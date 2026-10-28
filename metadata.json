@@ -1,0 +1,6 @@
+{
+  "name": "AeroFast Pro",
+  "description": "Thread Master & Fastener NPD Engineering: M0.25-M36 & #1-64 to 1 inch pre-roll blank calculation, ISO 898-1 grades, heat treatment cycles, Fanuc G-code generator, 2D blueprint simulator, and AI Co-Pilot.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

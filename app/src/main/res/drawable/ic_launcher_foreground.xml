@@ -1,0 +1,44 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Hexagonal Head -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M54,23 L73,34 L73,43 L35,43 L35,34 Z" />
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M35,40 L73,40 L73,44 L35,44 Z" />
+    <!-- Washer Face / Flange -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M30,44 L78,44 L76,48 L32,48 Z" />
+    <!-- Unthreaded Shank -->
+    <path
+        android:fillColor="#E2E8F0"
+        android:pathData="M43,48 L65,48 L65,58 L43,58 Z" />
+    <!-- Threaded Section with realistic pitch serrations -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M43,58 L65,58 L65,83 L54,89 L43,83 Z" />
+    <!-- Thread grooves -->
+    <path
+        android:strokeColor="#78350F"
+        android:strokeWidth="1.6"
+        android:pathData="M42,62 L66,65 M42,67 L66,70 M42,72 L66,75 M42,77 L66,80" />
+    <!-- Center Blueprint Axis -->
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="1.2"
+        android:pathData="M54,17 L54,92" />
+    <!-- Blueprint Caliper Marks -->
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="1.2"
+        android:pathData="M26,30 L26,80 M23,30 L29,30 M23,80 L29,80" />
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="1.2"
+        android:pathData="M82,44 L82,88 M79,44 L85,44 M79,88 L85,88" />
+</vector>
