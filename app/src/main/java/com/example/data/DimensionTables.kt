@@ -39,6 +39,25 @@ object DimensionTables {
         0.875 to doubleArrayOf(1.3125, 0.547, 1.3125, 0.750), 1.0 to doubleArrayOf(1.5, 0.627, 1.5, 0.859)
     )
 
+    // d -> hex socket key s, socket depth t min (ISO 4762)
+    private val ISO_SHCS_SOCKET = mapOf(
+        1.6 to doubleArrayOf(1.5, 0.7), 2.0 to doubleArrayOf(1.5, 1.0), 2.5 to doubleArrayOf(2.0, 1.1),
+        3.0 to doubleArrayOf(2.5, 1.3), 4.0 to doubleArrayOf(3.0, 2.0), 5.0 to doubleArrayOf(4.0, 2.5),
+        6.0 to doubleArrayOf(5.0, 3.0), 8.0 to doubleArrayOf(6.0, 4.0), 10.0 to doubleArrayOf(8.0, 5.0),
+        12.0 to doubleArrayOf(10.0, 6.0), 14.0 to doubleArrayOf(12.0, 7.0), 16.0 to doubleArrayOf(14.0, 8.0),
+        20.0 to doubleArrayOf(17.0, 10.0), 24.0 to doubleArrayOf(19.0, 12.0), 30.0 to doubleArrayOf(22.0, 15.5),
+        36.0 to doubleArrayOf(27.0, 19.0)
+    )
+
+    /** Hex socket (key size, depth) in mm, or null when the part has no socket. */
+    fun socketFor(type: FastenerType, unit: UnitSystem, dMm: Double): Pair<Double, Double>? = when (type) {
+        FastenerType.SOCKET_SET -> 0.5 * dMm to 0.5 * dMm
+        FastenerType.SHCS, FastenerType.SOCKET_BUTTON, FastenerType.SOCKET_CSK ->
+            (if (unit == UnitSystem.METRIC) lookup(ISO_SHCS_SOCKET, dMm)?.let { it[0] to it[1] } else null)
+                ?: (0.8 * dMm to 0.5 * dMm)
+        else -> null
+    }
+
     private fun <V> lookup(map: Map<Double, V>, key: Double): V? =
         map.entries.firstOrNull { abs(it.key - key) < 0.002 }?.value
 

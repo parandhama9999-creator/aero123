@@ -103,7 +103,8 @@ data class FastenerCalculationResult(
     // Strict poka-yoke gate results
     val propertyClass: PropertyClass? = null,
     val pokaYokeIssues: List<PokaYokeIssue> = emptyList(),
-    val headDimensions: HeadDimensions? = null
+    val headDimensions: HeadDimensions? = null,
+    val headingPlan: HeadingPlan? = null
 ) {
     val criticalIssues: List<PokaYokeIssue> get() = pokaYokeIssues.filter { it.severity == PokaYokeSeverity.CRITICAL }
     /** True when any CRITICAL rule fails: reports must not show the part as approved. */
@@ -375,9 +376,11 @@ object CalculationEngine {
         val s = dims.acrossFlatsS
         val isSocketHead = fastenerType == FastenerType.SHCS || fastenerType == FastenerType.SOCKET_BUTTON || fastenerType == FastenerType.SOCKET_CSK
         val k = dims.headHeightK
+        val socket = DimensionTables.socketFor(fastenerType, unitSystem, d)
+        val socketVol = socket?.let { (sqrt(3.0) / 2.0) * it.first.pow(2.0) * it.second } ?: 0.0
         val volHead = when {
             fastenerType.isStud || fastenerType == FastenerType.SOCKET_SET -> 0.0
-            isSocketHead -> (PI / 4.0) * s.pow(2.0) * k // round head (socket recess ignored)
+            isSocketHead -> (PI / 4.0) * s.pow(2.0) * k - socketVol
             else -> (sqrt(3.0) / 2.0) * s.pow(2.0) * k
         }
         val headArea = if (isSocketHead) (PI / 4.0) * s.pow(2.0) else (sqrt(3.0) / 2.0) * s.pow(2.0)
@@ -385,13 +388,19 @@ object CalculationEngine {
         val totalVolMm3 = if (isNut) {
             ((headArea - (PI / 4.0) * blankDia.pow(2.0)) * dims.nutHeightM)
         } else {
-            volHead + (PI / 4.0) * d.pow(2.0) * unthreadedLen + (PI / 4.0) * blankDia.pow(2.0) * lt
+            volHead + (PI / 4.0) * d.pow(2.0) * unthreadedLen + (PI / 4.0) * blankDia.pow(2.0) * lt -
+                (if (fastenerType == FastenerType.SOCKET_SET) socketVol else 0.0)
         }
 
         val netWeightG = max(0.05, (totalVolMm3 / 1000.0) * material.density)
         val grossWeightG = netWeightG * 1.04
         val wireAreaMm2 = (PI / 4.0) * dw.pow(2.0)
-        val cutOffLenMm = totalVolMm3 / wireAreaMm2
+        val headingPlan = HeadingProgression.build(
+            type = fastenerType, wireDiaMm = dw, nominalDiaMm = d, lengthMm = lengthMm, threadLengthMm = lt,
+            blankDiaMm = blankDia, partVolumeMm3 = totalVolMm3, head = dims, socket = socket, threadLabel = threadLabel
+        )
+        // Slug also carries material removed during heading (pierced nut web)
+        val cutOffLenMm = headingPlan?.slugLengthMm ?: (totalVolMm3 / wireAreaMm2)
         val ldRatio = if (volHead > 0) ((volHead / wireAreaMm2) / dw) else 0.0
 
         // Forging Mechanics & UTS Calculations
@@ -413,48 +422,32 @@ object CalculationEngine {
         val areaRedPct = max(0.0, ((wireAreaMm2 - blankAreaMm2) / wireAreaMm2) * 100.0)
         val forgingTonnage = ((headArea * flowStressMpa * 1.55) / 9806.65) * 1.20
         val machineCapacity = (ceil(forgingTonnage / 25.0) * 25).toInt()
-        val recommendedMachine = if (material.isAero) {
-            "5-Station Warm Former (${machineCapacity}T @ ${material.headingSpm} SPM)"
-        } else {
-            "4-Die 4-Blow Cold Header (${machineCapacity}T @ ${material.headingSpm} SPM)"
+        val dieCount = headingPlan?.dieStations ?: 0
+        val recommendedMachine = when {
+            headingPlan == null -> "Progressive blank & pierce press"
+            isNut -> "$dieCount-Die Nut Former (${machineCapacity}T @ ${material.headingSpm} SPM)"
+            material.isAero -> "$dieCount-Die Warm Former (${machineCapacity}T @ ${material.headingSpm} SPM)"
+            else -> "$dieCount-Die $dieCount-Blow ${if (fastenerType.isStud) "Header" else "Bolt Former"} (${machineCapacity}T @ ${material.headingSpm} SPM)"
         }
 
-        val needsPreUpset = ldRatio > 2.3
-        val forgingStages = if (isNut) {
+        val numberedStages = if (headingPlan == null) {
             listOf(
-                ForgingStage(1, "Shear Cut-Off", "Slug Ø${dw.round(2)}mm × ${cutOffLenMm.round(1)}mm from wire (${material.rawMaterialSourcingUtsMpa})"),
-                ForgingStage(2, "Piercing", "Pierce center hole for internal bore"),
-                ForgingStage(3, "Hex Upset", "Form hex nut body s=${dims.acrossFlatsS}mm, m=${dims.nutHeightM}mm (${forgingTonnage.round(1)}T)"),
-                ForgingStage(4, "Chamfer & Size", "Chamfer thread lead-in, size bore to ±${blankTolHalf.round(3)}mm"),
-                ForgingStage(5, "Tapping", "Internal thread $threadLabel. Proof Load: ${proofLoadKn.round(1)} kN")
+                ForgingStage(1, "Strip feed & level", "Level coil strip to washer thickness"),
+                ForgingStage(2, "Pierce", "Pierce bore in progressive die"),
+                ForgingStage(3, "Blank", "Blank outside diameter"),
+                ForgingStage(4, "Deburr & flatten", "Vibratory deburr, check flatness")
             )
-        } else if (fastenerType.isStud) {
-            buildList {
-                add(ForgingStage(1, "Shear Cut-Off", "Slug Ø${dw.round(2)}mm × ${cutOffLenMm.round(1)}mm (${material.rawMaterialSourcingUtsMpa})"))
-                add(ForgingStage(2, "Chamfer Both Ends", "Point chamfer for thread lead-in"))
-                add(ForgingStage(size + 1, "Thread Rolling", "${if (material.isAero) "Post-HT TRR" else "Precision Roll"} both ends. Proof: ${proofLoadKn.round(1)} kN"))
-            }
-        } else if (isSocketHead) {
-            buildList {
-                add(ForgingStage(1, "Shear Cut-Off", "Slug Ø${dw.round(2)}mm × ${cutOffLenMm.round(1)}mm (${material.rawMaterialSourcingUtsMpa})"))
-                add(ForgingStage(2, "Cone & Square", "14° taper cone to centralize grain flow"))
-                if (needsPreUpset) add(ForgingStage(size + 1, "Pre-Upset", "Gather volume for head, L/D=${ldRatio.round(2)}"))
-                add(ForgingStage(size + 1, "Head Extrude", "Form cylindrical head Ø${dims.acrossFlatsS}mm × k=${dims.headHeightK}mm (${forgingTonnage.round(1)}T)"))
-                add(ForgingStage(size + 1, "Socket Punch", "Punch hex socket s=${(dims.acrossFlatsS * 0.6).round(1)}mm into head"))
-                add(ForgingStage(size + 1, "Thread & Release", "${if (material.isAero) "Post-HT TRR" else "Precision Roll"}. Proof: ${proofLoadKn.round(1)} kN, UTS: ${tensileBreakingLoadKn.round(1)} kN"))
-            }
         } else {
-            buildList {
-                add(ForgingStage(1, "Shear Cut-Off", "Slug Ø${dw.round(2)}mm × ${cutOffLenMm.round(1)}mm (${material.rawMaterialSourcingUtsMpa})"))
-                add(ForgingStage(2, "Cone & Square", "14° taper cone to centralize grain flow"))
-                if (needsPreUpset) add(ForgingStage(size + 1, "Pre-Upset", "Gather volume for head, L/D=${ldRatio.round(2)}"))
-                add(ForgingStage(size + 1, "Head Form", "Hex head s=${dims.acrossFlatsS}mm × k=${dims.headHeightK}mm, blank Ø${blankDia.round(3)}mm (${forgingTonnage.round(1)}T)"))
-                add(ForgingStage(size + 1, "Hex Trim", "Trim hex to ISO tolerance, 94% fill"))
-                add(ForgingStage(size + 1, "Thread & Release", "${if (material.isAero) "Post-HT TRR" else "Precision Roll"}. Proof: ${proofLoadKn.round(1)} kN, UTS: ${tensileBreakingLoadKn.round(1)} kN"))
-            }
-        }
-        // Re-number stages sequentially
-        val numberedStages = forgingStages.mapIndexed { idx, s -> s.copy(stageNumber = idx + 1) }
+            headingPlan.stations.map { st ->
+                val label = if (st.isCutOff) st.title else "Die ${st.index} · ${st.title}"
+                val extra = when {
+                    st.isCutOff -> " (${material.rawMaterialSourcingUtsMpa})"
+                    st.isPeakBlow -> " (${forgingTonnage.round(1)}T)"
+                    else -> ""
+                }
+                ForgingStage(0, label, st.operation + extra)
+            } + headingPlan.offHeaderOps.map { ForgingStage(0, "Off-header · ${it.title}", it.operation) }
+        }.mapIndexed { idx, st -> st.copy(stageNumber = idx + 1) }
 
         // Hydrogen embrittlement poka-yoke
         // ISO 4042 / ASTM F1941: bake needed for electroplated steel parts at or above 1000 MPa (class 10.9+), not for 8.8
@@ -638,6 +631,7 @@ object CalculationEngine {
             forgingTonnage = forgingTonnage.round(1),
             recommendedMachine = recommendedMachine,
             forgingStages = numberedStages,
+            headingPlan = headingPlan,
             heatTreatmentSpec = calculateDynamicHeatTreatment(material, d, hasHeRisk, propertyClass),
             cncCycleTimeSec = totalCncSec.round(1),
             cncSpindleRpm = calcRpm,

@@ -12,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,6 +53,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.FastenerCalculationResult
+import com.example.data.HeadingPlan
+import com.example.data.HeadingProgression
+import com.example.data.HeadingStation
+import com.example.data.ProfileSegment
+import com.example.data.SectionShape
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.toArgb
+import kotlin.math.min
 import com.example.ui.components.PokaYokePanel
 import com.example.ui.theme.AlertRed
 import com.example.ui.theme.LocalCustomColors
@@ -409,7 +421,8 @@ fun ForgingMetallurgyScreen(
                         modifier = Modifier.padding(end = 6.dp)
                     )
                     Text(
-                        text = "${result.forgingStages.size}-STATION PROGRESSIVE FORGING & TONNAGE",
+                        text = result.headingPlan?.let { "CUT-OFF + ${it.dieStations}-DIE PROGRESSIVE FORGING & TONNAGE" }
+                            ?: "PRESS BLANKING SEQUENCE",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Black,
                         color = customColors.textMain
@@ -418,7 +431,6 @@ fun ForgingMetallurgyScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // 5 Progression Stages
                 result.forgingStages.forEach { stage ->
                     Surface(
                         shape = RoundedCornerShape(8.dp),
@@ -955,18 +967,7 @@ fun ColdHeadingProgressionCanvas(
     modifier: Modifier = Modifier
 ) {
     val customColors = LocalCustomColors.current
-    val stages = result.forgingStages
-    val stageCount = stages.size.coerceIn(2, 6)
-    val dims = result.headDimensions
-    val wireDia = result.wireDiaMm.toFloat()
-    val cutLen = result.cutOffLengthMm.toFloat()
-    val headS = dims?.acrossFlatsS?.toFloat() ?: (wireDia * 1.5f)
-    val headK = dims?.headHeightK?.toFloat() ?: (wireDia * 0.7f)
-    val nutM = dims?.nutHeightM?.toFloat() ?: (wireDia * 0.8f)
-    val isNut = result.isInternalNut
-    val isStud = result.fastenerType.isStud
-    val isSocket = result.fastenerType == FastenerType.SHCS || result.fastenerType == FastenerType.SOCKET_BUTTON || result.fastenerType == FastenerType.SOCKET_CSK
-    val ldOk = result.upsetLdRatio <= 2.3
+    val plan = result.headingPlan
 
     var zoomScale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -983,7 +984,7 @@ fun ColdHeadingProgressionCanvas(
 
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = Color(0xFF0F172A),
+        color = DieColors.background,
         border = androidx.compose.foundation.BorderStroke(1.dp, customColors.border),
         modifier = modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp)
     ) {
@@ -994,82 +995,77 @@ fun ColdHeadingProgressionCanvas(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "$stageCount-STATION DIE PROGRESSION",
+                    text = if (plan == null) "NO HEADING PROGRESSION" else "CUT-OFF + ${plan.dieStations}-DIE PROGRESSION",
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Black,
                     color = Color(0xFF38BDF8)
                 )
-                Text(
-                    text = "Head Tonnage: ${result.forgingTonnage} T",
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Black,
-                    fontFamily = FontFamily.Monospace,
-                    color = Color(0xFFF59E0B)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .clipToBounds()
-            ) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer(
-                            scaleX = zoomScale,
-                            scaleY = zoomScale,
-                            translationX = offsetX,
-                            translationY = offsetY
-                        )
-                        .transformable(state = transformState)
-                ) {
-                    val w = size.width
-                    val h = size.height
-                    val step = w / stageCount.toFloat()
-                    val baseY = h * 0.80f
-                    val maxDim = maxOf(cutLen, headS, wireDia * 2f)
-                    val scale = (h * 0.60f) / maxDim
-
-                    for (i in 0 until stageCount) {
-                        val cx = step * i + step / 2f
-                        val fraction = i.toFloat() / (stageCount - 1).coerceAtLeast(1)
-
-                        if (isNut) {
-                            drawNutStage(cx, baseY, scale, wireDia, cutLen, headS, nutM, fraction, i, stageCount)
-                        } else if (isStud) {
-                            drawStudStage(cx, baseY, scale, wireDia, cutLen, fraction, i, stageCount)
-                        } else {
-                            drawBoltStage(cx, baseY, scale, wireDia, cutLen, headS, headK, isSocket, fraction, i, stageCount)
-                        }
-
-                        drawContext.canvas.nativeCanvas.apply {
-                            val paint = android.graphics.Paint().apply {
-                                color = 0xFFCBD5E1.toInt()
-                                textSize = 20f
-                                textAlign = android.graphics.Paint.Align.CENTER
-                                isAntiAlias = true
-                            }
-                            drawText("S${i + 1}", cx, baseY + 18f, paint)
-                        }
-                    }
-                }
-
-                // Zoom indicator
-                if (zoomScale > 1.05f) {
+                if (plan != null) {
                     Text(
-                        text = "${String.format("%.1f", zoomScale)}×",
-                        fontSize = 9.sp,
-                        color = Color.White.copy(alpha = 0.6f),
-                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
+                        text = "Peak blow: ${result.forgingTonnage} T",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace,
+                        color = Color(0xFFF59E0B)
                     )
                 }
             }
 
-            // Reset zoom button
+            if (plan == null) {
+                Text(
+                    text = "Washers are blanked and pierced from strip on a progressive press; they are not cold-headed.",
+                    fontSize = 10.sp,
+                    color = customColors.textMuted,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+                return@Column
+            }
+
+            Text(
+                text = "True scale (long shanks broken) · left half in section · shank held in die",
+                fontSize = 9.sp,
+                color = customColors.textMuted,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                // Size the canvas to the parts: a nut needs far less height than a long bolt
+                val partAspect = (plan.stations.maxOf { it.heightMm } / plan.stations.maxOf { it.maxWidthMm }).toFloat()
+                val column = minOf(maxWidth / plan.stations.size, maxWidth / 4)
+                val canvasHeight = (column * 0.8f * partAspect + 44.dp).coerceIn(120.dp, 230.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(canvasHeight)
+                        .clipToBounds()
+                ) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = zoomScale,
+                                scaleY = zoomScale,
+                                translationX = offsetX,
+                                translationY = offsetY
+                            )
+                            .transformable(state = transformState)
+                    ) {
+                        drawHeadingProgression(plan, textPx = 9.sp.toPx())
+                    }
+
+                    if (zoomScale > 1.05f) {
+                        Text(
+                            text = "${String.format("%.1f", zoomScale)}×",
+                            fontSize = 9.sp,
+                            color = Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
+                        )
+                    }
+                }
+            }
+
             if (zoomScale > 1.05f) {
                 Text(
                     text = "Reset Zoom",
@@ -1085,26 +1081,52 @@ fun ColdHeadingProgressionCanvas(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            Column {
-                stages.forEachIndexed { idx, stage ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                plan.stations.forEach { st ->
                     Text(
-                        text = "• S${idx + 1} ${stage.title}: ${stage.description}",
+                        text = "${stationCode(st)}  ${st.title} — L ${fmt(st.heightMm, 1)} · ${topFeature(st)} · V ${fmt(st.volumeMm3, 0)} mm³",
                         fontSize = 9.sp,
-                        color = customColors.textMuted,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        fontFamily = FontFamily.Monospace,
+                        color = if (st.isPeakBlow) Color(0xFFF59E0B) else customColors.textMuted
                     )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Row {
+                plan.offHeaderOps.forEach { op ->
                     Text(
-                        text = "L/D: ${result.upsetLdRatio}",
+                        text = "OFF  ${op.title} — ${op.operation}",
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = customColors.textMuted
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                val volumeOk = plan.maxVolumeError < 0.005
+                val scrap = plan.stations.sumOf { it.scrapMm3 }
+                Text(
+                    text = if (volumeOk) {
+                        "✔ Volume conserved: slug ${fmt(plan.slugVolumeMm3, 0)} mm³ at every station" +
+                            (if (scrap > 0) " (incl. ${fmt(scrap, 0)} mm³ pierce scrap)" else "")
+                    } else {
+                        "✖ Volume mismatch ${fmt(plan.maxVolumeError * 100, 2)} % between stations"
+                    },
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (volumeOk) Color(0xFF22C55E) else Color(0xFFEF4444)
+                )
+                Row {
+                    val ldOk = result.upsetLdRatio <= HeadingProgression.SINGLE_BLOW_LD
+                    Text(
+                        text = "Head stock L/D: ${result.upsetLdRatio}",
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (ldOk) Color(0xFF22C55E) else Color(0xFFEF4444)
+                        color = if (ldOk || plan.upsetBlows > 1) Color(0xFF22C55E) else Color(0xFFEF4444)
                     )
                     Text(
-                        text = "  (limit 2.3 single blow)",
+                        text = when {
+                            plan.upsetBlows == 0 -> "  (no head upset)"
+                            plan.upsetBlows == 1 -> "  (≤ 2.3: single blow)"
+                            else -> "  (> 2.3: ${plan.upsetBlows - 1} cone pre-upset)"
+                        },
                         fontSize = 9.sp,
                         color = customColors.textMuted
                     )
@@ -1115,110 +1137,228 @@ fun ColdHeadingProgressionCanvas(
                         color = customColors.textMuted
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-    }
-}
-
-private fun DrawScope.drawBoltStage(
-    cx: Float, baseY: Float, scale: Float,
-    wireDia: Float, cutLen: Float, headS: Float, headK: Float,
-    isSocket: Boolean, fraction: Float, idx: Int, total: Int
-) {
-    val shankW = wireDia * scale
-    when {
-        idx == 0 -> {
-            val slugH = cutLen * scale
-            drawRect(Color(0xFF94A3B8), Offset(cx - shankW / 2, baseY - slugH), Size(shankW, slugH))
-        }
-        idx == total - 1 -> {
-            val shankH = (cutLen - headK) * scale
-            drawRect(Color(0xFF0EA5E9), Offset(cx - shankW / 2, baseY - shankH), Size(shankW, shankH))
-            val headW = if (isSocket) wireDia * 1.5f * scale else headS * scale
-            val headH = headK * scale
-            val headColor = if (isSocket) Color(0xFF8B5CF6) else Color(0xFFF59E0B)
-            drawRect(headColor, Offset(cx - headW / 2, baseY - shankH - headH), Size(headW, headH))
-            if (isSocket) {
-                val socketW = shankW * 0.5f
-                val socketD = headH * 0.6f
-                drawRect(Color(0xFF1E1B4B), Offset(cx - socketW / 2, baseY - shankH - headH), Size(socketW, socketD))
-            }
-        }
-        else -> {
-            val shankH = cutLen * scale * (1f - fraction * headK / cutLen)
-            val bulgeFraction = fraction
-            val bulgeW = shankW + (headS * scale - shankW) * bulgeFraction
-            val bulgeH = headK * scale * bulgeFraction
-            drawRect(Color(0xFF0EA5E9), Offset(cx - shankW / 2, baseY - shankH), Size(shankW, shankH))
-            if (bulgeH > 0) {
-                drawRect(Color(0xFF38BDF8), Offset(cx - bulgeW / 2, baseY - shankH - bulgeH), Size(bulgeW, bulgeH))
-            }
-        }
-    }
-}
-
-private fun DrawScope.drawNutStage(
-    cx: Float, baseY: Float, scale: Float,
-    wireDia: Float, cutLen: Float, headS: Float, nutM: Float,
-    fraction: Float, idx: Int, total: Int
-) {
-    val shankW = wireDia * scale
-    when {
-        idx == 0 -> {
-            val slugH = cutLen * scale
-            drawRect(Color(0xFF94A3B8), Offset(cx - shankW / 2, baseY - slugH), Size(shankW, slugH))
-        }
-        idx == total - 1 -> {
-            val nutW = headS * scale
-            val nutH = nutM * scale
-            val topY = baseY - nutH
-            drawRect(Color(0xFFF59E0B), Offset(cx - nutW / 2, topY), Size(nutW, nutH))
-            val holeW = wireDia * 0.85f * scale
-            drawRect(Color(0xFF0F172A), Offset(cx - holeW / 2, topY), Size(holeW, nutH))
-        }
-        else -> {
-            val w = shankW + (headS * scale - shankW) * fraction
-            val h = cutLen * scale * (1f - fraction * 0.3f)
-            drawRect(Color(0xFF38BDF8), Offset(cx - w / 2, baseY - h), Size(w, h))
-            if (idx >= total - 2) {
-                val holeW = wireDia * 0.5f * scale * fraction
-                val holeH = h * 0.7f
-                drawRect(Color(0xFF0F172A), Offset(cx - holeW / 2, baseY - h), Size(holeW, holeH))
-            }
-        }
-    }
-}
-
-private fun DrawScope.drawStudStage(
-    cx: Float, baseY: Float, scale: Float,
-    wireDia: Float, cutLen: Float,
-    fraction: Float, idx: Int, total: Int
-) {
-    val shankW = wireDia * scale
-    val slugH = cutLen * scale
-    when (idx) {
-        0 -> drawRect(Color(0xFF94A3B8), Offset(cx - shankW / 2, baseY - slugH), Size(shankW, slugH))
-        else -> {
-            drawRect(Color(0xFF0EA5E9), Offset(cx - shankW / 2, baseY - slugH), Size(shankW, slugH))
-            if (idx >= total - 1) {
-                val chamferH = wireDia * 0.3f * scale
-                val p = Path().apply {
-                    moveTo(cx - shankW / 2, baseY - slugH)
-                    lineTo(cx, baseY - slugH - chamferH)
-                    lineTo(cx + shankW / 2, baseY - slugH)
-                    close()
+                plan.notes.forEach { note ->
+                    Text(text = "⚠ $note", fontSize = 9.sp, color = Color(0xFFEF4444))
                 }
-                drawPath(p, Color(0xFF22C55E))
-                val p2 = Path().apply {
-                    moveTo(cx - shankW / 2, baseY)
-                    lineTo(cx, baseY + chamferH)
-                    lineTo(cx + shankW / 2, baseY)
-                    close()
-                }
-                drawPath(p2, Color(0xFF22C55E))
             }
+        }
+    }
+}
+
+private object DieColors {
+    val background = Color(0xFF0F172A)
+    val metal = Color(0xFF8FA3BF)
+    val wire = Color(0xFFA8B3C2)
+    val cutFace = Color(0xFFC3D0E0)
+    val hatch = Color(0xFF516079)
+    val outline = Color(0xFFE2E8F0)
+    val faceLine = Color(0xFF3E4C63)
+    val die = Color(0xFF1E293B)
+    val dieHatch = Color(0xFF2E3B52)
+    val dieEdge = Color(0xFF64748B)
+    val centerLine = Color(0xFFF59E0B)
+    val label = Color(0xFFCBD5E1)
+    val peak = Color(0xFFF59E0B)
+}
+
+private fun fmt(v: Double, decimals: Int) = String.format(java.util.Locale.US, "%,.${decimals}f", v)
+
+private fun stationCode(st: HeadingStation) = if (st.isCutOff) "CUT" else "D${st.index} "
+
+private fun topFeature(st: HeadingStation): String {
+    val top = st.segments.last()
+    return if (top.shape == SectionShape.HEX) "s ${fmt(top.dBottomMm, 2)}" else "Ø ${fmt(top.maxWidthMm, 2)}"
+}
+
+private fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float) {
+    val stations = plan.stations
+    val step = size.width / stations.size
+    val topBand = textPx * 1.8f
+    val baseY = size.height - textPx * 2.2f
+    val availH = baseY - topBand
+    // Few stations (studs, set screws) would otherwise draw parts far wider than a bolt progression
+    val scaleW = min(step, size.width / 4f) * 0.8f / stations.maxOf { it.maxWidthMm }
+    val maxH = stations.maxOf { it.heightMm }
+
+    // Long headed parts: shorten every station's longest straight round segment by the same length (drafting break)
+    // so the head stays readable. Headless parts are drawn unbroken so their length change reads correctly.
+    fun longestStraight(st: HeadingStation) = st.segments.withIndex()
+        .filter { it.value.shape == SectionShape.ROUND && it.value.dBottomMm == it.value.dTopMm }
+        .maxByOrNull { it.value.heightMm }
+    val minLongest = stations.minOf { longestStraight(it)?.value?.heightMm ?: 0.0 }
+    val breakMm = if (plan.upsetBlows > 0 && maxH * scaleW > availH) min(maxH - availH / scaleW, 0.8 * minLongest).coerceAtLeast(0.0) else 0.0
+    val scale = min(scaleW.toDouble(), availH / (maxH - breakMm)).toFloat()
+
+    val labelPaint = android.graphics.Paint().apply {
+        textSize = textPx
+        textAlign = android.graphics.Paint.Align.CENTER
+        isAntiAlias = true
+        isFakeBoldText = true
+    }
+    val dimPaint = android.graphics.Paint(labelPaint).apply {
+        isFakeBoldText = false
+        color = DieColors.label.copy(alpha = 0.8f).toArgb()
+        textSize = textPx * 0.9f
+    }
+
+    stations.forEachIndexed { i, st ->
+        val cx = step * i + step / 2f
+        val breakIdx = if (breakMm > 0.0) longestStraight(st)?.index else null
+        drawStation(st, cx, baseY, scale, min(step, size.width / 4f), breakIdx, breakMm)
+
+        val topY = baseY - (st.heightMm - if (breakIdx != null) breakMm else 0.0).toFloat() * scale
+        drawContext.canvas.nativeCanvas.apply {
+            drawText(topFeature(st), cx, topY - textPx * 0.6f, dimPaint)
+            labelPaint.color = (if (st.isPeakBlow) DieColors.peak else DieColors.label).toArgb()
+            drawText(stationCode(st).trim(), cx, baseY + textPx * 1.6f, labelPaint)
+        }
+    }
+}
+
+private fun DrawScope.drawStation(
+    st: HeadingStation, cx: Float, baseY: Float, scale: Float, column: Float, breakIdx: Int?, breakMm: Double
+) {
+    val segs = st.segments
+    val drawnH = segs.mapIndexed { j, s -> ((s.heightMm - if (j == breakIdx) breakMm else 0.0) * scale).toFloat() }
+    val bottoms = FloatArray(segs.size)
+    var y = baseY
+    segs.indices.forEach { j -> bottoms[j] = y; y -= drawnH[j] }
+    val topY = y
+
+    // Axial position (mm from bottom) → screen y, honouring the break
+    fun yAt(mm: Double): Float {
+        var acc = 0.0
+        segs.forEachIndexed { j, s ->
+            if (mm <= acc + s.heightMm) return bottoms[j] - ((mm - acc) / s.heightMm).toFloat() * drawnH[j]
+            acc += s.heightMm
+        }
+        return topY
+    }
+
+    fun halfWidth(s: ProfileSegment, top: Boolean) =
+        (if (s.shape == SectionShape.HEX) s.maxWidthMm else if (top) s.dTopMm else s.dBottomMm).toFloat() * scale / 2f
+
+    // Die block around the part of the shank held in the die bore
+    if (st.inDieMm > 0.0) {
+        val dieTop = yAt(st.inDieMm)
+        val left = cx - column * 0.47f
+        val right = cx + column * 0.47f
+        drawRect(DieColors.die, Offset(left, dieTop), Size(right - left, baseY + 4f - dieTop))
+        clipRect(left, dieTop, right, baseY + 4f) {
+            var x = left - (baseY - dieTop)
+            while (x < right) {
+                drawLine(DieColors.dieHatch, Offset(x, baseY + 4f), Offset(x + (baseY + 4f - dieTop), dieTop), 1f)
+                x += 6f
+            }
+        }
+        drawLine(DieColors.dieEdge, Offset(left, dieTop), Offset(right, dieTop), 1.5f)
+    }
+
+    // Outline: right side bottom → top, then mirrored down the left side
+    val chamferTop = segs.last().shape == SectionShape.HEX
+    val chamferBottom = segs.first().shape == SectionShape.HEX
+    val right = mutableListOf<Offset>()
+    segs.forEachIndexed { j, s ->
+        val y0 = bottoms[j]
+        val y1 = y0 - drawnH[j]
+        val rB = halfWidth(s, false)
+        val rT = halfWidth(s, true)
+        val c = rB * 0.12f
+        if (j == 0 && chamferBottom) {
+            right += Offset(cx + rB - c, y0); right += Offset(cx + rB, y0 - c * 0.6f)
+        } else right += Offset(cx + rB, y0)
+        if (j == segs.lastIndex && chamferTop) {
+            right += Offset(cx + rT, y1 + c * 0.6f); right += Offset(cx + rT - c, y1)
+        } else right += Offset(cx + rT, y1)
+    }
+    val outline = Path().apply {
+        moveTo(cx, baseY)
+        right.forEach { lineTo(it.x, it.y) }
+        lineTo(cx, topY)
+        right.asReversed().forEach { lineTo(2 * cx - it.x, it.y) }
+        close()
+    }
+    drawPath(outline, if (st.isCutOff) DieColors.wire else DieColors.metal)
+
+    // Left half in section: cut face with 45° hatching, then the cavities
+    val maxR = st.maxWidthMm.toFloat() * scale / 2f
+    clipPath(outline) {
+        clipRect(cx - maxR - 2f, topY - 2f, cx, baseY + 2f) {
+            drawRect(DieColors.cutFace, Offset(cx - maxR - 2f, topY - 2f), Size(maxR + 2f, baseY - topY + 4f))
+            var x = cx - maxR - (baseY - topY)
+            while (x < cx) {
+                drawLine(DieColors.hatch, Offset(x, baseY), Offset(x + (baseY - topY), topY), 0.8f)
+                x += 5f
+            }
+        }
+    }
+    val hidden = PathEffect.dashPathEffect(floatArrayOf(4f, 3f))
+    fun cavity(rMm: Double, yTop: Float, yBottom: Float) {
+        val r = rMm.toFloat() * scale / 2f
+        drawRect(DieColors.background, Offset(cx - r, yTop), Size(r, yBottom - yTop))
+        drawLine(DieColors.outline, Offset(cx - r, yTop), Offset(cx - r, yBottom), 1f)
+        drawLine(DieColors.outline, Offset(cx - r, if (yTop <= topY + 0.5f) yBottom else yTop), Offset(cx, if (yTop <= topY + 0.5f) yBottom else yTop), 1f)
+        // Hidden edges in the unsectioned right half
+        drawLine(DieColors.outline.copy(alpha = 0.5f), Offset(cx + r, yTop), Offset(cx + r, yBottom), 1f, pathEffect = hidden)
+    }
+    st.throughHoleMm?.let { h ->
+        val r = h.toFloat() * scale / 2f
+        drawRect(DieColors.background, Offset(cx - r, topY), Size(r, baseY - topY))
+        drawLine(DieColors.outline, Offset(cx - r, topY), Offset(cx - r, baseY), 1f)
+        drawLine(DieColors.outline.copy(alpha = 0.5f), Offset(cx + r, topY), Offset(cx + r, baseY), 1f, pathEffect = hidden)
+    }
+    st.recesses.forEach { rc ->
+        val width = if (rc.shape == SectionShape.HEX) rc.sizeMm * 2.0 / kotlin.math.sqrt(3.0) else rc.sizeMm
+        if (rc.fromTop) cavity(width, topY, yAt(st.heightMm - rc.depthMm))
+        else cavity(width, yAt(rc.depthMm), baseY)
+    }
+
+    // Hex faces seen across corners (unsectioned right half): edges at ±e/4 and 30° chamfer arcs
+    clipRect(cx, topY - 4f, cx + maxR + 4f, baseY + 4f) { segs.forEachIndexed { j, s ->
+        if (s.shape != SectionShape.HEX) return@forEachIndexed
+        val y0 = bottoms[j]
+        val y1 = y0 - drawnH[j]
+        val r = halfWidth(s, true)
+        val dip = min(drawnH[j] * 0.12f, r * 0.15f)
+        listOf(-r / 2f, r / 2f).forEach { dx ->
+            drawLine(DieColors.faceLine, Offset(cx + dx, y1 + dip), Offset(cx + dx, y0 - if (j == 0 && chamferBottom) dip else 0f), 1f)
+        }
+        val faces = listOf(-r to -r / 2f, -r / 2f to r / 2f, r / 2f to r)
+        fun arcs(yEdge: Float, dir: Float) = faces.forEach { (a, b) ->
+            val d = if (a == -r / 2f) dip else dip * 0.6f
+            drawPath(Path().apply {
+                moveTo(cx + a, yEdge + dir * if (a == -r) d else 0f)
+                quadraticBezierTo(cx + (a + b) / 2f, yEdge + dir * 2f * d, cx + b, yEdge + dir * if (b == r) d else 0f)
+            }, DieColors.faceLine, style = Stroke(1f))
+        }
+        if (j == segs.lastIndex) arcs(y1, 1f)
+        if (j == 0 && chamferBottom) arcs(y0, -1f)
+    } }
+
+    drawPath(outline, DieColors.outline, style = Stroke(1.2f))
+
+    // Centre line
+    drawLine(
+        DieColors.centerLine.copy(alpha = 0.7f), Offset(cx, topY - 4f), Offset(cx, baseY + 4f), 0.8f,
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 3f, 2f, 3f))
+    )
+
+    // Break symbol across the shortened segment
+    if (breakIdx != null) {
+        val yMid = bottoms[breakIdx] - drawnH[breakIdx] / 2f
+        val half = if (st.inDieMm > 0.0) column * 0.47f else halfWidth(segs[breakIdx], false) + 2f
+        drawRect(DieColors.background, Offset(cx - half, yMid - 2.5f), Size(2 * half, 5f))
+        listOf(yMid - 2.5f, yMid + 2.5f).forEach { yy ->
+            drawPath(Path().apply {
+                moveTo(cx - half, yy)
+                var x = cx - half
+                var up = true
+                while (x < cx + half) {
+                    x = minOf(x + 4f, cx + half)
+                    lineTo(x, yy + if (up) -1.5f else 1.5f)
+                    up = !up
+                }
+            }, DieColors.outline.copy(alpha = 0.7f), style = Stroke(0.8f))
         }
     }
 }
