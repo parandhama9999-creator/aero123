@@ -50,12 +50,6 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk "$name"
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.apk.outputs.name }}
-          path: ${{ steps.apk.outputs.name }}
-          retention-days: 30
-
       - name: Publish to "latest" release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
@@ -67,3 +61,12 @@ jobs:
             --prerelease \
             --title "Latest APK (${GITHUB_SHA::7})" \
             --notes "Debug APK built from ${GITHUB_SHA} on $(date -u '+%Y-%m-%d %H:%M UTC'). Download the .apk below and open it on the phone to install."
+
+      # Release assets do not count toward the Actions artifact storage quota, so the release is the
+      # primary download; the run artifact is a convenience and may fail when the quota is full.
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: ${{ steps.apk.outputs.name }}
+          retention-days: 7
