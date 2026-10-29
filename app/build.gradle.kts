@@ -20,7 +20,7 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    val envGeminiKey = System.getenv("GEMINI_API_KEY") ?: "AQ.Ab8RN6I-C0UA5ZVRpvktDjwaAxCCEYY0CLBD_GbIAwXGS9hlJA"
+    val envGeminiKey = System.getenv("GEMINI_API_KEY") ?: ""
     buildConfigField("String", "GEMINI_API_KEY", "\"$envGeminiKey\"")
   }
 
@@ -102,6 +102,7 @@ dependencies {
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.core.ktx)
+  implementation("androidx.security:security-crypto:1.1.0-alpha06")
   // implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)

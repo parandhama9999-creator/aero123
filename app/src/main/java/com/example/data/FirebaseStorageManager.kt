@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
+import com.example.config.AppConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -11,8 +12,6 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-
-const val FIREBASE_DB_URL = "https://aerofast-pro-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 data class ChatMessageData(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -144,7 +143,7 @@ object FirebaseStorageManager {
     }
 
     private fun deviceDataUrl(context: Context): URL =
-        URL("$FIREBASE_DB_URL/aerofast_devices/${getDeviceId(context)}.json")
+        URL("${AppConfig.FIREBASE_DB_URL}/aerofast_devices/${getDeviceId(context)}.json")
 
     suspend fun syncAppData(context: Context, state: AeroFastState) {
         val jsonString = state.toJson().toString()

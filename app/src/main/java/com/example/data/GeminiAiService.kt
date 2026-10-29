@@ -3,6 +3,8 @@ package com.example.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Base64
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -42,8 +44,8 @@ data class ExtractedFastenerSpec(
 )
 
 object GeminiAiService {
-    // 1. Permanent Default API Key Constant
-    const val DEFAULT_GEMINI_API_KEY = "AQ.Ab8RN6I-C0UA5ZVRpvktDjwaAxCCEYY0CLBD_GbIAwXGS9hlJA"
+    // Users MUST provide their own Gemini API key via Settings dialog
+    const val DEFAULT_GEMINI_API_KEY = ""
 
     // Production models with multimodal vision support
     val MODEL_FALLBACK_CHAIN = listOf(
@@ -56,10 +58,24 @@ object GeminiAiService {
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .callTimeout(40, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .callTimeout(90, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
+
+    // Rate limiting: max 1 request per 500ms
+    private var lastApiCallTime = 0L
+    private val API_CALL_MIN_INTERVAL = 500L
+
+    private fun checkRateLimit() {
+        val now = System.currentTimeMillis()
+        val timeSinceLastCall = now - lastApiCallTime
+        if (timeSinceLastCall < API_CALL_MIN_INTERVAL) {
+            Thread.sleep(API_CALL_MIN_INTERVAL - timeSinceLastCall)
+        }
+        lastApiCallTime = System.currentTimeMillis()
+    }
 
     private fun Double.round(decimals: Int): Double {
         var multiplier = 1.0
@@ -98,48 +114,66 @@ object GeminiAiService {
         return "w${bitmap.width}_h${bitmap.height}_crc${crc.value}"
     }
 
+    private fun getEncryptedPrefs(context: Context, name: String): EncryptedSharedPreferences {
+        val masterKey = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
+        return EncryptedSharedPreferences.create(context, name, masterKey, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM) as EncryptedSharedPreferences
+    }
+
     private fun getCachedExtraction(context: Context, fingerprint: String): ExtractedFastenerSpec? {
-        val prefs = context.getSharedPreferences("aerofast_scan_cache", Context.MODE_PRIVATE)
-        val jsonStr = prefs.getString(fingerprint, null) ?: return null
         return try {
-            val parsedJson = JSONObject(jsonStr)
-            parseSpecFromJson(parsedJson, "Cached (Zero API)")
+            val prefs = getEncryptedPrefs(context, "aerofast_scan_cache")
+            val cachedData = prefs.getString(fingerprint, null) ?: return null
+            val json = JSONObject(cachedData)
+            val timestamp = json.optLong("_timestamp", 0L)
+            val now = System.currentTimeMillis()
+            val CACHE_VALIDITY_MS = 30L * 24L * 60L * 60L * 1000L // 30 days
+            if (now - timestamp > CACHE_VALIDITY_MS) {
+                prefs.edit().remove(fingerprint).apply() // Expired, remove
+                return null
+            }
+            val spec = json.optJSONObject("_spec") ?: return null
+            parseSpecFromJson(spec, "Cached (Zero API)")
         } catch (e: Exception) {
             null
         }
     }
 
     private fun cacheExtraction(context: Context, fingerprint: String, rawJsonText: String) {
-        val prefs = context.getSharedPreferences("aerofast_scan_cache", Context.MODE_PRIVATE)
-        prefs.edit().putString(fingerprint, rawJsonText).apply()
+        try {
+            val prefs = getEncryptedPrefs(context, "aerofast_scan_cache")
+            val wrapper = JSONObject()
+                .put("_timestamp", System.currentTimeMillis())
+                .put("_spec", JSONObject(rawJsonText))
+            prefs.edit().putString(fingerprint, wrapper.toString()).apply()
+        } catch (e: Exception) {
+            // Silent fail - caching is optional
+        }
     }
 
     fun getEffectiveApiKey(context: Context): String {
-        val prefs = context.getSharedPreferences("aerofast_prefs", Context.MODE_PRIVATE)
-        val userKey = (prefs.getString("aerofast_gemini_key", null)
-            ?: prefs.getString("user_gemini_key", null))?.trim() ?: ""
-        if (userKey.isNotBlank()) return userKey
-
-        val buildKey = try { BuildConfig.GEMINI_API_KEY.trim() } catch (e: Throwable) { "" }
-        if (buildKey.isNotBlank() && buildKey != "MY_GEMINI_API_KEY") return buildKey
-
-        if (DEFAULT_GEMINI_API_KEY.isNotBlank() && DEFAULT_GEMINI_API_KEY != "PASTE_YOUR_ACTUAL_API_KEY_HERE") {
-            return DEFAULT_GEMINI_API_KEY
+        return try {
+            val prefs = getEncryptedPrefs(context, "aerofast_prefs")
+            (prefs.getString("aerofast_gemini_key", null) ?: prefs.getString("user_gemini_key", null))?.trim() ?: ""
+        } catch (e: Exception) {
+            ""
         }
-        return DEFAULT_GEMINI_API_KEY
     }
 
     fun hasLiveApiKey(context: Context): Boolean {
         val key = getEffectiveApiKey(context)
-        return key.isNotBlank() && key != "PASTE_YOUR_ACTUAL_API_KEY_HERE" && key != "MY_GEMINI_API_KEY"
+        return key.isNotBlank() && key != "MY_GEMINI_API_KEY" && key != "PASTE_YOUR_ACTUAL_API_KEY_HERE"
     }
 
     fun saveUserApiKey(context: Context, key: String) {
-        val prefs = context.getSharedPreferences("aerofast_prefs", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putString("aerofast_gemini_key", key.trim())
-            .putString("user_gemini_key", key.trim())
-            .apply()
+        try {
+            val prefs = getEncryptedPrefs(context, "aerofast_prefs")
+            prefs.edit()
+                .putString("aerofast_gemini_key", key.trim())
+                .putString("user_gemini_key", key.trim())
+                .apply()
+        } catch (e: Exception) {
+            throw RuntimeException("Failed to save API key securely: ${e.message}", e)
+        }
     }
 
     private fun optCleanDouble(json: JSONObject, key: String, default: Double): Double {
@@ -269,9 +303,11 @@ object GeminiAiService {
         var lastError: String? = null
         for (model in MODEL_FALLBACK_CHAIN) {
             try {
+                checkRateLimit() // Enforce rate limiting
                 val jsonBody = buildJsonBody()
                 val request = Request.Builder()
                     .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey")
+                    .header("User-Agent", "AeroFastPro/1.0")
                     .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
                     .build()
                 val response = httpClient.newCall(request).execute()
@@ -282,34 +318,44 @@ object GeminiAiService {
                 }
 
                 val rootJson = JSONObject(responseBody)
+
+                // Validate response structure
+                if (!rootJson.has("candidates")) {
+                    lastError = "Invalid API response: missing 'candidates' field"
+                    continue
+                }
+
                 val candidates = rootJson.optJSONArray("candidates")
-                val candidate = candidates?.optJSONObject(0)
-                val parts = candidate?.optJSONObject("content")?.optJSONArray("parts")
+                if (candidates == null || candidates.length() == 0) {
+                    lastError = "Model $model returned no candidates"
+                    continue
+                }
+
+                val candidate = candidates.optJSONObject(0) ?: run {
+                    lastError = "Invalid candidate object"
+                    continue
+                }
+
+                val parts = candidate.optJSONObject("content")?.optJSONArray("parts")
+                if (parts == null || parts.length() == 0) {
+                    lastError = "Model $model returned no response parts"
+                    continue
+                }
+
                 var text = ""
-                if (parts != null) {
-                    for (p in 0 until parts.length()) {
-                        val partObj = parts.optJSONObject(p)
-                        val isThought = partObj?.optBoolean("thought", false) ?: false
-                        if (!isThought) {
-                            val pText = partObj?.optString("text", "") ?: ""
-                            if (pText.isNotBlank()) {
-                                text += pText
-                            }
-                        }
-                    }
-                    if (text.isBlank()) {
-                        for (p in 0 until parts.length()) {
-                            val partObj = parts.optJSONObject(p)
-                            val pText = partObj?.optString("text", "") ?: ""
-                            if (pText.isNotBlank()) {
-                                text += pText
-                            }
+                for (p in 0 until parts.length()) {
+                    val partObj = parts.optJSONObject(p) ?: continue
+                    val isThought = partObj.optBoolean("thought", false)
+                    if (!isThought) {
+                        val pText = partObj.optString("text", "").trim()
+                        if (pText.isNotBlank()) {
+                            text += pText
                         }
                     }
                 }
-                text = text.trim()
+
                 if (text.isBlank()) {
-                    lastError = "Model $model returned empty candidate text"
+                    lastError = "Model $model returned empty response text"
                     continue
                 }
 
@@ -790,8 +836,10 @@ object GeminiAiService {
         var lastError: String? = null
         for (model in MODEL_FALLBACK_CHAIN) {
             try {
+                checkRateLimit() // Enforce rate limiting
                 val request = Request.Builder()
                     .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey")
+                    .header("User-Agent", "AeroFastPro/1.0")
                     .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
                     .build()
                 val response = httpClient.newCall(request).execute()
@@ -802,32 +850,44 @@ object GeminiAiService {
                 }
 
                 val rootJson = JSONObject(responseBody)
+
+                // Validate response structure
+                if (!rootJson.has("candidates")) {
+                    lastError = "Invalid API response: missing 'candidates' field"
+                    continue
+                }
+
                 val candidates = rootJson.optJSONArray("candidates")
-                val firstCandidate = candidates?.optJSONObject(0)
-                val content = firstCandidate?.optJSONObject("content")
+                if (candidates == null || candidates.length() == 0) {
+                    lastError = "Model $model returned no candidates"
+                    continue
+                }
+
+                val firstCandidate = candidates.optJSONObject(0) ?: run {
+                    lastError = "Invalid candidate object"
+                    continue
+                }
+
+                val content = firstCandidate.optJSONObject("content")
                 val parts = content?.optJSONArray("parts")
+
+                if (parts == null || parts.length() == 0) {
+                    lastError = "Model $model returned no response parts"
+                    continue
+                }
+
                 var fullText = ""
-                if (parts != null) {
-                    for (p in 0 until parts.length()) {
-                        val partObj = parts.optJSONObject(p)
-                        val isThought = partObj?.optBoolean("thought", false) ?: false
-                        if (!isThought) {
-                            val pText = partObj?.optString("text", "") ?: ""
-                            if (pText.isNotBlank()) {
-                                fullText += pText
-                            }
-                        }
-                    }
-                    if (fullText.isBlank()) {
-                        for (p in 0 until parts.length()) {
-                            val partObj = parts.optJSONObject(p)
-                            val pText = partObj?.optString("text", "") ?: ""
-                            if (pText.isNotBlank()) {
-                                fullText += pText
-                            }
+                for (p in 0 until parts.length()) {
+                    val partObj = parts.optJSONObject(p) ?: continue
+                    val isThought = partObj.optBoolean("thought", false)
+                    if (!isThought) {
+                        val pText = partObj.optString("text", "").trim()
+                        if (pText.isNotBlank()) {
+                            fullText += pText
                         }
                     }
                 }
+
                 if (fullText.isNotBlank()) {
                     return@withContext fullText.trim()
                 }
