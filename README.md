@@ -8,6 +8,19 @@ This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/3ec9b983-8a5c-417d-8ab4-497ce3e6616d
 
+## Download the APK
+
+Every push to `main` builds a debug APK with GitHub Actions (`.github/workflows/build-apk.yml`).
+
+- **Latest build:** [Releases → Latest APK](https://github.com/parandhama9999-creator/aero123/releases/tag/latest-apk). Open this on the phone, tap the `.apk`, and allow "install unknown apps" when asked.
+- **Any build:** Actions tab → *Build APK* → pick a run → *Artifacts*.
+- **Build on demand:** Actions tab → *Build APK* → *Run workflow*.
+
+The published APK contains no API key; enter your Gemini key in the app under Settings → AI Settings.
+
+Optional repository secret (Settings → Secrets and variables → Actions): `DEBUG_KEYSTORE_BASE64`, the output of
+`base64 -w0 debug.keystore`. It keeps the signing key fixed so each new APK installs over the previous one.
+
 ## Run Locally
 
 **Prerequisites:**  [Android Studio](https://developer.android.com/studio) and a [Google Gemini API key](https://aistudio.google.com/)
