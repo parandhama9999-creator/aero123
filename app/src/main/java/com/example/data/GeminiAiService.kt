@@ -40,7 +40,14 @@ data class ExtractedFastenerSpec(
     val detectedDimensions: List<DetectedDimension>,
     val isAiVisionExtracted: Boolean,
     val modelUsed: String = "gemini-3.5-flash",
-    val radius: Double? = null
+    val radius: Double? = null,
+    // Drawing geometry for volume / pre-extrusion length (null when the drawing does not show it), all in mm
+    val threadLengthMm: Double? = null,
+    val headAcrossFlatsMm: Double? = null,
+    val headHeightMm: Double? = null,
+    val flangeDiaMm: Double? = null,
+    val flangeThicknessMm: Double? = null,
+    val shankDiaMm: Double? = null
 )
 
 object GeminiAiService {
@@ -264,12 +271,16 @@ object GeminiAiService {
             Fastener drawing inspection. Read every callout, title block and note. Return ONLY this JSON:
             {"nominalDiameterMm":number,"pitch":number,"lengthMm":number,"fastenerType":"","unitSystem":"METRIC|INCH",
              "materialKey":"","propertyClass":"","threadClass":"","coating":"",
+             "threadLengthMm":number,"headAcrossFlatsMm":number,"headHeightMm":number,
+             "flangeDiaMm":number,"flangeThicknessMm":number,"shankDiaMm":number,
              "detectedDimensions":[{"feature":"","nominal":"","tolerance":""}],"summary":""}
             Rules:
             - fastenerType one of: ${FastenerType.values().joinToString(",") { it.name }}
             - coating one of: ${CoatingType.values().joinToString(",") { it.name }}
             - materialKey e.g. 10B21, 4140, SS316, A286, Ti-6Al-4V; propertyClass e.g. 8.8, 10.9, A2-70; threadClass e.g. 6g, 6H, 2A, 3A.
             - Inch drawings: give nominalDiameterMm and lengthMm in mm and pitch in mm (25.4/TPI).
+            - threadLengthMm = thread length b; headAcrossFlatsMm = across flats s; headHeightMm = head height k (incl. flange);
+              flangeDiaMm = flange dc; flangeThicknessMm = flange thickness c; shankDiaMm = plain shank / body diameter. All in mm, 0 if not shown.
             - detectedDimensions: EVERY dimension on the drawing, one entry each, nominal with unit, tolerance exactly as written ("" if none):
               diameters, lengths, thread length, head height, across flats/corners, flange/socket sizes, chamfers, radii, angles, GD&T callouts.
             - Only values actually shown; never invent. Use "" (or 0 for numbers) when not shown.
@@ -491,7 +502,14 @@ object GeminiAiService {
 
         val extractedRadius = parsedJson.optDouble("radius", Double.NaN).let { if (it.isNaN()) null else it }
 
+        fun geom(key: String) = parsedJson.optDouble(key, Double.NaN).takeIf { !it.isNaN() && it > 0.0 }
         return ExtractedFastenerSpec(
+            threadLengthMm = geom("threadLengthMm"),
+            headAcrossFlatsMm = geom("headAcrossFlatsMm"),
+            headHeightMm = geom("headHeightMm"),
+            flangeDiaMm = geom("flangeDiaMm"),
+            flangeThicknessMm = geom("flangeThicknessMm"),
+            shankDiaMm = geom("shankDiaMm"),
             fastenerType = fastenerType,
             unitSystem = unitSystem,
             nominalSizeIndex = sizeIndex,
