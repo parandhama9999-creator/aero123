@@ -534,6 +534,7 @@ fun FastenerSizingScreen(
             val bMin = scan?.threadLengthMm ?: com.example.data.PokaYokeEngine.threadLengthB(selectedFastenerType, selectedUnitSystem, dMm, selectedLength)
             val fullThread = com.example.data.PokaYokeEngine.isFullyThreaded(selectedFastenerType) || bMin + 2 * pitchMm >= selectedLength
             val bRule = if (scan?.threadLengthMm != null) "drawing (AI scan)" else when {
+                selectedUnitSystem == UnitSystem.INCH && (selectedFastenerType == FastenerType.SHCS || selectedFastenerType == FastenerType.HEXALOBULAR_SCREW) -> "2D + 1/2\" (ASME B18.3)"
                 selectedUnitSystem == UnitSystem.INCH -> if (selectedLength <= 152.4) "2D + 1/4\" (L ≤ 6\")" else "2D + 1/2\" (L > 6\")"
                 selectedFastenerType == FastenerType.SHCS || selectedFastenerType == FastenerType.HEXALOBULAR_SCREW -> "2d + 12 (ISO 4762)"
                 selectedLength <= 125.0 -> "2d + 6 (L ≤ 125)"

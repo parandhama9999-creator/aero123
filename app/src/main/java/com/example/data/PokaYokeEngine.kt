@@ -236,8 +236,10 @@ object PokaYokeEngine {
     fun threadLengthB(type: FastenerType, unit: UnitSystem, d: Double, lengthMm: Double): Double {
         if (type.isUnthreaded) return 0.0
         if (isFullyThreaded(type)) return lengthMm
+        val socketHead = type == FastenerType.SHCS || type == FastenerType.HEXALOBULAR_SCREW
         val b = if (unit == UnitSystem.INCH) {
-            if (lengthMm <= 152.4) 2 * d + 6.35 else 2 * d + 12.7
+            // ASME B18.3 socket head cap screws: LT = 2D + 1/2"; ASME B18.2.1 hex bolts: 2D + 1/4" (L ≤ 6"), 2D + 1/2"
+            if (socketHead || lengthMm > 152.4) 2 * d + 12.7 else 2 * d + 6.35
         } else if (type == FastenerType.SHCS || type == FastenerType.HEXALOBULAR_SCREW) {
             2 * d + 12.0
         } else when {
