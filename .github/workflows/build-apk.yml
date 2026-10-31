@@ -43,6 +43,26 @@ jobs:
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
 
+      # Play Store upload: a signed release bundle, built only when the upload-key secrets exist.
+      # Kept as a private run artifact (not on the public release page).
+      - name: Build signed release bundle (AAB)
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        if: env.UPLOAD_KEYSTORE_BASE64 != '' && github.event_name != 'pull_request'
+        run: |
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          KEYSTORE_PATH="$RUNNER_TEMP/upload.jks" gradle :app:bundleRelease --stacktrace
+          cp app/build/outputs/bundle/release/app-release.aab "AeroFastPro-release-${GITHUB_SHA::7}.aab"
+
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('AeroFastPro-release-*.aab') != ''
+        with:
+          name: AeroFastPro-release-aab
+          path: AeroFastPro-release-*.aab
+          retention-days: 30
+
       - name: Rename APK
         id: apk
         run: |

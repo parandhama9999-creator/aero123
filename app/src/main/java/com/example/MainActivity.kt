@@ -134,6 +134,29 @@ enum class NavigationTab(val tabIndex: Int, val defaultTitle: String, val icon: 
 @Composable
 fun AeroFastApp() {
     val context = LocalContext.current
+    // One-time engineering disclaimer (Play policy and liability): results are a reference, not a released design
+    val disclaimerPrefs = remember { context.getSharedPreferences("aerofast_prefs", android.content.Context.MODE_PRIVATE) }
+    var showDisclaimer by remember { mutableStateOf(!disclaimerPrefs.getBoolean("disclaimer_ok_v1", false)) }
+    if (showDisclaimer) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    disclaimerPrefs.edit().putBoolean("disclaimer_ok_v1", true).apply()
+                    showDisclaimer = false
+                }) { Text("I understand") }
+            },
+            title = { Text("Engineering reference only") },
+            text = {
+                Text(
+                    "AeroFast Pro calculates fastener dimensions, processes and checks from published standards and " +
+                        "material data. Results are for reference: verify every value against the current ISO / ASME / SAE / " +
+                        "AMS standard, the customer drawing and your process qualification before production. " +
+                        "The author accepts no liability for parts made from these results."
+                )
+            }
+        )
+    }
     val scope = rememberCoroutineScope()
 
     var themeMode by remember { mutableStateOf(AppThemeMode.INDUSTRIAL_LIGHT) }

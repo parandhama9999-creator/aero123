@@ -47,6 +47,15 @@ fun JointTorqueScreen(
     modifier: Modifier = Modifier
 ) {
     val customColors = LocalCustomColors.current
+    if (result.fastenerType.isUnthreaded) {
+        Text(
+            text = "Rivets are not tightened by torque: the joint is set by upsetting (solid) or pulling the mandrel (blind). " +
+                "Size it from rivet shear and bearing allowables (MMPDS) and the rivet procurement spec.",
+            color = customColors.textMain,
+            modifier = modifier
+        )
+        return
+    }
     val scrollState = rememberScrollState()
 
     // Friction defaults follow the selected finish and reset when it changes; the user can then adjust them

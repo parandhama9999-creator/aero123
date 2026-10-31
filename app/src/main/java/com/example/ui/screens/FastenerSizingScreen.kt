@@ -595,14 +595,14 @@ fun FastenerSizingScreen(
                                     Text(text = "Forged round head: Ø${mm(dForged)} (1.2 × e ${mm(e)}) × k ${mm(k)} mm", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = customColors.textMain)
                                 } else {
                                     // DIN 6921 (1983) dc max, k max, s from supplier catalogues; flange thickness c must come from the drawing
-                                    val din6921 = mapOf(6.0 to Triple(14.2, 6.6, 10.0), 8.0 to Triple(18.0, 8.1, 13.0), 10.0 to Triple(22.3, 9.2, 15.0),
+                                    val din6921 = mapOf<Double, Triple<Double, Double, Double?>>(5.0 to Triple(11.8, 5.4, 8.0), 20.0 to Triple(43.0, 17.1, null), 6.0 to Triple(14.2, 6.6, 10.0), 8.0 to Triple(18.0, 8.1, 13.0), 10.0 to Triple(22.3, 9.2, 15.0),
                                         12.0 to Triple(26.6, 11.5, 16.0), 16.0 to Triple(35.0, 14.4, 21.0))
                                     val row = din6921.entries.firstOrNull { kotlin.math.abs(it.key - dMm) < 0.01 }?.value
                                     var dcText by remember(dMm) { mutableStateOf(row?.first?.toString() ?: "") }
                                     var kText by remember(dMm) { mutableStateOf(row?.second?.toString() ?: headDims.headHeightK.toString()) }
-                                    var sText by remember(dMm) { mutableStateOf(row?.third?.toString() ?: headDims.acrossFlatsS.toString()) }
+                                    var sText by remember(dMm) { mutableStateOf(row?.let { r -> r.third?.toString() ?: "" } ?: headDims.acrossFlatsS.toString()) }
                                     var cText by remember(dMm) { mutableStateOf("") }
-                                    Text(text = if (row != null) "dc, k, s pre-filled from DIN 6921 (1983 edition, supplier tables). Enter flange thickness c from the drawing." else "No DIN 6921 row for this size: enter dc, k, s and c from the drawing.", fontSize = 10.sp, color = customColors.textMuted)
+                                    Text(text = if (row != null) "Pre-filled from DIN 6921 (1983 edition, supplier tables) where known. Enter flange thickness c (and any blank value) from the drawing." else "No DIN 6921 row for this size: enter dc, k, s and c from the drawing.", fontSize = 10.sp, color = customColors.textMuted)
                                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                                         listOf(Triple<String, String, (String) -> Unit>("dc", dcText, { v: String -> dcText = v }), Triple<String, String, (String) -> Unit>("k", kText, { v: String -> kText = v }),
                                             Triple<String, String, (String) -> Unit>("s", sText, { v: String -> sText = v }), Triple<String, String, (String) -> Unit>("c", cText, { v: String -> cText = v })).forEach { (lbl, value, set) ->
