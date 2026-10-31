@@ -306,7 +306,11 @@ data class MaterialInfo(
     val reductionOfAreaZPct: Double,
     val flowStressCoeffK: Double, // Strength coefficient K (MPa)
     val strainHardeningN: Double, // Strain hardening exponent n
-    val heatTreatmentSpec: HeatTreatmentSpec
+    val heatTreatmentSpec: HeatTreatmentSpec,
+    /** Base grade whose unsourced values (machining, flow stress, price, tooling) this grade copies. */
+    val estimatedFrom: String? = null,
+    /** Datasheets the sourced values came from. */
+    val dataSources: List<String> = emptyList()
 )
 
 data class MetricSize(
@@ -322,7 +326,7 @@ data class InchSize(
 )
 
 object FastenerCatalog {
-    val DEFAULT_MATERIALS: Map<String, MaterialInfo> = mapOf(
+    private val BASE_MATERIALS: Map<String, MaterialInfo> = mapOf(
         "1008" to MaterialInfo(
             key = "1008",
             name = "Mild Steel (AISI 1008/1010)",
@@ -1808,6 +1812,9 @@ object FastenerCatalog {
             )
         )
     )
+
+    /** Base catalogue plus the researched automotive / aerospace grades (see ResearchedMaterials). */
+    val DEFAULT_MATERIALS: Map<String, MaterialInfo> = BASE_MATERIALS + ResearchedMaterials.extend(BASE_MATERIALS)
 
     // Observable Compose state map with all 38+ default alloys + dynamic custom additions
     val MATERIALS = androidx.compose.runtime.mutableStateMapOf<String, MaterialInfo>().apply {

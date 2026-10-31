@@ -109,6 +109,14 @@ object SoftAnnealEngine {
             "Slow cooling precipitates carbides and destroys corrosion resistance."),
         "MONEL_K500" to MillAnnealCycle("982 – 1038 °C (1800 – 1900 °F)", "", "Water quench",
             "High Temp Metals; Metal Suppliers Online", MEDIUM),
+        "MP159" to MillAnnealCycle("1038 – 1052 °C (1900 – 1925 °F)", "4 – 8 h", "Water quench",
+            "Aircraft Materials / UPMET MP159 (AMS 5842)", MEDIUM,
+            "Solution-treated stock is the soft condition; strength comes from work-strengthening plus aging."),
+        "INCONEL_X750" to MillAnnealCycle("982 °C ± 14 °C (1800 °F)", "", "Air cool or faster",
+            "Total Materia Inconel X-750", MEDIUM),
+        "TI_BETA_C" to MillAnnealCycle("788 – 927 °C (1450 – 1700 °F) solution treat", "", "",
+            "Total Materia Ti-3Al-8V-6Cr-4Mo-4Zr", MEDIUM,
+            "Beta alloy: the solution-treated condition is the soft, cold-formable one. Re-solution between blows, age after forming."),
         "10KH11N23T3MR" to MillAnnealCycle("≈ 1000 – 1050 °C (unconfirmed)", "", "Air",
             "Garbled table in a TsKBA amendment only", LOW)
     )
@@ -249,7 +257,7 @@ object SoftAnnealEngine {
                 notes += "Non-ferrous anneal runs far below steel temperatures. Take the cycle from the supplier datasheet."
                 SoftAnnealSpec(
                     route = route,
-                    inHouseAnnealNeeded = !cond.contains("CONDITION O"),
+                    inHouseAnnealNeeded = !cond.contains("CONDITION O") && !cond.contains("NO ANNEAL"),
                     suppliedCondition = supplied,
                     temperatureC = "",
                     soakTime = "",

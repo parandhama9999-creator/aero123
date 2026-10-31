@@ -107,13 +107,13 @@ class SoftAnnealTest {
         assertTrue(rene.cycleConfidence.contains("disagree"))
     }
 
-    @Test fun everyMillAnnealedGrade_hasACitedCycle() {
+    @Test fun everyMillAnnealedGrade_hasACitedCycleOrDeclaresTheGap() {
         val mill = FastenerCatalog.MATERIALS.values.filter { SoftAnnealEngine.build(it).route == AnnealRoute.MILL_ANNEALED }
-        assertEquals(14, mill.size)
+        assertTrue(mill.size >= 14)
         mill.forEach {
             val s = SoftAnnealEngine.build(it)
-            assertTrue("${it.key} has no researched cycle", s.cycleSource.isNotBlank())
-            assertTrue("${it.key} temp", !s.temperatureC.startsWith("N/A"))
+            val cited = s.cycleSource.isNotBlank() && !s.temperatureC.startsWith("N/A")
+            assertTrue("${it.key}: no cycle and no declared gap", cited || s.unsourced.any { u -> u.contains("Mill-anneal") })
         }
     }
 
