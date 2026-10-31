@@ -110,6 +110,8 @@ object PokaYokeEngine {
                 type == FastenerType.LOCKBOLT_PIN -> ProductStandard.LOCKBOLT_STD
                 type == FastenerType.BLIND_BOLT -> ProductStandard.BLIND_BOLT_STD
                 type == FastenerType.HEXALOBULAR_SCREW -> ProductStandard.ASME_B18_3
+                type == FastenerType.SOLID_RIVET -> ProductStandard.MS20470
+                type == FastenerType.BLIND_RIVET -> ProductStandard.NAS1398
                 type == FastenerType.HEAVY_HEX_NUT -> ProductStandard.ASTM_A194
                 type == FastenerType.CASTLE_NUT -> ProductStandard.MS20500
                 type == FastenerType.METAL_LOCK_NUT -> ProductStandard.MS21042
@@ -159,11 +161,14 @@ object PokaYokeEngine {
             FastenerType.BLIND_BOLT -> ProductStandard.BLIND_BOLT_STD
             FastenerType.AERO_LOCK_NUT -> ProductStandard.MS21042
             FastenerType.NUTPLATE -> ProductStandard.MS21047
+            FastenerType.SOLID_RIVET -> ProductStandard.MS20470
+            FastenerType.BLIND_RIVET -> ProductStandard.NAS1398
         }
     }
 
     /** Thread length b for partially threaded bolts (ISO 4014 / ISO 4762 / ASME B18.2.1). */
     fun threadLengthB(type: FastenerType, unit: UnitSystem, d: Double, lengthMm: Double): Double {
+        if (type.isUnthreaded) return 0.0
         if (isFullyThreaded(type)) return lengthMm
         val b = if (unit == UnitSystem.INCH) {
             if (lengthMm <= 152.4) 2 * d + 6.35 else 2 * d + 12.7
@@ -316,13 +321,13 @@ object PokaYokeEngine {
             if (d < 8.0) {
                 warn("Hot-dip galvanizing below M8", "ISO 10684 covers M8–M64; smaller threads fill with zinc.", "Use electro-zinc or zinc flake for small sizes.")
             }
-            if (!isNut && !threadClass.contains("e") && !threadClass.contains("1A")) {
+            if (!isNut && !type.isUnthreaded && !threadClass.contains("e") && !threadClass.contains("1A")) {
                 critical("HDG thread needs oversize fit", "45–65 µm zinc will not fit a ${threadClass} external thread.", "Use 6az / 6e external with oversize-tapped nuts (6AZ/6AX per ISO 965-5), or undercut the bolt thread before galvanizing.")
             }
         }
 
         // ---- 8. Coating thickness vs thread allowance (ISO 4042: coating adds 4 × t to the pitch diameter) ----
-        if (!isWasher && coating.thicknessMaxUm > 2.0 && coating != CoatingType.HOT_DIP_GALV) {
+        if (!type.isUnthreaded && !isWasher && coating.thicknessMaxUm > 2.0 && coating != CoatingType.HOT_DIP_GALV) {
             val allowanceUm = abs(fundamentalDeviationMm) * 1000.0
             val growthUm = 4.0 * coating.thicknessMaxUm
             val excessUm = growthUm - allowanceUm
@@ -343,7 +348,7 @@ object PokaYokeEngine {
         }
 
         // ---- 8b. Bolt–nut matching (ISO 898-2: nut class ≥ first digit of the bolt class) ----
-        if (pc != null && !isWasher) {
+        if (!type.isUnthreaded && pc != null && !isWasher) {
             val nutClass = nutClassFor(pc)
             val minLoadKn = classStrength(pc, d, material).rmMinMpa * stressAreaMm2 / 1000.0
             if (isNut) {
@@ -357,6 +362,9 @@ object PokaYokeEngine {
         }
 
         // ---- 9. Geometry & manufacturability ----
+        if (type.isUnthreaded) {
+            warn("Rivet joints are designed in shear", "Tensile proof load, thread-root Kt and fatigue figures assume a threaded bolt; for a rivet they are shank-area values only.", "Size the joint from rivet shear and bearing allowables (MMPDS) and the rivet procurement spec.")
+        }
         if (!isWasher && headDims != null && !headDims.isTable && headDims.source.startsWith("Approximated")) {
             warn("No dimension table for this type", "${headDims.source}.", "Take head and nut dimensions from the part drawing before releasing weights, tooling or G-code.")
         } else if (!isWasher && headDims != null && !headDims.isTable) {

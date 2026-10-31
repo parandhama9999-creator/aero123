@@ -5,7 +5,9 @@ enum class FastenerType(
     val isNut: Boolean = false,
     val isStud: Boolean = false,
     val isWasher: Boolean = false,
-    val category: String = "Bolts & Screws"
+    val category: String = "Bolts & Screws",
+    /** Rivets: no thread, so thread limits, rolling, tapping, CNC turning and thread-root fatigue do not apply. */
+    val isUnthreaded: Boolean = false
 ) {
     // External Threaded Bolts & Screws
     HEX_BOLT("Hex Bolt - Partial Thread (ISO 4014 / DIN 931)", false, false, false, "Bolts & Screws"),
@@ -34,6 +36,8 @@ enum class FastenerType(
     TAPER_LOK("Taper-Lok Interference-Fit Bolt (OEM spec)", false, false, false, "Aerospace"),
     LOCKBOLT_PIN("Lockbolt Pin - Swaged Collar (Huck type)", false, false, false, "Aerospace"),
     BLIND_BOLT("Blind Bolt - Core Bolt (OEM / NAS series)", false, false, false, "Aerospace"),
+    SOLID_RIVET("Solid Rivet - Universal Head (MS20470)", false, false, false, "Aerospace", isUnthreaded = true),
+    BLIND_RIVET("Structural Blind Rivet (NAS 1398)", false, false, false, "Aerospace", isUnthreaded = true),
 
     // Studs & Rods
     STUD("Double-End / Continuous Thread Stud (ASTM A193 B7)", false, true, false, "Studs & Rods"),
@@ -118,7 +122,9 @@ enum class ProductStandard(val code: String, val label: String, val category: St
     TAPER_LOK_STD("Taper-Lok", "Taper-Lok Interference-Fit Bolt (OEM spec)", "Aerospace/Defense"),
     LOCKBOLT_STD("Lockbolt", "Lockbolt Pin & Swaged Collar (Huck / OEM spec)", "Aerospace/Defense"),
     BLIND_BOLT_STD("Blind Bolt", "Blind Bolt (OEM / NAS series)", "Aerospace/Defense"),
-    MS21047("MS21047", "MS21047 (Two-Lug Nutplate / Anchor Nut)", "Aerospace/Defense")
+    MS21047("MS21047", "MS21047 (Two-Lug Nutplate / Anchor Nut)", "Aerospace/Defense"),
+    MS20470("MS20470", "MS20470 (Solid Rivet, Universal Head)", "Aerospace/Defense"),
+    NAS1398("NAS 1398", "NAS 1398 (Structural Blind Rivet)", "Aerospace/Defense")
 }
 
 enum class PropertyClass(val label: String, val defaultMatKey: String, val utsMpa: Double) {

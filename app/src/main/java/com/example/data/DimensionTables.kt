@@ -66,7 +66,7 @@ object DimensionTables {
         FastenerType.TTY_HEAD_BOLT, FastenerType.THREAD_FORMING_SCREW, FastenerType.WHEEL_BOLT, FastenerType.WHEEL_NUT,
         FastenerType.BANJO_BOLT, FastenerType.NAS_CLOSE_TOL_BOLT, FastenerType.HI_LOK_PIN, FastenerType.HI_LOK_COLLAR,
         FastenerType.TAPER_LOK, FastenerType.LOCKBOLT_PIN, FastenerType.BLIND_BOLT, FastenerType.AERO_LOCK_NUT,
-        FastenerType.NUTPLATE
+        FastenerType.NUTPLATE, FastenerType.SOLID_RIVET, FastenerType.BLIND_RIVET
     )
 
     fun forPart(type: FastenerType, unit: UnitSystem, dMm: Double): HeadDimensions {

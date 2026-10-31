@@ -505,6 +505,7 @@ fun FastenerSizingScreen(
         }
 
         // Authoritative Turning Blank / Tap Drill Card
+        if (!result.fastenerType.isUnthreaded) {
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = customColors.bgCard,
@@ -636,6 +637,7 @@ fun FastenerSizingScreen(
                 )
             }
         }
+        } // end blank card (threaded parts only)
 
         // Pitch Sweet-Spot & Limits Card
         Surface(
@@ -650,7 +652,7 @@ fun FastenerSizingScreen(
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
-                        text = "ISO 965 / ASME B1.1 / AS8879 LIMITS",
+                        text = if (result.fastenerType.isUnthreaded) "RIVET \u2014 NO THREAD" else "ISO 965 / ASME B1.1 / AS8879 LIMITS",
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Black,
                         color = customColors.accentPrimary,
@@ -658,13 +660,14 @@ fun FastenerSizingScreen(
                     )
                 }
                 Text(
-                    text = "Authoritative Thread Diameter Limits (${result.threadClass})",
+                    text = if (result.fastenerType.isUnthreaded) "Head & shank geometry (thread limits not applicable)" else "Authoritative Thread Diameter Limits (${result.threadClass})",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Black,
                     color = customColors.textMain,
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                 )
 
+                if (!result.fastenerType.isUnthreaded) {
                 // 1. Major Diameter (Min / Mean / Max)
                 Surface(
                     shape = RoundedCornerShape(8.dp),
@@ -968,6 +971,7 @@ fun FastenerSizingScreen(
                     }
                 }
 
+                } // end thread-only sections
                 // 5. ISO/ASME Dimension Table
                 result.headDimensions?.let { hd ->
                     Spacer(modifier = Modifier.height(6.dp))

@@ -316,6 +316,7 @@ private fun DrawScope.drawBlueprint(
                 when (result.fastenerType) {
                     FastenerType.SHCS, FastenerType.HEXALOBULAR_SCREW -> drawShcsBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.SOCKET_CSK -> drawCountersunkBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
+                    FastenerType.SOLID_RIVET, FastenerType.BLIND_RIVET -> drawRivetBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.SOCKET_BUTTON -> drawButtonHeadBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.SOCKET_SET -> drawSetScrewBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.FLANGE_BOLT, FastenerType.TTY_HEAD_BOLT -> drawFlangeBoltBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
@@ -504,6 +505,36 @@ private fun DrawScope.drawButtonHeadBlueprint(
     drawRect(color = cyanColor, topLeft = Offset(shankX, -shankH / 2f), size = Size(shankPx, shankH), style = Stroke(2f))
 
     drawThreadVTeeth(shankX + shankPx, threadPx, shankH - 6f, amberColor, brightPaper)
+}
+
+/** Rivet: domed head and a plain shank. No socket and no thread. */
+private fun DrawScope.drawRivetBlueprint(
+    result: FastenerCalculationResult,
+    fgColor: Color, cyanColor: Color, amberColor: Color, brightPaper: Boolean
+) {
+    val startX = -180f
+    val headW = 40f
+    val headH = 88f
+    val shankPx = 250f
+    val shankH = 44f
+
+    val domePath = Path().apply {
+        moveTo(startX + headW, -shankH / 2f)
+        lineTo(startX + headW, -headH / 2f)
+        cubicTo(startX, -headH / 2f, startX, headH / 2f, startX + headW, headH / 2f)
+        lineTo(startX + headW, shankH / 2f)
+        close()
+    }
+    drawPath(domePath, color = if (brightPaper) Color(0xFFCBD5E1) else Color(0xFF1E293B))
+    drawPath(domePath, color = fgColor, style = Stroke(2.2f))
+
+    val shankX = startX + headW
+    drawRect(color = if (brightPaper) Color(0xFFF1F5F9) else Color(0xFF0F172A), topLeft = Offset(shankX, -shankH / 2f), size = Size(shankPx, shankH))
+    drawRect(color = cyanColor, topLeft = Offset(shankX, -shankH / 2f), size = Size(shankPx, shankH), style = Stroke(2f))
+    if (result.fastenerType == FastenerType.BLIND_RIVET) {
+        // Mandrel through the sleeve
+        drawLine(color = amberColor, start = Offset(startX + 6f, 0f), end = Offset(shankX + shankPx + 40f, 0f), strokeWidth = 6f)
+    }
 }
 
 private fun DrawScope.drawSetScrewBlueprint(

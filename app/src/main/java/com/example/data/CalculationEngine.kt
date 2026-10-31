@@ -170,7 +170,9 @@ object CalculationEngine {
         }
 
         val isNut = fastenerType.isNut
-        val threadLabel = if (customNominalDiaMm != null) {
+        val threadLabel = if (fastenerType.isUnthreaded) {
+            "Ø${d.round(2)} rivet (no thread)"
+        } else if (customNominalDiaMm != null) {
             "Custom Ø${customNominalDiaMm}×${p.round(3)} - $threadClass"
         } else if (unitSystem == UnitSystem.METRIC) {
             val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[11] }
@@ -384,9 +386,10 @@ object CalculationEngine {
         val volHead = when {
             fastenerType.isStud || fastenerType == FastenerType.SOCKET_SET -> 0.0
             isSocketHead -> (PI / 4.0) * s.pow(2.0) * k - socketVol
+            fastenerType.isUnthreaded -> (PI / 4.0) * s.pow(2.0) * k
             else -> (sqrt(3.0) / 2.0) * s.pow(2.0) * k
         }
-        val headArea = if (isSocketHead) (PI / 4.0) * s.pow(2.0) else (sqrt(3.0) / 2.0) * s.pow(2.0)
+        val headArea = if (isSocketHead || fastenerType.isUnthreaded) (PI / 4.0) * s.pow(2.0) else (sqrt(3.0) / 2.0) * s.pow(2.0)
 
         val totalVolMm3 = if (isNut) {
             ((headArea - (PI / 4.0) * blankDia.pow(2.0)) * dims.nutHeightM)
@@ -410,7 +413,8 @@ object CalculationEngine {
         val trueStrainEps = ln(max(1.15, ldRatio + 1.0))
         val flowStressMpa = material.flowStressCoeffK * trueStrainEps.pow(material.strainHardeningN)
         // Tensile stress area: ISO 898-1 As = π/4·(d − 0.9382P)²; ASME B1.1 As = π/4·(d − 0.9743P)²
-        val stressAreaAsMm2 = (PI / 4.0) * (d - (if (unitSystem == UnitSystem.INCH) 0.974279 else 0.938194) * p).pow(2.0)
+        val stressAreaAsMm2 = if (fastenerType.isUnthreaded) (PI / 4.0) * d.pow(2.0)
+            else (PI / 4.0) * (d - (if (unitSystem == UnitSystem.INCH) 0.974279 else 0.938194) * p).pow(2.0)
         // Loads follow the selected property class (ISO 898-1 proof stress Sp and min Rm), not just the raw alloy
         val strength = if (propertyClass != null) PokaYokeEngine.classStrength(propertyClass, d, material)
             else ClassStrength(material.postForgingTargetUtsMpa, material.yieldStrengthMpa, material.yieldStrengthMpa * 0.9, false)
@@ -461,9 +465,12 @@ object CalculationEngine {
         // CNC Tooling & Fanuc G-Code
         val maxRpm = if (material.isAero) 1800 else 3200
         val calcRpm = min(maxRpm, ((1000 * material.vc) / (PI * max(1.0, d))).roundToInt())
-        val totalCncSec = ((lengthMm / (calcRpm * material.feed)) * 60.0 * 2.1) + 5.5
+        // Rivets are finished on the header: no turning, no threading
+        val totalCncSec = if (fastenerType.isUnthreaded) 0.0 else ((lengthMm / (calcRpm * material.feed)) * 60.0 * 2.1) + 5.5
 
-        val cncTools = if (isNut) {
+        val cncTools = if (fastenerType.isUnthreaded) {
+            emptyList()
+        } else if (isNut) {
             listOf(
                 CncToolItem("T0101", "S20Q-SCLCR09 + ${material.insertSpec}", "Internal Boring Bar G71/G01", material.vc, material.feed),
                 CncToolItem("T0202", "IR06.0-1.5 ISO + PVD TiAlN", "Internal Threading G76", (material.vc * 0.8).round(0), 0.1),
@@ -485,7 +492,9 @@ object CalculationEngine {
         val programNo = String.format(java.util.Locale.US, "O%04d", ((d.roundToInt() * 100 + lengthMm.roundToInt()) % 9999).coerceAtLeast(1))
         // Threading must run at constant RPM (G97): G96 changes speed with X and breaks pitch synchronisation
         val threadRpm = min(min(maxRpm, 1500), ((1000 * material.vc * 0.6) / (PI * max(1.0, d))).roundToInt())
-        val fanucCode = if (isNut) {
+        val fanucCode = if (fastenerType.isUnthreaded) {
+            "%\n$programNo ${cmt("AEROFAST PRO RIVET")}\n${cmt("NO CNC PROGRAM - RIVETS ARE FULLY FORMED ON THE HEADER")}\nM30\n%"
+        } else if (isNut) {
             val nutHeight = dims.nutHeightM.round(2) // ISO 4032 / ASME B18.2.2 nut height m
             buildString {
                 appendLine("%")
@@ -560,8 +569,9 @@ object CalculationEngine {
         val matRate = material.rateInr * fx
         val cRawMat = ((grossWeightG / 1000.0) * matRate) - (((grossWeightG - netWeightG) / 1000.0) * matRate * 0.35)
         val cForging = (((if (material.isAero) 1800.0 else 850.0) * fx) / (material.headingSpm * 60.0 * 0.75)) + (((if (material.isAero) 24000.0 else 6500.0) * fx) / batchQty)
-        val cCnc = ((totalCncSec / 3600.0) * (cncHourRateInr * fx)) + ((if (material.isAero) 3.8 else 0.75) * fx)
-        val cRoll = (if (material.isAero) 4.8 else 0.65) * fx
+        val cCnc = if (fastenerType.isUnthreaded) 0.0
+            else ((totalCncSec / 3600.0) * (cncHourRateInr * fx)) + ((if (material.isAero) 3.8 else 0.75) * fx)
+        val cRoll = if (fastenerType.isUnthreaded) 0.0 else (if (material.isAero) 4.8 else 0.65) * fx
         val cHt = ((netWeightG / 1000.0) * (htRatePerKgInr * fx)) + ((if (material.isAero) 5.5 else 0.45) * fx)
         val cNdt = (if (material.isAero) (3.8 + (7500.0 / batchQty)) else 0.30) * fx
 
@@ -572,7 +582,8 @@ object CalculationEngine {
         val (risks, recommendations) = analyzeForgingAndCrackRisks(extractedRadius, material, ldRatio)
 
         val rootRadiusR = 0.144 * p
-        val ktFactor = (1.0 + 2.0 * kotlin.math.sqrt((p / 2.0) / rootRadiusR)).coerceIn(2.2, 4.2)
+        // No thread root on a rivet shank
+        val ktFactor = if (fastenerType.isUnthreaded) 1.0 else (1.0 + 2.0 * kotlin.math.sqrt((p / 2.0) / rootRadiusR)).coerceIn(2.2, 4.2)
         val nominalTensileStress = (proofLoadKn * 1000.0) / (stressAreaAsMm2.coerceAtLeast(1.0))
         val peakThreadRootStress = nominalTensileStress * ktFactor
 

@@ -152,7 +152,13 @@ object HeadingProgression {
         }
         val reductionPct = (1.0 - area(blank) / aw) * 100.0
         // The round preform must enter the hex punch insert (inscribed circle s) or match the socket head Ø
-        val dRound = if (isSocket) 0.97 * head.acrossFlatsS else 0.96 * head.acrossFlatsS
+        // A rivet head is round: the upset IS the finished head. Hex/socket heads need a preform that fits the tooling.
+        val roundHead = type.isUnthreaded
+        val dRound = when {
+            roundHead -> head.acrossFlatsS
+            isSocket -> 0.97 * head.acrossFlatsS
+            else -> 0.96 * head.acrossFlatsS
+        }
 
         val stations = mutableListOf(cutOff(wire, slugLen))
         stations += HeadingStation(
@@ -190,14 +196,14 @@ object HeadingProgression {
         val hRound = headVol / area(dRound)
         stations += HeadingStation(
             index = stations.size,
-            title = "Head upset",
+            title = if (roundHead) "Head upset (finished round head)" else "Head upset",
             operation = "Upset round head Ø${f(dRound)} × ${f(hRound)} mm against die face",
             segments = shank + ProfileSegment(hRound, dRound),
             inDieMm = length,
-            isPeakBlow = isSocket
+            isPeakBlow = isSocket || roundHead
         )
 
-        stations += if (isSocket) {
+        if (!roundHead) stations += if (isSocket) {
             val (key, depth) = socket!!
             HeadingStation(
                 index = stations.size,
@@ -223,8 +229,9 @@ object HeadingProgression {
         val notes = buildList {
             if (ld > THREE_BLOW_LD) add("Head stock L/D ${f(ld)} exceeds the 3-blow limit ($THREE_BLOW_LD): use larger wire or warm forming.")
             if (reductionPct > 30.0) add("Open-die extrusion ${f(reductionPct, 0)} % exceeds ~30 %: extrude in a closed (trapped) die to avoid upsetting the shank.")
+            if (type == FastenerType.BLIND_RIVET) add("Blind rivet: only the sleeve is modelled, as a solid shank. The sleeve bore and the mandrel are separate parts not covered here.")
         }
-        return HeadingPlan(wire, slugLen, slugVol, stations, rollingOps(threadLabel), blows, notes)
+        return HeadingPlan(wire, slugLen, slugVol, stations, if (roundHead) emptyList() else rollingOps(threadLabel), blows, notes)
     }
 
     private fun headless(
