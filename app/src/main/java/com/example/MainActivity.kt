@@ -110,7 +110,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AeroFastApp()
+            // The app composes behind the intro, so it is ready the moment the intro ends
+            var showIntro by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
+            Box(modifier = Modifier.fillMaxSize()) {
+                AeroFastApp()
+                if (showIntro) com.example.ui.components.ForgeIntro(onFinished = { showIntro = false })
+            }
+            androidx.compose.runtime.LaunchedEffect(showIntro) {
+                if (!showIntro) com.example.ui.components.AppIntro.finished = true
+            }
         }
     }
 }
@@ -137,7 +145,7 @@ fun AeroFastApp() {
     // One-time engineering disclaimer (Play policy and liability): results are a reference, not a released design
     val disclaimerPrefs = remember { context.getSharedPreferences("aerofast_prefs", android.content.Context.MODE_PRIVATE) }
     var showDisclaimer by remember { mutableStateOf(!disclaimerPrefs.getBoolean("disclaimer_ok_v1", false)) }
-    if (showDisclaimer) {
+    if (showDisclaimer && com.example.ui.components.AppIntro.finished) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = {},
             confirmButton = {
