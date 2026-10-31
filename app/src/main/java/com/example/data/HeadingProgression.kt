@@ -202,7 +202,9 @@ object HeadingProgression {
             HeadingStation(
                 index = stations.size,
                 title = "Socket back-extrude",
-                operation = "Back-extrude hex socket s=${f(key, 1)} × t=${f(depth, 1)} mm; finish head Ø${f(head.acrossFlatsS)} × k=${f(head.headHeightK)} mm",
+                operation = (if (type == FastenerType.HEXALOBULAR_SCREW) "Back-extrude hexalobular recess (volume modelled as hex s=${f(key, 1)})"
+                    else "Back-extrude hex socket s=${f(key, 1)}") +
+                    " × t=${f(depth, 1)} mm; finish head Ø${f(head.acrossFlatsS)} × k=${f(head.headHeightK)} mm",
                 segments = shank + ProfileSegment(head.headHeightK, head.acrossFlatsS),
                 recesses = listOf(Recess(true, key, depth, SectionShape.HEX)),
                 inDieMm = length

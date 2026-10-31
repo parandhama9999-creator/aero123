@@ -376,7 +376,8 @@ object CalculationEngine {
         // Real head / nut geometry from ISO 4014, 4032, 4762 and ASME B18.2.1/B18.2.2 tables
         val dims = DimensionTables.forPart(fastenerType, unitSystem, d)
         val s = dims.acrossFlatsS
-        val isSocketHead = fastenerType == FastenerType.SHCS || fastenerType == FastenerType.SOCKET_BUTTON || fastenerType == FastenerType.SOCKET_CSK
+        val isSocketHead = fastenerType == FastenerType.SHCS || fastenerType == FastenerType.SOCKET_BUTTON ||
+            fastenerType == FastenerType.SOCKET_CSK || fastenerType == FastenerType.HEXALOBULAR_SCREW
         val k = dims.headHeightK
         val socket = DimensionTables.socketFor(fastenerType, unitSystem, d)
         val socketVol = socket?.let { (sqrt(3.0) / 2.0) * it.first.pow(2.0) * it.second } ?: 0.0

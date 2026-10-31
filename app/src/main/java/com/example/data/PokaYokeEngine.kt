@@ -54,13 +54,14 @@ object PokaYokeEngine {
     private val NUT_STANDARDS = setOf(
         ProductStandard.ISO_4032, ProductStandard.ISO_4033, ProductStandard.DIN_6923, ProductStandard.ISO_7040,
         ProductStandard.ISO_7042, ProductStandard.DIN_935, ProductStandard.DIN_1587, ProductStandard.DIN_929, ProductStandard.ASME_B18_2_2,
-        ProductStandard.ASTM_A194, ProductStandard.MS21042, ProductStandard.MS20500
+        ProductStandard.ASTM_A194, ProductStandard.MS21042, ProductStandard.MS20500,
+        ProductStandard.DIN_74361_NUT, ProductStandard.HI_LOK_COLLAR_STD, ProductStandard.MS21047
     )
     private val WASHER_STANDARDS = setOf(ProductStandard.ISO_7089, ProductStandard.ISO_7093, ProductStandard.DIN_127, ProductStandard.ASTM_F436)
 
     private val FULL_THREAD_TYPES = setOf(
         FastenerType.HEX_BOLT_FULL, FastenerType.SOCKET_SET, FastenerType.SOCKET_BUTTON,
-        FastenerType.SOCKET_CSK, FastenerType.STUD
+        FastenerType.SOCKET_CSK, FastenerType.STUD, FastenerType.THREAD_FORMING_SCREW
     )
 
     fun isFullyThreaded(type: FastenerType) = type in FULL_THREAD_TYPES
@@ -100,6 +101,15 @@ object PokaYokeEngine {
         if (unit == UnitSystem.INCH) {
             return when {
                 type.isWasher -> ProductStandard.ASTM_F436
+                type == FastenerType.AERO_LOCK_NUT -> ProductStandard.MS21042
+                type == FastenerType.HI_LOK_COLLAR -> ProductStandard.HI_LOK_COLLAR_STD
+                type == FastenerType.NUTPLATE -> ProductStandard.MS21047
+                type == FastenerType.NAS_CLOSE_TOL_BOLT -> ProductStandard.NAS6203
+                type == FastenerType.HI_LOK_PIN -> ProductStandard.HI_LOK
+                type == FastenerType.TAPER_LOK -> ProductStandard.TAPER_LOK_STD
+                type == FastenerType.LOCKBOLT_PIN -> ProductStandard.LOCKBOLT_STD
+                type == FastenerType.BLIND_BOLT -> ProductStandard.BLIND_BOLT_STD
+                type == FastenerType.HEXALOBULAR_SCREW -> ProductStandard.ASME_B18_3
                 type == FastenerType.HEAVY_HEX_NUT -> ProductStandard.ASTM_A194
                 type == FastenerType.CASTLE_NUT -> ProductStandard.MS20500
                 type == FastenerType.METAL_LOCK_NUT -> ProductStandard.MS21042
@@ -135,6 +145,20 @@ object PokaYokeEngine {
             FastenerType.WELD_NUT -> ProductStandard.DIN_929
             FastenerType.FLAT_WASHER -> ProductStandard.ISO_7089
             FastenerType.SPRING_WASHER -> ProductStandard.DIN_127
+            FastenerType.TTY_HEAD_BOLT -> ProductStandard.OEM_TTY
+            FastenerType.HEXALOBULAR_SCREW -> ProductStandard.ISO_14579
+            FastenerType.THREAD_FORMING_SCREW -> ProductStandard.DIN_7500
+            FastenerType.WHEEL_BOLT -> ProductStandard.DIN_74361
+            FastenerType.WHEEL_NUT -> ProductStandard.DIN_74361_NUT
+            FastenerType.BANJO_BOLT -> ProductStandard.DIN_7623
+            FastenerType.NAS_CLOSE_TOL_BOLT -> ProductStandard.NAS6203
+            FastenerType.HI_LOK_PIN -> ProductStandard.HI_LOK
+            FastenerType.HI_LOK_COLLAR -> ProductStandard.HI_LOK_COLLAR_STD
+            FastenerType.TAPER_LOK -> ProductStandard.TAPER_LOK_STD
+            FastenerType.LOCKBOLT_PIN -> ProductStandard.LOCKBOLT_STD
+            FastenerType.BLIND_BOLT -> ProductStandard.BLIND_BOLT_STD
+            FastenerType.AERO_LOCK_NUT -> ProductStandard.MS21042
+            FastenerType.NUTPLATE -> ProductStandard.MS21047
         }
     }
 
@@ -143,7 +167,7 @@ object PokaYokeEngine {
         if (isFullyThreaded(type)) return lengthMm
         val b = if (unit == UnitSystem.INCH) {
             if (lengthMm <= 152.4) 2 * d + 6.35 else 2 * d + 12.7
-        } else if (type == FastenerType.SHCS) {
+        } else if (type == FastenerType.SHCS || type == FastenerType.HEXALOBULAR_SCREW) {
             2 * d + 12.0
         } else when {
             lengthMm <= 125.0 -> 2 * d + 6.0
@@ -333,7 +357,9 @@ object PokaYokeEngine {
         }
 
         // ---- 9. Geometry & manufacturability ----
-        if (!isWasher && headDims != null && !headDims.isTable) {
+        if (!isWasher && headDims != null && !headDims.isTable && headDims.source.startsWith("Approximated")) {
+            warn("No dimension table for this type", "${headDims.source}.", "Take head and nut dimensions from the part drawing before releasing weights, tooling or G-code.")
+        } else if (!isWasher && headDims != null && !headDims.isTable) {
             warn("Head/nut size estimated", "M$d is outside the ISO/ASME dimension tables, so head and nut dimensions are proportional estimates.", "Take head dimensions from the drawing before releasing weights, tooling or G-code.")
         }
         if (!isNut && !isWasher && type == FastenerType.HEX_BOLT && unit == UnitSystem.METRIC) {

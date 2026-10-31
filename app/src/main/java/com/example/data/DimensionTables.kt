@@ -52,7 +52,7 @@ object DimensionTables {
     /** Hex socket (key size, depth) in mm, or null when the part has no socket. */
     fun socketFor(type: FastenerType, unit: UnitSystem, dMm: Double): Pair<Double, Double>? = when (type) {
         FastenerType.SOCKET_SET -> 0.5 * dMm to 0.5 * dMm
-        FastenerType.SHCS, FastenerType.SOCKET_BUTTON, FastenerType.SOCKET_CSK ->
+        FastenerType.SHCS, FastenerType.SOCKET_BUTTON, FastenerType.SOCKET_CSK, FastenerType.HEXALOBULAR_SCREW ->
             (if (unit == UnitSystem.METRIC) lookup(ISO_SHCS_SOCKET, dMm)?.let { it[0] to it[1] } else null)
                 ?: (0.8 * dMm to 0.5 * dMm)
         else -> null
@@ -61,15 +61,32 @@ object DimensionTables {
     private fun <V> lookup(map: Map<Double, V>, key: Double): V? =
         map.entries.firstOrNull { abs(it.key - key) < 0.002 }?.value
 
+    /** Types the app has no dimension table for: they reuse hex geometry and are labelled as approximations. */
+    private val APPROXIMATED = setOf(
+        FastenerType.TTY_HEAD_BOLT, FastenerType.THREAD_FORMING_SCREW, FastenerType.WHEEL_BOLT, FastenerType.WHEEL_NUT,
+        FastenerType.BANJO_BOLT, FastenerType.NAS_CLOSE_TOL_BOLT, FastenerType.HI_LOK_PIN, FastenerType.HI_LOK_COLLAR,
+        FastenerType.TAPER_LOK, FastenerType.LOCKBOLT_PIN, FastenerType.BLIND_BOLT, FastenerType.AERO_LOCK_NUT,
+        FastenerType.NUTPLATE
+    )
+
     fun forPart(type: FastenerType, unit: UnitSystem, dMm: Double): HeadDimensions {
+        val dims = tableFor(type, unit, dMm)
+        if (type !in APPROXIMATED) return dims
+        val std = PokaYokeEngine.defaultStandard(type, unit).code
+        return dims.copy(source = "Approximated from ${dims.source} hex geometry — no $std table in the app", isTable = false)
+    }
+
+    private fun tableFor(type: FastenerType, unit: UnitSystem, dMm: Double): HeadDimensions {
         if (unit == UnitSystem.INCH) {
             lookup(ASME_HEX, dMm / 25.4)?.let { a ->
                 val f = if (type.isNut) a[2] else a[0]
                 return HeadDimensions(f * 25.4, a[1] * 25.4, 0.95 * f * 25.4, a[3] * 25.4, "ASME B18.2.1 / B18.2.2", true)
             }
-        } else if (type == FastenerType.SHCS || type == FastenerType.SOCKET_BUTTON || type == FastenerType.SOCKET_CSK) {
+        } else if (type == FastenerType.SHCS || type == FastenerType.SOCKET_BUTTON || type == FastenerType.SOCKET_CSK ||
+            type == FastenerType.HEXALOBULAR_SCREW) {
             lookup(ISO_SHCS_DK, dMm)?.let { dk ->
-                return HeadDimensions(dk, dMm, 0.92 * dk, lookup(ISO_HEX, dMm)?.get(2) ?: 0.84 * dMm, "ISO 4762", true)
+                val src = if (type == FastenerType.HEXALOBULAR_SCREW) "ISO 14579 (head per ISO 4762)" else "ISO 4762"
+                return HeadDimensions(dk, dMm, 0.92 * dk, lookup(ISO_HEX, dMm)?.get(2) ?: 0.84 * dMm, src, true)
             }
         } else {
             lookup(ISO_HEX, dMm)?.let { h -> return HeadDimensions(h[0], h[1], h[3], h[2], "ISO 4014 / ISO 4032", true) }

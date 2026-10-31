@@ -314,20 +314,21 @@ private fun DrawScope.drawBlueprint(
 
                 // Dispatch to specific Fastener Type CAD geometry renderer
                 when (result.fastenerType) {
-                    FastenerType.SHCS -> drawShcsBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
+                    FastenerType.SHCS, FastenerType.HEXALOBULAR_SCREW -> drawShcsBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.SOCKET_CSK -> drawCountersunkBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.SOCKET_BUTTON -> drawButtonHeadBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.SOCKET_SET -> drawSetScrewBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
-                    FastenerType.FLANGE_BOLT -> drawFlangeBoltBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
+                    FastenerType.FLANGE_BOLT, FastenerType.TTY_HEAD_BOLT -> drawFlangeBoltBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.TWELVE_POINT -> drawTwelvePointBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.CARRIAGE_BOLT -> drawCarriageBoltBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.T_BOLT -> drawTBoltBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.EYE_BOLT -> drawEyeBoltBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.STUD, FastenerType.WHEEL_STUD -> drawStudBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.U_BOLT -> drawUBoltBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
-                    FastenerType.HEX_NUT, FastenerType.HEAVY_HEX_NUT, FastenerType.WELD_NUT -> drawHexNutBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
+                    FastenerType.HEX_NUT, FastenerType.HEAVY_HEX_NUT, FastenerType.WELD_NUT, FastenerType.WHEEL_NUT,
+                    FastenerType.HI_LOK_COLLAR, FastenerType.NUTPLATE -> drawHexNutBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.FLANGE_NUT -> drawFlangeNutBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
-                    FastenerType.NYLOC_NUT, FastenerType.METAL_LOCK_NUT -> drawNylocNutBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
+                    FastenerType.NYLOC_NUT, FastenerType.METAL_LOCK_NUT, FastenerType.AERO_LOCK_NUT -> drawNylocNutBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.CASTLE_NUT -> drawCastleNutBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.ACORN_NUT -> drawAcornNutBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)
                     FastenerType.FLAT_WASHER -> drawFlatWasherBlueprint(result, fgColor, cyanColor, amberColor, brightPaper)

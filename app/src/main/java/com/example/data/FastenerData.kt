@@ -21,6 +21,20 @@ enum class FastenerType(
     HEAVY_HEX_BOLT("Heavy Hex Structural Bolt (ASTM A325 / A490)", false, false, false, "Bolts & Screws"),
     EYE_BOLT("Precision Eye Bolt / Lifting Ring (DIN 444 / ISO 9001)", false, false, false, "Bolts & Screws"),
 
+    // Automotive
+    TTY_HEAD_BOLT("Torque-to-Yield Head Bolt - Reduced Shank, Flange (OEM)", false, false, false, "Automotive"),
+    HEXALOBULAR_SCREW("Hexalobular (Torx) Socket Head Cap Screw (ISO 14579)", false, false, false, "Automotive"),
+    THREAD_FORMING_SCREW("Thread-Forming / Taptite Screw (DIN 7500)", false, false, false, "Automotive"),
+    WHEEL_BOLT("Wheel Bolt - Conical / Spherical Seat (DIN 74361)", false, false, false, "Automotive"),
+    BANJO_BOLT("Banjo / Hollow Bolt (DIN 7623)", false, false, false, "Automotive"),
+
+    // Aerospace
+    NAS_CLOSE_TOL_BOLT("Aircraft Hex Head Bolt - Close Tolerance (NAS 6203 / AN3)", false, false, false, "Aerospace"),
+    HI_LOK_PIN("Hi-Lok Pin - Torque-Off Collar System (Hi-Shear)", false, false, false, "Aerospace"),
+    TAPER_LOK("Taper-Lok Interference-Fit Bolt (OEM spec)", false, false, false, "Aerospace"),
+    LOCKBOLT_PIN("Lockbolt Pin - Swaged Collar (Huck type)", false, false, false, "Aerospace"),
+    BLIND_BOLT("Blind Bolt - Core Bolt (OEM / NAS series)", false, false, false, "Aerospace"),
+
     // Studs & Rods
     STUD("Double-End / Continuous Thread Stud (ASTM A193 B7)", false, true, false, "Studs & Rods"),
     WHEEL_STUD("Knurled Wheel / Hub Stud", false, true, false, "Studs & Rods"),
@@ -35,6 +49,10 @@ enum class FastenerType(
     CASTLE_NUT("Slotted / Castle Aero Nut (DIN 935 / AN310)", true, false, false, "Nuts & Locking"),
     ACORN_NUT("Dome Cap Acorn Nut (DIN 1587)", true, false, false, "Nuts & Locking"),
     WELD_NUT("Square / Hex Weld Nut (DIN 928 / DIN 929)", true, false, false, "Nuts & Locking"),
+    WHEEL_NUT("Wheel Nut - Conical / Spherical Seat (DIN 74361)", true, false, false, "Automotive"),
+    AERO_LOCK_NUT("Self-Locking Reduced Hex Aero Nut (MS21042 / NAS 1291)", true, false, false, "Aerospace"),
+    HI_LOK_COLLAR("Hi-Lok Torque-Off Collar (Hi-Shear)", true, false, false, "Aerospace"),
+    NUTPLATE("Nutplate / Anchor Nut - Two Lug (MS21047)", true, false, false, "Aerospace"),
 
     // Washers
     FLAT_WASHER("Flat Plain Washer (ISO 7089 / DIN 125A)", false, false, true, "Washers"),
@@ -69,6 +87,12 @@ enum class ProductStandard(val code: String, val label: String, val category: St
     ISO_7089("ISO 7089", "ISO 7089 / DIN 125A (Flat Plain Washer)", "ISO/DIN Metric"),
     ISO_7093("ISO 7093", "ISO 7093 / DIN 9021 (Large OD Fender Washer)", "ISO/DIN Metric"),
     DIN_127("DIN 127", "DIN 127B / ISO 10270 (Spring Lock Washer)", "ISO/DIN Metric"),
+    ISO_14579("ISO 14579", "ISO 14579 (Hexalobular Socket Head Cap Screw)", "ISO/DIN Metric"),
+    DIN_7500("DIN 7500", "DIN 7500 (Thread-Forming / Thread-Rolling Screw)", "ISO/DIN Metric"),
+    DIN_74361("DIN 74361", "DIN 74361 (Wheel Bolt, Conical / Spherical Seat)", "ISO/DIN Metric"),
+    DIN_74361_NUT("DIN 74361 Nut", "DIN 74361 (Wheel Nut, Conical / Spherical Seat)", "ISO/DIN Metric"),
+    DIN_7623("DIN 7623", "DIN 7623 (Banjo / Hollow Bolt)", "ISO/DIN Metric"),
+    OEM_TTY("OEM TTY", "OEM Torque-to-Yield Spec (ISO 898-1 base, torque + angle)", "ISO/DIN Metric"),
 
     // Imperial / ASME / ANSI / ASTM Standards
     ASME_B18_2_1("ASME B18.2.1", "ASME B18.2.1 / ANSI B18.2.1 (Square & Hex Bolts)", "ASME/Imperial"),
@@ -87,7 +111,14 @@ enum class ProductStandard(val code: String, val label: String, val category: St
     MS21042("MS21042", "MS21042 / NAS 1291 (All-Metal Reduced Hex Lock Nut)", "Aerospace/Defense"),
     MS20500("MS20500", "MS20500 / AN310 (Aero Slotted Castle Nut)", "Aerospace/Defense"),
     AS1150("AS 1150", "AS 1150 / AS 1151 (Aerospace Titanium Engine Stud)", "Aerospace/Defense"),
-    EN2882("EN 2882", "EN 2882 / EN 2883 (Aerospace FE-PM1501 High Temp Bolt)", "Aerospace/Defense")
+    EN2882("EN 2882", "EN 2882 / EN 2883 (Aerospace FE-PM1501 High Temp Bolt)", "Aerospace/Defense"),
+    NAS6203("NAS 6203", "NAS 6203–6220 (Close-Tolerance) / AN3–AN20 (Aircraft Hex Bolt)", "Aerospace/Defense"),
+    HI_LOK("Hi-Lok Pin", "Hi-Lok HL Pin (Hi-Shear spec)", "Aerospace/Defense"),
+    HI_LOK_COLLAR_STD("Hi-Lok Collar", "Hi-Lok HL Torque-Off Collar (Hi-Shear spec)", "Aerospace/Defense"),
+    TAPER_LOK_STD("Taper-Lok", "Taper-Lok Interference-Fit Bolt (OEM spec)", "Aerospace/Defense"),
+    LOCKBOLT_STD("Lockbolt", "Lockbolt Pin & Swaged Collar (Huck / OEM spec)", "Aerospace/Defense"),
+    BLIND_BOLT_STD("Blind Bolt", "Blind Bolt (OEM / NAS series)", "Aerospace/Defense"),
+    MS21047("MS21047", "MS21047 (Two-Lug Nutplate / Anchor Nut)", "Aerospace/Defense")
 }
 
 enum class PropertyClass(val label: String, val defaultMatKey: String, val utsMpa: Double) {
