@@ -625,8 +625,8 @@ object CalculationEngine {
             rawMaterialSourcingUts = material.rawMaterialSourcingUtsMpa,
             postForgingTargetUtsMpa = effectiveRmMpa,
             yieldStrengthMpa = effectiveYieldMpa,
-            minElongationPct = material.minElongationPct,
-            reductionOfAreaZPct = material.reductionOfAreaZPct,
+            minElongationPct = if (isNut) material.minElongationPct else classDuctility(propertyClass)?.first ?: material.minElongationPct,
+            reductionOfAreaZPct = if (isNut) material.reductionOfAreaZPct else classDuctility(propertyClass)?.second ?: material.reductionOfAreaZPct,
             flowStressMpa = flowStressMpa.round(1),
             stressAreaAsMm2 = stressAreaAsMm2.round(2),
             proofLoadKn = proofLoadKn.round(1),
@@ -700,7 +700,7 @@ object CalculationEngine {
         }
 
         if (material.hasHighHardness && material.isAero) {
-            risks.add("✈️ Aerospace Superalloy Warning (${material.name}): Rapid work-hardening behavior. Room-temperature cold working will cause catastrophic micro-cracking.")
+            risks.add("✈️ High-Strength Aerospace Alloy Warning (${material.name}): Rapid work-hardening behavior. Room-temperature cold working will cause catastrophic micro-cracking.")
             recommendations.add("Strictly enforce Controlled Warm Forging / Induction Heating (650°C–720°C) with Glass-MoS2 dual lubrication.")
         } else if (material.name.contains("Stainless", ignoreCase = true) || material.name.contains("SS204", ignoreCase = true) || material.name.contains("SS304", ignoreCase = true)) {
             risks.add("⚠️ Austenitic Stainless Steel Warning: High strain-hardening rate. Single-stage trap extrusion will cause internal tearing.")
@@ -1032,4 +1032,25 @@ object CalculationEngine {
         repeat(decimals) { multiplier *= 10 }
         return (this * multiplier).roundToInt() / multiplier
     }
+
+/**
+ * Minimum elongation A and reduction of area Z (%) the property class itself requires:
+ * ISO 898-1 Table 3, SAE J429, ASTM A193 B7. 0.0 = the standard sets no value for machined test pieces.
+ * null = the class defers to the material (stainless, aerospace, material spec).
+ */
+fun classDuctility(pc: PropertyClass?): Pair<Double, Double>? = when (pc) {
+    PropertyClass.CLASS_4_6 -> 22.0 to 0.0
+    PropertyClass.CLASS_5_6 -> 20.0 to 0.0
+    PropertyClass.CLASS_4_8, PropertyClass.CLASS_5_8, PropertyClass.CLASS_6_8 -> 0.0 to 0.0
+    PropertyClass.CLASS_8_8 -> 12.0 to 52.0
+    PropertyClass.CLASS_9_8 -> 10.0 to 48.0
+    PropertyClass.CLASS_10_9 -> 9.0 to 48.0
+    PropertyClass.CLASS_12_9 -> 8.0 to 44.0
+    PropertyClass.SAE_GRADE_2 -> 18.0 to 35.0
+    PropertyClass.SAE_GRADE_5 -> 14.0 to 35.0
+    PropertyClass.SAE_GRADE_8 -> 12.0 to 35.0
+    PropertyClass.ASTM_A193_B7 -> 16.0 to 50.0
+    else -> null
+}
+
 }

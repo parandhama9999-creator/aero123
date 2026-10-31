@@ -74,7 +74,7 @@ fun PricingDialog(
                 TierCard(
                     title = "COMMUNITY FREE",
                     price = "₹0 / Free Forever",
-                    features = "Full M0.25-M36 calculations, turning blanks, live gauge simulator, offline Fanuc G-code",
+                    features = "Full M0.25-M64 calculations, turning blanks, live gauge simulator, offline Fanuc G-code",
                     isSelected = currentTier == "FREE",
                     buttonText = "Active Free Tier",
                     onSelect = {

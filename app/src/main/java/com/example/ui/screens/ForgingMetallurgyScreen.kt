@@ -282,7 +282,7 @@ fun ForgingMetallurgyScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Elongation (A5): min ${result.minElongationPct.toInt()}%  •  Reduction of Area (Z): min ${result.reductionOfAreaZPct.toInt()}%",
+                        text = "Elongation (A): ${if (result.minElongationPct > 0) "min ${result.minElongationPct.toInt()}%" else "not specified (full-size test)"}  •  Reduction of Area (Z): ${if (result.reductionOfAreaZPct > 0) "min ${result.reductionOfAreaZPct.toInt()}%" else "not specified"}",
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         color = customColors.textMuted

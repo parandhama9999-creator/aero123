@@ -806,7 +806,7 @@ fun AeroFastTopBar(
                                 color = customColors.accentSecondary
                             ) {
                                 Text(
-                                    text = "M0.25–M36",
+                                    text = "M0.25–M64",
                                     fontSize = 7.5.sp,
                                     fontWeight = FontWeight.Black,
                                     color = Color.Black,

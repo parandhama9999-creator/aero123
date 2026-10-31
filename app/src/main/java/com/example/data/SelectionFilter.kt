@@ -72,8 +72,8 @@ object SelectionFilter {
         val default = PokaYokeEngine.defaultStandard(type, unit)
         val fits = typeStandards(type).filter {
             when (unit) {
-                UnitSystem.INCH -> it.category != "ISO/DIN Metric"
-                UnitSystem.METRIC -> it.category != "ASME/Imperial"
+                UnitSystem.INCH -> !PokaYokeEngine.isMetricOnlyStandard(it)
+                UnitSystem.METRIC -> !PokaYokeEngine.isInchOnlyStandard(it)
             }
         }
         return listOf(default) + ProductStandard.values().filter { it in fits && it != default }

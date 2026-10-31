@@ -45,6 +45,10 @@ object PokaYokeEngine {
         return id.contains("304") || id.contains("316")
     }
 
+    /** NAS / MS aerospace standards are written for inch threads; EN aerospace standards for metric. */
+    fun isInchOnlyStandard(s: ProductStandard) = s.category == "ASME/Imperial" || s.code.startsWith("NAS") || s.code.startsWith("MS")
+    fun isMetricOnlyStandard(s: ProductStandard) = s.category == "ISO/DIN Metric" || s.code.startsWith("EN ")
+
     /** Fastener types bought to aerospace procurement specs rather than ISO 898-1 / SAE J429 grades. */
     fun isAerospaceType(type: FastenerType) = type.category == "Aerospace" || type == FastenerType.TWELVE_POINT
 
@@ -268,10 +272,10 @@ object PokaYokeEngine {
             isWasher && !stdIsWasher -> critical("Standard does not fit a washer", "${standard.code} is not a washer standard.", "Choose a washer standard (ISO 7089, DIN 127, ASTM F436).")
             !isNut && !isWasher && (stdIsNut || stdIsWasher) -> critical("Standard does not fit a bolt/screw", "${standard.code} is a ${if (stdIsNut) "nut" else "washer"} standard, but ${type.label} is selected.", "Choose the bolt/screw standard for this product.")
         }
-        if (unit == UnitSystem.INCH && standard.category == "ISO/DIN Metric") {
+        if (unit == UnitSystem.INCH && isMetricOnlyStandard(standard)) {
             critical("Metric standard with inch thread", "${standard.code} defines metric fasteners only.", "Use an ASME/ASTM standard for UNC/UNF threads, or switch to Metric.")
         }
-        if (unit == UnitSystem.METRIC && standard.category == "ASME/Imperial") {
+        if (unit == UnitSystem.METRIC && isInchOnlyStandard(standard)) {
             warn("Inch standard with metric thread", "${standard.code} is an inch standard; the metric version has its own number (e.g. ASTM A325M / F3125M).", "Confirm the metric edition of the standard on the drawing.")
         }
 
