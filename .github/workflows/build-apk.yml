@@ -43,6 +43,10 @@ jobs:
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
 
+      # Proves the obfuscated (R8) release code builds on every push; signing is not needed for this step
+      - name: Check release shrinking / obfuscation (R8)
+        run: gradle :app:minifyReleaseWithR8 --stacktrace
+
       # Play Store upload: a signed release bundle, built only when the upload-key secrets exist.
       # Kept as a private run artifact (not on the public release page).
       - name: Build signed release bundle (AAB)

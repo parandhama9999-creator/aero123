@@ -19,3 +19,23 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+
+# --- AeroFast Pro release hardening ---
+# Saved sessions store enum names (fastener type, standard, class, coating): keep them readable by valueOf()
+-keepclassmembers enum com.example.** {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+    <fields>;
+}
+# Move every obfuscated class into one flat package and keep line numbers for Play crash deobfuscation
+-repackageclasses ''
+-allowaccessmodification
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+# Strip debug / verbose logging from the release build
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
