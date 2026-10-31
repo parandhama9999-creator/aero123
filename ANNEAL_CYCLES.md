@@ -85,20 +85,20 @@ Rows marked **ENTER PER GRADE** are values the catalogue does not carry.
 
 | Grade | Family | Temperature | Soak | Cooling | Target Rm (annealed) | Target hardness | Standard |
 |---|---|---|---|---|---|---|---|
-| **10KH11N23T3MR**<br><sub>10KH11N23T3MR / EP33 (GOST ЭП33 Aero Superalloy)</sub> | nickel superalloy | N/A — supplied annealed | N/A | N/A | 680 – 780 MPa (Sol. Annealed Wire) | **ENTER PER GRADE** | GOST ЭП33 / OST 1 90005 |
-| **A286**<br><sub>A286 Superalloy (AMS 5731)</sub> | nickel superalloy | N/A — supplied annealed | N/A | N/A | 650 – 750 MPa (Solution Annealed Bar/Wire) | **ENTER PER GRADE** | AMS 5731 / AMS 5732 / NAS624 / MS21250 |
-| **HASTELLOY_C276**<br><sub>Hastelloy C-276 (AMS 5750)</sub> | nickel superalloy | N/A — supplied annealed | N/A | N/A | 750 – 820 MPa | **ENTER PER GRADE** | AMS 5750 / ASTM B574 / UNS N10276 |
-| **INCONEL625**<br><sub>Inconel 625 (AMS 5666 / N06625)</sub> | nickel superalloy | N/A — supplied annealed | N/A | N/A | 880 – 960 MPa (Annealed Wire) | **ENTER PER GRADE** | AMS 5666 / ASTM B446 / UNS N06625 |
-| **INCONEL718**<br><sub>Inconel 718 (AMS 5662)</sub> | nickel superalloy | N/A — supplied annealed | N/A | N/A | 920 – 1020 MPa (AMS 5662 Annealed Wire) | **ENTER PER GRADE** | AMS 5662 / AMS 5664 / AMS 2759/3 / NAS624 |
-| **INCONEL_600**<br><sub>Inconel 600 / UNS N06600 (AMS 5665 Ni-Cr-Fe)</sub> | nickel superalloy | N/A — supplied annealed | N/A | N/A | 550 – 680 MPa (Annealed Wire) | **ENTER PER GRADE** | AMS 5665 / UNS N06600 |
-| **MONEL_K500**<br><sub>Monel K-500 (QQ-N-286 / N05500)</sub> | nickel superalloy | N/A — supplied annealed | N/A | N/A | 680 – 780 MPa (Annealed Wire) | **ENTER PER GRADE** | QQ-N-286 / AMS 4676 / UNS N05500 |
-| **RENE41**<br><sub>René 41 Superalloy (AMS 5545/5712)</sub> | nickel superalloy | N/A — supplied annealed | N/A | N/A | 920 – 1020 MPa (Solution Annealed Bar) | **ENTER PER GRADE** | AMS 5545 / AMS 5712 / UNS N07041 |
-| **TI_6242**<br><sub>Ti-6Al-2Sn-4Zr-2Mo (AMS 4975/4976)</sub> | titanium | N/A — supplied annealed | N/A | N/A | 880 – 940 MPa (Annealed Wire, H2 < 125 ppm) | **ENTER PER GRADE** | AMS 4975 / AMS 4976 / AMS 2801 |
-| **TI_GR1**<br><sub>Titanium Grade 1 / 2 CP</sub> | titanium | N/A — supplied annealed | N/A | N/A | 420 – 520 MPa (CP Grade 2 Wire) | **ENTER PER GRADE** | ASTM B348 / AMS 4921 |
-| **TI_GR23**<br><sub>Titanium Gr 23 Ti-6Al-4V ELI (AMS 4930)</sub> | titanium | N/A — supplied annealed | N/A | N/A | 860 – 920 MPa (ELI Annealed Wire, H2 < 80 ppm) | **ENTER PER GRADE** | AMS 4930 / ASTM F136 / AMS 2759/4 |
-| **TI_GR5**<br><sub>Titanium Gr 5 (Ti-6Al-4V)</sub> | titanium | N/A — supplied annealed | N/A | N/A | 890 – 960 MPa (Annealed Wire, max H2: 125 ppm) | **ENTER PER GRADE** | AMS 4928 / AMS 4967 / AMS 2759/4 |
-| **VT16**<br><sub>VT-16 Titanium Alloy (GOST ВТ16 Ti-3Al-5Mo-4.5V)</sub> | titanium | N/A — supplied annealed | N/A | N/A | 750 – 850 MPa (Annealed α+β Wire) | **ENTER PER GRADE** | GOST ВТ16 / OST 1 90013 |
-| **WASPALOY**<br><sub>Waspaloy (AMS 5708)</sub> | nickel superalloy | N/A — supplied annealed | N/A | N/A | 850 – 950 MPa (Solution Treated Wire) | **ENTER PER GRADE** | AMS 5708 / UNS N07001 |
+| **10KH11N23T3MR**<br><sub>10KH11N23T3MR / EP33 (GOST ЭП33 Aero Superalloy)</sub> | nickel superalloy | ≈ 1000 – 1050 °C (unconfirmed) | **ENTER PER GRADE** | Air | 680 – 780 MPa (Sol. Annealed Wire) | **ENTER PER GRADE** | GOST ЭП33 / OST 1 90005 |
+| **A286**<br><sub>A286 Superalloy (AMS 5731)</sub> | nickel superalloy | 982 °C (1800 °F); 899 °C (1650 °F) for more ductility | 1 h | Water or oil quench | 650 – 750 MPa (Solution Annealed Bar/Wire) | **ENTER PER GRADE** | AMS 5731 / AMS 5732 / NAS624 / MS21250 |
+| **HASTELLOY_C276**<br><sub>Hastelloy C-276 (AMS 5750)</sub> | nickel superalloy | 1121 °C (2050 °F) | **ENTER PER GRADE** | Water quench (fast air only below 10 mm) | 750 – 820 MPa | **ENTER PER GRADE** | AMS 5750 / ASTM B574 / UNS N10276 |
+| **INCONEL625**<br><sub>Inconel 625 (AMS 5666 / N06625)</sub> | nickel superalloy | 982 °C typical (Grade 1, 871 °C min) | **ENTER PER GRADE** | Air cool | 880 – 960 MPa (Annealed Wire) | **ENTER PER GRADE** | AMS 5666 / ASTM B446 / UNS N06625 |
+| **INCONEL718**<br><sub>Inconel 718 (AMS 5662)</sub> | nickel superalloy | 927 – 1010 °C (1700 – 1850 °F), 980 °C typical | **ENTER PER GRADE** | Air cool or faster | 920 – 1020 MPa (AMS 5662 Annealed Wire) | **ENTER PER GRADE** | AMS 5662 / AMS 5664 / AMS 2759/3 / NAS624 |
+| **INCONEL_600**<br><sub>Inconel 600 / UNS N06600 (AMS 5665 Ni-Cr-Fe)</sub> | nickel superalloy | 1010 °C (1850 °F) | 15 min | **ENTER PER GRADE** | 550 – 680 MPa (Annealed Wire) | **ENTER PER GRADE** | AMS 5665 / UNS N06600 |
+| **MONEL_K500**<br><sub>Monel K-500 (QQ-N-286 / N05500)</sub> | nickel superalloy | 982 – 1038 °C (1800 – 1900 °F) | **ENTER PER GRADE** | Water quench | 680 – 780 MPa (Annealed Wire) | **ENTER PER GRADE** | QQ-N-286 / AMS 4676 / UNS N05500 |
+| **RENE41**<br><sub>René 41 Superalloy (AMS 5545/5712)</sub> | nickel superalloy | 1066 – 1080 °C (1950 – 1975 °F) | 4 h | Air cool | 920 – 1020 MPa (Solution Annealed Bar) | **ENTER PER GRADE** | AMS 5545 / AMS 5712 / UNS N07041 |
+| **TI_6242**<br><sub>Ti-6Al-2Sn-4Zr-2Mo (AMS 4975/4976)</sub> | titanium | 704 – 843 °C (1300 – 1550 °F) | **ENTER PER GRADE** | Air cool | 880 – 940 MPa (Annealed Wire, H2 < 125 ppm) | **ENTER PER GRADE** | AMS 4975 / AMS 4976 / AMS 2801 |
+| **TI_GR1**<br><sub>Titanium Grade 1 / 2 CP</sub> | titanium | 649 – 760 °C (1200 – 1400 °F) | 6 min – 2 h | Air cool | 420 – 520 MPa (CP Grade 2 Wire) | **ENTER PER GRADE** | ASTM B348 / AMS 4921 |
+| **TI_GR23**<br><sub>Titanium Gr 23 Ti-6Al-4V ELI (AMS 4930)</sub> | titanium | 704 – 732 °C (1300 – 1350 °F) | 1 – 8 h | Air cool | 860 – 920 MPa (ELI Annealed Wire, H2 < 80 ppm) | **ENTER PER GRADE** | AMS 4930 / ASTM F136 / AMS 2759/4 |
+| **TI_GR5**<br><sub>Titanium Gr 5 (Ti-6Al-4V)</sub> | titanium | 704 – 788 °C (1300 – 1450 °F) | 2 h | Air cool | 890 – 960 MPa (Annealed Wire, max H2: 125 ppm) | **ENTER PER GRADE** | AMS 4928 / AMS 4967 / AMS 2759/4 |
+| **VT16**<br><sub>VT-16 Titanium Alloy (GOST ВТ16 Ti-3Al-5Mo-4.5V)</sub> | titanium | 770 – 790 °C | 2 h | Furnace cool 1 – 5 °C/min to 500 °C, then air | 750 – 850 MPa (Annealed α+β Wire) | **ENTER PER GRADE** | GOST ВТ16 / OST 1 90013 |
+| **WASPALOY**<br><sub>Waspaloy (AMS 5708)</sub> | nickel superalloy | 1049 °C (1920 °F) | 4 h | Air cool | 850 – 950 MPa (Solution Treated Wire) | **ENTER PER GRADE** | AMS 5708 / UNS N07001 |
 
 ---
 
@@ -118,46 +118,46 @@ Rows marked **ENTER PER GRADE** are values the catalogue does not carry.
 
 Low Z and low spm mean the grade work-hardens fast and cannot take many blows between anneals.
 
-> **Do not use the last column as an intermediate-anneal cycle.** It is the catalogue's heat-treat
-> temperature. For titanium that is a *solution treatment* (e.g. Ti-6Al-4V 955 °C), ~200 °C above the
-> mill anneal (704 – 788 °C). Researched mill-anneal cycles with sources: **MILL_ANNEAL_CYCLES.md**.
+The last column is the anneal for re-annealing between blows. For mill-annealed grades it is the
+researched mill anneal (sources in MILL_ANNEAL_CYCLES.md) — not the catalogue's solution-treat
+temperature, which for titanium is ~200 °C hotter and is a hardening step.
 
-| Grade | Route | Z % | n | spm | Catalogue heat-treat temperature (not an anneal for Ti) |
+| Grade | Route | Z % | n | spm | Anneal between blows |
 |---|---|---:|---:|---:|---|
-| **RENE41** | Mill-annealed — supplied ready to head | 18.0 | 0.13 | 25 | 1080°C – 1120°C (Vacuum Solution 2 hrs) |
-| **WASPALOY** | Mill-annealed — supplied ready to head | 20.0 | 0.14 | 30 | Stage 1 Solution: 1010°C–1040°C (4 hrs) |
-| **INCONEL718** | Mill-annealed — supplied ready to head | 22.0 | 0.13 | 35 | Solution Anneal: 955°C – 980°C (Vacuum) |
-| **TI_GR5** | Mill-annealed — supplied ready to head | 25.0 | 0.1 | 45 | Vacuum Solution: 955°C ± 10°C (<10^-4 torr) |
+| **RENE41** | Mill-annealed — supplied ready to head | 18.0 | 0.13 | 25 | 1066 – 1080 °C (1950 – 1975 °F) |
+| **WASPALOY** | Mill-annealed — supplied ready to head | 20.0 | 0.14 | 30 | 1049 °C (1920 °F) |
+| **INCONEL718** | Mill-annealed — supplied ready to head | 22.0 | 0.13 | 35 | 927 – 1010 °C (1700 – 1850 °F), 980 °C typical |
+| **TI_GR5** | Mill-annealed — supplied ready to head | 25.0 | 0.1 | 45 | 704 – 788 °C (1300 – 1450 °F) |
 | **MP35N** | Anneal required — wire supplied hard | 25.0 | 0.11 | 20 | **ENTER PER GRADE** <sub>(catalogue says: Work Hardened Cold Drawn Matrix)</sub> |
-| **CUBE2** | Full anneal to O temper | 25.0 | 0.14 | 65 | Solution Heat Treat: 780°C – 800°C |
-| **TI_6242** | Mill-annealed — supplied ready to head | 28.0 | 0.11 | 40 | Duplex Anneal Solution: 970°C ± 5°C (<10⁻⁴ mbar vacuum) |
+| **CUBE2** | Full anneal to O temper | 25.0 | 0.14 | 65 | **ENTER PER GRADE** <sub>(catalogue says: Solution Heat Treat: 780°C – 800°C)</sub> |
+| **TI_6242** | Mill-annealed — supplied ready to head | 28.0 | 0.11 | 40 | 704 – 843 °C (1300 – 1550 °F) |
 | **CUSTOM_455** | Solution anneal + rapid cool | 32.0 | 0.1 | 50 | 830°C – 845°C (Solution Anneal Condition A) |
-| **AL7075** | Full anneal to O temper | 32.0 | 0.16 | 150 | Solution Heat Treat: 470°C ± 5°C |
-| **A286** | Mill-annealed — supplied ready to head | 35.0 | 0.2 | 50 | Solution Anneal: 980°C ± 10°C |
+| **AL7075** | Full anneal to O temper | 32.0 | 0.16 | 150 | **ENTER PER GRADE** <sub>(catalogue says: Solution Heat Treat: 470°C ± 5°C)</sub> |
+| **A286** | Mill-annealed — supplied ready to head | 35.0 | 0.2 | 50 | 982 °C (1800 °F); 899 °C (1650 °F) for more ductility |
 | **H11_H13** | Sub-critical spheroidize anneal | 35.0 | 0.12 | 65 | 698 – 718 °C (just below A1; baseline A1 = 723 °C) |
-| **AL2219** | Full anneal to O temper | 35.0 | 0.18 | 155 | Solution Heat Treat: 535°C ± 5°C |
-| **MONEL_K500** | Mill-annealed — supplied ready to head | 35.0 | 0.18 | 45 | 980°C ± 10°C |
-| **TI_GR23** | Mill-annealed — supplied ready to head | 35.0 | 0.1 | 50 | Vacuum Solution: 925°C – 940°C (<10⁻⁴ mbar) |
+| **AL2219** | Full anneal to O temper | 35.0 | 0.18 | 155 | **ENTER PER GRADE** <sub>(catalogue says: Solution Heat Treat: 535°C ± 5°C)</sub> |
+| **MONEL_K500** | Mill-annealed — supplied ready to head | 35.0 | 0.18 | 45 | 982 – 1038 °C (1800 – 1900 °F) |
+| **TI_GR23** | Mill-annealed — supplied ready to head | 35.0 | 0.1 | 50 | 704 – 732 °C (1300 – 1350 °F) |
 | **300M** | Sub-critical spheroidize anneal | 38.0 | 0.11 | 60 | 698 – 718 °C (just below A1; baseline A1 = 723 °C) |
 | **AM350** | Solution anneal + rapid cool | 38.0 | 0.12 | 60 | 1050°C ± 10°C (Condition H Solution) |
 | **17_4PH** | Solution anneal + rapid cool | 40.0 | 0.11 | 65 | Condition A Solution: 1040°C ± 15°C |
-| **TI_GR1** | Mill-annealed — supplied ready to head | 40.0 | 0.18 | 70 | Stress Relief Annealing: 520°C–540°C |
-| **AL2024** | Full anneal to O temper | 40.0 | 0.2 | 160 | Solution Heat Treat: 493°C ± 5°C |
-| **INCONEL625** | Mill-annealed — supplied ready to head | 40.0 | 0.22 | 35 | 1090°C – 1150°C (Anneal) |
+| **TI_GR1** | Mill-annealed — supplied ready to head | 40.0 | 0.18 | 70 | 649 – 760 °C (1200 – 1400 °F) |
+| **AL2024** | Full anneal to O temper | 40.0 | 0.2 | 160 | **ENTER PER GRADE** <sub>(catalogue says: Solution Heat Treat: 493°C ± 5°C)</sub> |
+| **INCONEL625** | Mill-annealed — supplied ready to head | 40.0 | 0.22 | 35 | 982 °C typical (Grade 1, 871 °C min) |
 | **4340** | Sub-critical spheroidize anneal | 45.0 | 0.12 | 80 | 698 – 718 °C (just below A1; baseline A1 = 723 °C) |
 | **15_5PH** | Solution anneal + rapid cool | 45.0 | 0.11 | 65 | 1038°C ± 10°C (Condition A Solution) |
 | **13_8PH** | Solution anneal + rapid cool | 45.0 | 0.11 | 55 | Condition A Solution: 927°C ± 10°C |
 | **35NCD16** | Sub-critical spheroidize anneal | 45.0 | 0.15 | 85 | 698 – 718 °C (just below A1; baseline A1 = 723 °C) |
-| **10KH11N23T3MR** | Mill-annealed — supplied ready to head | 45.0 | 0.32 | 75 | 1080°C – 1110°C Solution |
+| **10KH11N23T3MR** | Mill-annealed — supplied ready to head | 45.0 | 0.32 | 75 | ≈ 1000 – 1050 °C (unconfirmed) |
 | **8740** | Sub-critical spheroidize anneal | 48.0 | 0.14 | 95 | 698 – 718 °C (just below A1; baseline A1 = 723 °C) |
 | **30KHGSA** | Sub-critical spheroidize anneal | 48.0 | 0.16 | 95 | 698 – 718 °C (just below A1; baseline A1 = 723 °C) |
 | **14KH17N2** | Solution anneal + rapid cool | 48.0 | 0.17 | 100 | 980°C – 1020°C |
 | **30X13** | Solution anneal + rapid cool | 48.0 | 0.18 | 105 | 1000°C – 1020°C |
 | **NITRONIC60** | Solution anneal + rapid cool | 50.0 | 0.28 | 55 | 1065°C ± 15°C |
-| **HASTELLOY_C276** | Mill-annealed — supplied ready to head | 50.0 | 0.25 | 30 | 1120°C ± 10°C |
+| **HASTELLOY_C276** | Mill-annealed — supplied ready to head | 50.0 | 0.25 | 30 | 1121 °C (2050 °F) |
 | **16KHGSN** | Sub-critical spheroidize anneal | 50.0 | 0.18 | 105 | 698 – 718 °C (just below A1; baseline A1 = 723 °C) |
-| **VT16** | Mill-annealed — supplied ready to head | 50.0 | 0.12 | 80 | 800°C – 820°C Solution |
-| **INCONEL_600** | Mill-annealed — supplied ready to head | 50.0 | 0.38 | 80 | 1010°C – 1050°C Solution |
+| **VT16** | Mill-annealed — supplied ready to head | 50.0 | 0.12 | 80 | 770 – 790 °C |
+| **INCONEL_600** | Mill-annealed — supplied ready to head | 50.0 | 0.38 | 80 | 1010 °C (1850 °F) |
 | **EN24_ESR** | Sub-critical spheroidize anneal | 55.0 | 0.17 | 100 | 698 – 718 °C (just below A1; baseline A1 = 723 °C) |
 | **AISI_4130** | Sub-critical spheroidize anneal | 55.0 | 0.2 | 135 | 698 – 718 °C (just below A1; baseline A1 = 723 °C) |
 | **12KH18N10T** | Solution anneal + rapid cool | 60.0 | 0.42 | 120 | 1020°C – 1080°C Solution Annealed |
@@ -173,7 +173,7 @@ Low Z and low spm mean the grade work-hardens fast and cannot take many blows be
 | **1008** | • Exact A1 for this grade<br>• Soak hours — driven by coil mass and furnace load, not part diameter |
 | **1018** | • Anneal cycle — none in the catalogue, because this grade is listed in the hard condition |
 | **10B21** | • Exact A1 for this grade<br>• Soak hours — driven by coil mass and furnace load, not part diameter |
-| **10KH11N23T3MR** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |
+| **10KH11N23T3MR** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade<br>• Hold time — not stated in the source<br>• Confirm the anneal cycle against the GOST / TU for this grade |
 | **13_8PH** | • Target hardness in HRB — derived HB falls outside the A370 HRB range |
 | **14KH17N2** | • Target hardness in HRB — derived HB falls outside the A370 HRB range |
 | **15_5PH** | • Target hardness in HRB — derived HB falls outside the A370 HRB range |
@@ -201,15 +201,15 @@ Low Z and low spm mean the grade work-hardens fast and cannot take many blows be
 | **EN24** | • Exact A1 for this grade<br>• Soak hours — driven by coil mass and furnace load, not part diameter |
 | **EN24_ESR** | • Exact A1 for this grade<br>• Soak hours — driven by coil mass and furnace load, not part diameter |
 | **H11_H13** | • Target hardness in HRB — derived HB falls outside the A370 HRB range<br>• Exact A1 for this grade<br>• Soak hours — driven by coil mass and furnace load, not part diameter |
-| **HASTELLOY_C276** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |
-| **INCONEL625** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |
-| **INCONEL718** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |
-| **INCONEL_600** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |
-| **MONEL_K500** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |
+| **HASTELLOY_C276** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade<br>• Hold time — not stated in the source |
+| **INCONEL625** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade<br>• Hold time — not stated in the source |
+| **INCONEL718** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade<br>• Hold time — not stated in the source |
+| **INCONEL_600** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade<br>• Cooling — not stated in the source |
+| **MONEL_K500** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade<br>• Hold time — not stated in the source |
 | **MP35N** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade<br>• Anneal cycle — none in the catalogue, because this grade is listed in the hard condition |
 | **NITRONIC60** | • Target hardness in HRB — derived HB falls outside the A370 HRB range |
 | **RENE41** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |
-| **TI_6242** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |
+| **TI_6242** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade<br>• Hold time — not stated in the source |
 | **TI_GR1** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |
 | **TI_GR23** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |
 | **TI_GR5** | • Target hardness — no steel Rm/HB correlation for this family; enter per grade |

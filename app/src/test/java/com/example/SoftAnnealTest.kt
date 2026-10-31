@@ -87,4 +87,39 @@ class SoftAnnealTest {
         assertNotNull(r.softAnnealSpec)
         assertEquals(AnnealRoute.SPHEROIDIZE, r.softAnnealSpec!!.route)
     }
+
+    @Test fun titanium_millAnneal_isNotTheSolutionTreatTemperature() {
+        val s = spec("TI_GR5")
+        assertEquals(AnnealRoute.MILL_ANNEALED, s.route)
+        assertTrue("temp=${s.temperatureC}", s.temperatureC.startsWith("704 – 788"))
+        // 955 C is the solution treatment for hardening, never the anneal
+        assertTrue(!s.temperatureC.contains("955"))
+        assertTrue(s.atmosphere.contains("alpha-case"))
+        assertTrue(s.cycleSource.contains("Rolled Alloys"))
+        // the hardening schedule still reads the solution temperature, untouched
+        assertTrue(FastenerCatalog.MATERIALS["TI_GR5"]!!.heatTreatmentSpec.austenitizingOrSolutionTempC.contains("955"))
+    }
+
+    @Test fun inconel625_usesGrade1Anneal_andRene41_isMarkedDisputed() {
+        assertTrue(spec("INCONEL625").temperatureC.startsWith("982"))
+        val rene = spec("RENE41")
+        assertTrue(rene.temperatureC.startsWith("1066"))
+        assertTrue(rene.cycleConfidence.contains("disagree"))
+    }
+
+    @Test fun everyMillAnnealedGrade_hasACitedCycle() {
+        val mill = FastenerCatalog.MATERIALS.values.filter { SoftAnnealEngine.build(it).route == AnnealRoute.MILL_ANNEALED }
+        assertEquals(14, mill.size)
+        mill.forEach {
+            val s = SoftAnnealEngine.build(it)
+            assertTrue("${it.key} has no researched cycle", s.cycleSource.isNotBlank())
+            assertTrue("${it.key} temp", !s.temperatureC.startsWith("N/A"))
+        }
+    }
+
+    @Test fun lowConfidenceCycle_isFlaggedForVerification() {
+        val s = spec("10KH11N23T3MR")
+        assertTrue(s.cycleConfidence.startsWith("Low"))
+        assertTrue(s.unsourced.any { it.contains("GOST") })
+    }
 }

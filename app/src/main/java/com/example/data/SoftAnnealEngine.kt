@@ -48,10 +48,70 @@ data class SoftAnnealSpec(
     val softeningRatio: Double?,
     /** Fields the catalogue could not supply; the user fills these per grade. */
     val unsourced: List<String>,
-    val notes: List<String>
+    val notes: List<String>,
+    /** Where the anneal cycle came from, when it is not derived from the catalogue. */
+    val cycleSource: String = "",
+    val cycleConfidence: String = ""
+)
+
+/** A published mill / softening anneal cycle, with the datasheet it came from. */
+data class MillAnnealCycle(
+    val temperatureC: String,
+    val hold: String,
+    val cooling: String,
+    val source: String,
+    val confidence: String,
+    val note: String = ""
 )
 
 object SoftAnnealEngine {
+
+    private const val HIGH = "High — producer / supplier datasheet"
+    private const val MEDIUM = "Medium — consistent secondary sources"
+    private const val DISPUTED = "Medium — sources disagree"
+    private const val LOW = "Low — verify against GOST / TU before use"
+
+    /**
+     * Researched mill / softening anneal cycles for the grades bought mill-annealed (see MILL_ANNEAL_CYCLES.md).
+     * Kept apart from heatTreatmentSpec on purpose: for titanium that field is the solution-treat temperature
+     * used for hardening, roughly 200 °C above the anneal. Blank hold / cooling means the source did not state it.
+     */
+    val MILL_ANNEAL: Map<String, MillAnnealCycle> = mapOf(
+        "TI_GR5" to MillAnnealCycle("704 – 788 °C (1300 – 1450 °F)", "2 h", "Air cool",
+            "Rolled Alloys 6Al-4V datasheet", HIGH),
+        "TI_GR23" to MillAnnealCycle("704 – 732 °C (1300 – 1350 °F)", "1 – 8 h", "Air cool",
+            "ATI 6-4 ELI datasheet (AMS 4930, annealed)", HIGH),
+        "TI_6242" to MillAnnealCycle("704 – 843 °C (1300 – 1550 °F)", "", "Air cool",
+            "TIMET 6242 datasheet", HIGH,
+            "Duplex anneal alternative: 899 °C 30 min AC, then 788 °C 15 min AC."),
+        "TI_GR1" to MillAnnealCycle("649 – 760 °C (1200 – 1400 °F)", "6 min – 2 h", "Air cool",
+            "Corrosion Materials / Rolled Alloys CP Ti datasheets", HIGH),
+        "VT16" to MillAnnealCycle("770 – 790 °C", "2 h", "Furnace cool 1 – 5 °C/min to 500 °C, then air",
+            "TsKBA standard process", HIGH),
+        "INCONEL718" to MillAnnealCycle("927 – 1010 °C (1700 – 1850 °F), 980 °C typical", "", "Air cool or faster",
+            "HPAlloys; Total Materia", MEDIUM),
+        "A286" to MillAnnealCycle("982 °C (1800 °F); 899 °C (1650 °F) for more ductility", "1 h", "Water or oil quench",
+            "Aircraft Materials; UPMET (AMS 5731 / 5732 / 5737)", MEDIUM),
+        "WASPALOY" to MillAnnealCycle("1049 °C (1920 °F)", "4 h", "Air cool",
+            "Alloy Wire; Haynes", MEDIUM,
+            "Heat through 650 – 870 °C as fast as possible to avoid strain-age cracking."),
+        "RENE41" to MillAnnealCycle("1066 – 1080 °C (1950 – 1975 °F)", "4 h", "Air cool",
+            "Alfa Chemistry; High Temp Metals", DISPUTED,
+            "Heat fast through 650 – 870 °C (strain-age cracking). Catalogue hardening cycle tops out at 1120 °C, above these sources."),
+        "INCONEL625" to MillAnnealCycle("982 °C typical (Grade 1, 871 °C min)", "", "Air cool",
+            "Langley Alloys; Rickard Metals", DISPUTED,
+            "Grade 1 anneal for cold forming. The catalogue's 1090 – 1150 °C is the Grade 2 solution, which coarsens grain."),
+        "INCONEL_600" to MillAnnealCycle("1010 °C (1850 °F)", "15 min", "",
+            "Total Materia (citing Special Metals); Austral Wright", MEDIUM,
+            "Brief exposure to 1040 °C also softens without coarse grain."),
+        "HASTELLOY_C276" to MillAnnealCycle("1121 °C (2050 °F)", "", "Water quench (fast air only below 10 mm)",
+            "HPAlloys; AZoM", MEDIUM,
+            "Slow cooling precipitates carbides and destroys corrosion resistance."),
+        "MONEL_K500" to MillAnnealCycle("982 – 1038 °C (1800 – 1900 °F)", "", "Water quench",
+            "High Temp Metals; Metal Suppliers Online", MEDIUM),
+        "10KH11N23T3MR" to MillAnnealCycle("≈ 1000 – 1050 °C (unconfirmed)", "", "Air",
+            "Garbled table in a TsKBA amendment only", LOW)
+    )
 
     /** Eutectoid temperature for plain carbon steel. Alloying shifts this, so it is only a baseline. */
     private const val A1_PLAIN_CARBON_C = 723.0
@@ -207,15 +267,30 @@ object SoftAnnealEngine {
             }
 
             AnnealRoute.MILL_ANNEALED -> {
-                notes += "Bought already annealed. Verify the condition on the mill certificate rather than annealing in-house."
+                notes += "Bought already annealed — verify the condition on the mill certificate. " +
+                    "The cycle shown is the mill anneal, for re-annealing between blows."
+                val mill = MILL_ANNEAL[material.key]
+                if (mill == null) {
+                    unsourced += "Mill-anneal cycle — not researched for this grade"
+                } else {
+                    if (mill.hold.isBlank()) unsourced += "Hold time — not stated in the source"
+                    if (mill.cooling.isBlank()) unsourced += "Cooling — not stated in the source"
+                    if (mill.confidence == LOW) unsourced += "Confirm the anneal cycle against the GOST / TU for this grade"
+                    if (mill.note.isNotBlank()) notes += mill.note
+                }
+                val isTi = family == MaterialFamily.TITANIUM
                 SoftAnnealSpec(
                     route = route,
                     inHouseAnnealNeeded = false,
                     suppliedCondition = supplied,
-                    temperatureC = "N/A — supplied annealed",
-                    soakTime = "N/A",
-                    coolingRate = "N/A",
-                    atmosphere = "N/A",
+                    temperatureC = mill?.temperatureC ?: "N/A — supplied annealed",
+                    soakTime = mill?.hold ?: "N/A",
+                    coolingRate = mill?.cooling ?: "N/A",
+                    atmosphere = if (mill == null) "N/A" else if (isTi) {
+                        "Vacuum or argon — air above ~600 °C forms alpha-case, which cracks on heading"
+                    } else "Vacuum, argon or protective gas",
+                    cycleSource = mill?.source ?: "",
+                    cycleConfidence = mill?.confidence ?: "",
                     targetUtsMpa = supplied,
                     targetHardnessHb = hbText,
                     targetHardnessHrb = hrbText,

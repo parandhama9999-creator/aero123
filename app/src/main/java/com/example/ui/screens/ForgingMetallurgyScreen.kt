@@ -1419,9 +1419,9 @@ private fun SoftAnnealCard(result: FastenerCalculationResult) {
                 modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
             )
 
-            if (spec.temperatureC.isNotBlank()) {
+            if (spec.temperatureC.isNotBlank() && !spec.temperatureC.startsWith("N/A")) {
                 HtStageCard(
-                    stage = "Anneal cycle",
+                    stage = if (spec.inHouseAnnealNeeded) "Anneal cycle" else "Mill anneal \u2014 re-anneal between blows",
                     temperature = spec.temperatureC,
                     soakTime = spec.soakTime,
                     subDetail = "Cooling: " + spec.coolingRate + "  \u2022  Atmosphere: " + spec.atmosphere
@@ -1435,6 +1435,16 @@ private fun SoftAnnealCard(result: FastenerCalculationResult) {
                 subDetail = listOf(spec.targetHardnessHrb, spec.structureTarget)
                     .filter { it.isNotBlank() }.joinToString("  \u2022  ")
             )
+
+            if (spec.cycleSource.isNotBlank()) {
+                Text(
+                    text = "Source: " + spec.cycleSource + "  \u2022  " + spec.cycleConfidence,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (spec.cycleConfidence.startsWith("Low")) AlertRed else customColors.textMuted,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
 
             spec.softeningRatio?.let { ratio ->
                 Text(
