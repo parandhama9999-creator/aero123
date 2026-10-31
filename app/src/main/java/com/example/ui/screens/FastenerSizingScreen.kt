@@ -333,11 +333,18 @@ fun FastenerSizingScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val pitchList = if (selectedUnitSystem == UnitSystem.METRIC) {
-                            val metric = FastenerCatalog.METRIC_SIZES.getOrElse(selectedSizeIndex) { FastenerCatalog.METRIC_SIZES[11] }
+                            val metric = FastenerCatalog.METRIC_SIZES.getOrElse(selectedSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
                             metric.pitches.mapIndexed { idx, p -> "$p mm (${if (idx == 0) "Coarse" else "Fine"})" }
                         } else {
-                            val inch = FastenerCatalog.INCH_SIZES.getOrElse(selectedSizeIndex) { FastenerCatalog.INCH_SIZES[8] }
-                            inch.tpis.mapIndexed { idx, tpi -> "$tpi TPI (${if (idx == 0) "UNC" else "UNF"})" }
+                            val inch = FastenerCatalog.INCH_SIZES.getOrElse(selectedSizeIndex) { FastenerCatalog.INCH_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.INCH)] }
+                            inch.tpis.mapIndexed { idx, tpi ->
+                                val series = when {
+                                    idx == 0 && inch.hasUnc -> "UNC"
+                                    idx == 0 || (idx == 1 && inch.hasUnc) -> "UNF"
+                                    else -> "UNS"
+                                }
+                                "$tpi TPI ($series)"
+                            }
                         }
                         val currentPitchText = if (selectedUnitSystem == UnitSystem.METRIC) {
                             "$selectedPitchValue mm"
@@ -351,10 +358,10 @@ fun FastenerSizingScreen(
                             items = pitchList,
                             onItemSelected = { idx ->
                                 if (selectedUnitSystem == UnitSystem.METRIC) {
-                                    val metric = FastenerCatalog.METRIC_SIZES.getOrElse(selectedSizeIndex) { FastenerCatalog.METRIC_SIZES[11] }
+                                    val metric = FastenerCatalog.METRIC_SIZES.getOrElse(selectedSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
                                     onPitchSelected(metric.pitches[idx])
                                 } else {
-                                    val inch = FastenerCatalog.INCH_SIZES.getOrElse(selectedSizeIndex) { FastenerCatalog.INCH_SIZES[8] }
+                                    val inch = FastenerCatalog.INCH_SIZES.getOrElse(selectedSizeIndex) { FastenerCatalog.INCH_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.INCH)] }
                                     onPitchSelected(inch.tpis[idx].toDouble())
                                 }
                             },

@@ -144,7 +144,7 @@ fun AeroFastApp() {
     var selectedFastenerType by remember { mutableStateOf(FastenerType.HEX_BOLT) }
     var selectedUnitSystem by remember { mutableStateOf(UnitSystem.METRIC) }
     var selectedStandard by remember { mutableStateOf(ProductStandard.ISO_4014) }
-    var selectedSizeIndex by remember { mutableIntStateOf(11) } // M10 or 3/8"
+    var selectedSizeIndex by remember { mutableIntStateOf(FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)) } // M10
     var selectedPitchValue by remember { mutableDoubleStateOf(1.50) }
     var selectedLength by remember { mutableDoubleStateOf(60.0) }
     var selectedPropClass by remember { mutableStateOf(PropertyClass.CLASS_10_9) }
@@ -179,6 +179,7 @@ fun AeroFastApp() {
             unitSystem = selectedUnitSystem.name,
             standard = selectedStandard.name,
             sizeIndex = selectedSizeIndex,
+            sizeDiaMm = FastenerCatalog.diameterMm(selectedUnitSystem, selectedSizeIndex),
             pitchValue = selectedPitchValue,
             lengthMm = selectedLength,
             propClass = selectedPropClass.name,
@@ -209,7 +210,10 @@ fun AeroFastApp() {
             try { selectedFastenerType = FastenerType.valueOf(loadedState.fastenerType) } catch (_: Exception) {}
             try { selectedUnitSystem = UnitSystem.valueOf(loadedState.unitSystem) } catch (_: Exception) {}
             try { selectedStandard = ProductStandard.valueOf(loadedState.standard) } catch (_: Exception) {}
-            selectedSizeIndex = loadedState.sizeIndex
+            selectedSizeIndex = loadedState.let { st ->
+                val u = runCatching { UnitSystem.valueOf(st.unitSystem) }.getOrDefault(UnitSystem.METRIC)
+                if (st.sizeDiaMm > 0.0) FastenerCatalog.sizeIndexFor(u, st.sizeDiaMm) else FastenerCatalog.migrateLegacySizeIndex(u, st.sizeIndex)
+            }
             selectedPitchValue = loadedState.pitchValue
             selectedLength = loadedState.lengthMm
             try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
@@ -282,7 +286,10 @@ fun AeroFastApp() {
                 try { selectedFastenerType = FastenerType.valueOf(loadedState.fastenerType) } catch (_: Exception) {}
                 try { selectedUnitSystem = UnitSystem.valueOf(loadedState.unitSystem) } catch (_: Exception) {}
                 try { selectedStandard = ProductStandard.valueOf(loadedState.standard) } catch (_: Exception) {}
-                selectedSizeIndex = loadedState.sizeIndex
+                selectedSizeIndex = loadedState.let { st ->
+                val u = runCatching { UnitSystem.valueOf(st.unitSystem) }.getOrDefault(UnitSystem.METRIC)
+                if (st.sizeDiaMm > 0.0) FastenerCatalog.sizeIndexFor(u, st.sizeDiaMm) else FastenerCatalog.migrateLegacySizeIndex(u, st.sizeIndex)
+            }
                 selectedPitchValue = loadedState.pitchValue
                 selectedLength = loadedState.lengthMm
                 try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
@@ -418,7 +425,7 @@ fun AeroFastApp() {
                                 selectedUnitSystem = selectedUnitSystem,
                                 onUnitSystemSelected = { newUnit ->
                                     selectedUnitSystem = newUnit
-                                    selectedSizeIndex = if (newUnit == UnitSystem.METRIC) 11 else 8
+                                    selectedSizeIndex = FastenerCatalog.defaultSizeIndex(newUnit)
                                     selectedPitchValue = if (newUnit == UnitSystem.METRIC) 1.50 else 16.0
                                     selectedLength = if (newUnit == UnitSystem.METRIC) 60.0 else 50.8
                                     val validClasses = ThreadClassCatalog.getOptions(newUnit, selectedFastenerType.isNut)
@@ -438,10 +445,10 @@ fun AeroFastApp() {
                                 onSizeIndexSelected = { idx ->
                                     selectedSizeIndex = idx
                                     if (selectedUnitSystem == UnitSystem.METRIC) {
-                                        val m = FastenerCatalog.METRIC_SIZES.getOrElse(idx) { FastenerCatalog.METRIC_SIZES[11] }
+                                        val m = FastenerCatalog.METRIC_SIZES.getOrElse(idx) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
                                         selectedPitchValue = m.pitches.first()
                                     } else {
-                                        val inc = FastenerCatalog.INCH_SIZES.getOrElse(idx) { FastenerCatalog.INCH_SIZES[8] }
+                                        val inc = FastenerCatalog.INCH_SIZES.getOrElse(idx) { FastenerCatalog.INCH_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.INCH)] }
                                         selectedPitchValue = inc.tpis.first().toDouble()
                                     }
                                     appliedExtractedSpec = null

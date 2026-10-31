@@ -438,10 +438,23 @@ object GeminiAiService {
 
         val rawProp = parsedJson.optString("propertyClass", "10.9").uppercase()
         val matchedPropClass = when {
-            rawProp.contains("4.8") -> PropertyClass.CLASS_4_8
-            rawProp.contains("5.8") -> PropertyClass.CLASS_5_8
-            rawProp.contains("8.8") -> PropertyClass.CLASS_8_8
+            // Longest / most specific patterns first: "9.8" must not fall into "8.8", "A4-80" not into "A2-70"
+            rawProp.contains("B7") -> PropertyClass.ASTM_A193_B7
+            rawProp.contains("A574") -> PropertyClass.ASTM_A574
+            rawProp.contains("GRADE 8") || rawProp.contains("GR 8") || rawProp.contains("GR.8") -> PropertyClass.SAE_GRADE_8
+            rawProp.contains("GRADE 5") || rawProp.contains("GR 5") || rawProp.contains("GR.5") -> PropertyClass.SAE_GRADE_5
+            rawProp.contains("GRADE 2") || rawProp.contains("GR 2") || rawProp.contains("GR.2") -> PropertyClass.SAE_GRADE_2
             rawProp.contains("12.9") -> PropertyClass.CLASS_12_9
+            rawProp.contains("10.9") -> PropertyClass.CLASS_10_9
+            rawProp.contains("9.8") -> PropertyClass.CLASS_9_8
+            rawProp.contains("8.8") -> PropertyClass.CLASS_8_8
+            rawProp.contains("6.8") -> PropertyClass.CLASS_6_8
+            rawProp.contains("5.8") -> PropertyClass.CLASS_5_8
+            rawProp.contains("5.6") -> PropertyClass.CLASS_5_6
+            rawProp.contains("4.8") -> PropertyClass.CLASS_4_8
+            rawProp.contains("4.6") -> PropertyClass.CLASS_4_6
+            (rawProp.contains("A2") || rawProp.contains("A4")) && rawProp.contains("80") -> PropertyClass.A4_80
+            (rawProp.contains("A2") || rawProp.contains("A4")) && rawProp.contains("50") -> PropertyClass.A2_50
             rawProp.contains("A2") || rawProp.contains("A4") || rawProp.contains("70") -> PropertyClass.A2_70
             rawProp.contains("1100") || rawProp.contains("TI") -> PropertyClass.AERO_1100
             rawProp.contains("1380") || rawProp.contains("INCONEL") || rawProp.contains("WASP") -> PropertyClass.AERO_1380

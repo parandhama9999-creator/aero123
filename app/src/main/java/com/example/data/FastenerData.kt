@@ -64,8 +64,8 @@ enum class FastenerType(
 }
 
 enum class UnitSystem(val label: String) {
-    METRIC("Metric (M0.25 – M36)"),
-    INCH("Inch (#1-64 – 1\" UNC/UNF)")
+    METRIC("Metric (M0.25 – M64, ISO 261)"),
+    INCH("Inch (#0-80 – 1-3/4\" UNC/UNF, ASME B1.1)")
 }
 
 enum class ProductStandard(val code: String, val label: String, val category: String = "ISO/DIN Metric") {
@@ -128,12 +128,23 @@ enum class ProductStandard(val code: String, val label: String, val category: St
 }
 
 enum class PropertyClass(val label: String, val defaultMatKey: String, val utsMpa: Double) {
+    CLASS_4_6("Class 4.6 (400 MPa • Low Carbon)", "1008", 400.0),
     CLASS_4_8("Class 4.8 (420 MPa • Cold Formed)", "1008", 420.0),
+    CLASS_5_6("Class 5.6 (500 MPa • Low / Medium Carbon)", "1018", 500.0),
     CLASS_5_8("Class 5.8 (520 MPa • Stress Relieved)", "1018", 520.0),
+    CLASS_6_8("Class 6.8 (600 MPa • Cold Formed)", "1018", 600.0),
     CLASS_8_8("Class 8.8 (830 MPa • Q&T Medium C)", "10B21", 830.0),
+    CLASS_9_8("Class 9.8 (900 MPa • Q&T, d ≤ 16)", "10B21", 900.0),
     CLASS_10_9("Class 10.9 (1040 MPa • Q&T Alloy)", "10B21", 1040.0),
     CLASS_12_9("Class 12.9 (1220 MPa • Q&T CrMo)", "4140", 1220.0),
-    A2_70("Stainless A2-70 / A4-80 (700-800 MPa)", "SS304", 750.0),
+    A2_50("Stainless A2-50 / A4-50 (500 MPa)", "SS304", 500.0),
+    A2_70("Stainless A2-70 / A4-70 (700 MPa)", "SS304", 700.0),
+    A4_80("Stainless A2-80 / A4-80 (800 MPa)", "SS316", 800.0),
+    SAE_GRADE_2("SAE J429 Grade 2 (74 ksi / 510 MPa)", "1018", 510.0),
+    SAE_GRADE_5("SAE J429 Grade 5 (120 ksi / 827 MPa)", "10B21", 827.0),
+    SAE_GRADE_8("SAE J429 Grade 8 (150 ksi / 1034 MPa)", "4140", 1034.0),
+    ASTM_A574("ASTM A574 Socket Head (180 / 170 ksi)", "4140", 1172.0),
+    ASTM_A193_B7("ASTM A193 B7 (125 ksi / 862 MPa)", "4140", 862.0),
     AERO_1100("Aero Titanium (1050-1120 MPa • STA)", "TI_GR5", 1120.0),
     AERO_1380("Aero Superalloy (1380-1420 MPa • Aged)", "INCONEL718", 1380.0),
     AERO_1750("Aero Ultra-High (1720–1950 MPa • 300M/MP35N)", "300M", 1950.0),
@@ -292,7 +303,15 @@ enum class CoatingType(
         25.0,
         false,
         "Whitford Xylan 1424 (15–25 µm)"
-    )
+    ),
+    ZN_FE("ZN_FE", "Zinc-Iron Fe/Zn (ISO 4042)", true, 5.0, 12.0, true, "ISO 4042 Zn-Fe (5–12 µm, e.g. Fe/Zn 12)"),
+    MAGNI_565("MAGNI_565", "Magni 565 Zinc Flake (ISO 10683)", false, 13.0, 18.0, false, "ISO 10683 flZn / Magni 565 (8 µm base + 5 µm top min; 13–18 µm)"),
+    DELTA_PROTEKT("DELTA_PROTEKT", "Delta-Protekt KL 100 Zinc Flake (ISO 10683)", false, 6.0, 12.0, false, "ISO 10683 / Dörken Delta-Protekt KL 100 basecoat (6–12 µm)"),
+    TIN("TIN", "Tin Plating (ASTM B545)", true, 2.5, 5.1, true, "ASTM B545 Class A – B (2.5–5 µm)"),
+    ANODIZE_II("ANODIZE_II", "Sulfuric Anodize Type II — Aluminium (MIL-PRF-8625)", false, 5.0, 20.0, false, "MIL-PRF-8625 Type II (≈ 5–20 µm typical)"),
+    HARD_ANODIZE("HARD_ANODIZE", "Hard Anodize Type III — Aluminium (MIL-PRF-8625)", false, 13.0, 50.0, false, "MIL-PRF-8625 Type III (12.7–115 µm; 50 µm when not specified)"),
+    TI_ANODIZE("TI_ANODIZE", "Titanium Anodize Type II (AMS 2488)", false, 0.5, 5.0, false, "AMS 2488 Type II (0.5–5 µm, vendor figures — verify)"),
+    CHEM_FILM("CHEM_FILM", "Chemical Conversion / Chem Film — Aluminium (MIL-DTL-5541)", false, 0.0, 0.5, false, "MIL-DTL-5541 Class 1A / 3 (negligible build-up)")
 }
 
 data class HeatTreatmentSpec(
@@ -359,7 +378,9 @@ data class MetricSize(
 data class InchSize(
     val label: String,
     val dInch: Double,
-    val tpis: List<Int> // Coarse (UNC) first, then fine (UNF)
+    val tpis: List<Int>, // Coarse (UNC) first, then fine (UNF)
+    /** #0 exists only as 0-80 UNF. */
+    val hasUnc: Boolean = true
 )
 
 object FastenerCatalog {
@@ -1950,69 +1971,112 @@ object FastenerCatalog {
     )
 
 
+    // ISO 261 general-purpose sizes: coarse pitch first, then fine pitches (Modulus Metal / induspecs ISO 261 charts)
     val METRIC_SIZES = listOf(
         MetricSize("M0.25 (0.25 mm)", 0.25, listOf(0.075)),
         MetricSize("M0.5 (0.50 mm)", 0.50, listOf(0.125)),
         MetricSize("M1.0 (1.00 mm)", 1.00, listOf(0.25, 0.20)),
+        MetricSize("M1.2 (1.20 mm)", 1.20, listOf(0.25, 0.20)),
+        MetricSize("M1.4 (1.40 mm)", 1.40, listOf(0.30, 0.20)),
         MetricSize("M1.6 (1.60 mm)", 1.60, listOf(0.35, 0.20)),
         MetricSize("M2.0 (2.00 mm)", 2.00, listOf(0.40, 0.25)),
         MetricSize("M2.5 (2.50 mm)", 2.50, listOf(0.45, 0.35)),
         MetricSize("M3 (3.00 mm)", 3.00, listOf(0.50, 0.35)),
+        MetricSize("M3.5 (3.50 mm)", 3.50, listOf(0.60, 0.35)),
         MetricSize("M4 (4.00 mm)", 4.00, listOf(0.70, 0.50)),
         MetricSize("M5 (5.00 mm)", 5.00, listOf(0.80, 0.50)),
-        MetricSize("M6 (6.00 mm)", 6.00, listOf(1.00, 0.75)),
+        MetricSize("M6 (6.00 mm)", 6.00, listOf(1.00, 0.75, 0.50)),
         MetricSize("M8 (8.00 mm)", 8.00, listOf(1.25, 1.00, 0.75)),
-        MetricSize("M10 (10.00 mm)", 10.00, listOf(1.50, 1.25, 1.00)),
-        MetricSize("M12 (12.00 mm)", 12.00, listOf(1.75, 1.50, 1.25)),
-        MetricSize("M14 (14.00 mm)", 14.00, listOf(2.00, 1.50)),
-        MetricSize("M16 (16.00 mm)", 16.00, listOf(2.00, 1.50)),
-        MetricSize("M20 (20.00 mm)", 20.00, listOf(2.50, 1.50)),
-        MetricSize("M24 (24.00 mm)", 24.00, listOf(3.00, 2.00)),
-        MetricSize("M30 (30.00 mm)", 30.00, listOf(3.50, 2.00)),
-        MetricSize("M36 (36.00 mm)", 36.00, listOf(4.00, 3.00))
+        MetricSize("M10 (10.00 mm)", 10.00, listOf(1.50, 1.25, 1.00, 0.75)),
+        MetricSize("M12 (12.00 mm)", 12.00, listOf(1.75, 1.50, 1.25, 1.00)),
+        MetricSize("M14 (14.00 mm)", 14.00, listOf(2.00, 1.50, 1.25, 1.00)),
+        MetricSize("M16 (16.00 mm)", 16.00, listOf(2.00, 1.50, 1.00)),
+        MetricSize("M18 (18.00 mm)", 18.00, listOf(2.50, 2.00, 1.50, 1.00)),
+        MetricSize("M20 (20.00 mm)", 20.00, listOf(2.50, 2.00, 1.50, 1.00)),
+        MetricSize("M22 (22.00 mm)", 22.00, listOf(2.50, 2.00, 1.50, 1.00)),
+        MetricSize("M24 (24.00 mm)", 24.00, listOf(3.00, 2.00, 1.50, 1.00)),
+        MetricSize("M27 (27.00 mm)", 27.00, listOf(3.00, 2.00, 1.50, 1.00)),
+        MetricSize("M30 (30.00 mm)", 30.00, listOf(3.50, 2.00, 1.50, 1.00)),
+        MetricSize("M33 (33.00 mm)", 33.00, listOf(3.50, 2.00, 1.50)),
+        MetricSize("M36 (36.00 mm)", 36.00, listOf(4.00, 3.00, 2.00, 1.50)),
+        MetricSize("M39 (39.00 mm)", 39.00, listOf(4.00, 3.00, 2.00, 1.50)),
+        MetricSize("M42 (42.00 mm)", 42.00, listOf(4.50, 3.00, 2.00, 1.50)),
+        MetricSize("M45 (45.00 mm)", 45.00, listOf(4.50, 3.00, 2.00, 1.50)),
+        MetricSize("M48 (48.00 mm)", 48.00, listOf(5.00, 3.00, 2.00, 1.50)),
+        MetricSize("M52 (52.00 mm)", 52.00, listOf(5.00, 4.00, 3.00, 2.00, 1.50)),
+        MetricSize("M56 (56.00 mm)", 56.00, listOf(5.50, 4.00, 3.00, 2.00, 1.50)),
+        MetricSize("M60 (60.00 mm)", 60.00, listOf(5.50, 4.00, 3.00, 2.00, 1.50)),
+        MetricSize("M64 (64.00 mm)", 64.00, listOf(6.00, 4.00, 3.00, 2.00, 1.50))
     )
 
+    // ASME B1.1 Unified sizes: UNC first, then UNF. 2" (4.5 TPI) is left out — TPI is stored as a whole number.
     val INCH_SIZES = listOf(
+        InchSize("#0 (0.0600\")", 0.0600, listOf(80), hasUnc = false),
         InchSize("#1 (0.0730\")", 0.0730, listOf(64, 72)),
         InchSize("#2 (0.0860\")", 0.0860, listOf(56, 64)),
+        InchSize("#3 (0.0990\")", 0.0990, listOf(48, 56)),
         InchSize("#4 (0.1120\")", 0.1120, listOf(40, 48)),
+        InchSize("#5 (0.1250\")", 0.1250, listOf(40, 44)),
         InchSize("#6 (0.1380\")", 0.1380, listOf(32, 40)),
         InchSize("#8 (0.1640\")", 0.1640, listOf(32, 36)),
         InchSize("#10 (0.1900\")", 0.1900, listOf(24, 32)),
+        InchSize("#12 (0.2160\")", 0.2160, listOf(24, 28)),
         InchSize("1/4\" (0.2500\")", 0.2500, listOf(20, 28)),
         InchSize("5/16\" (0.3125\")", 0.3125, listOf(18, 24)),
         InchSize("3/8\" (0.3750\")", 0.3750, listOf(16, 24)),
         InchSize("7/16\" (0.4375\")", 0.4375, listOf(14, 20)),
         InchSize("1/2\" (0.5000\")", 0.5000, listOf(13, 20)),
+        InchSize("9/16\" (0.5625\")", 0.5625, listOf(12, 18)),
         InchSize("5/8\" (0.6250\")", 0.6250, listOf(11, 18)),
         InchSize("3/4\" (0.7500\")", 0.7500, listOf(10, 16)),
         InchSize("7/8\" (0.8750\")", 0.8750, listOf(9, 14)),
-        InchSize("1\" (1.0000\")", 1.0000, listOf(8, 12, 14))
+        InchSize("1\" (1.0000\")", 1.0000, listOf(8, 12, 14)),
+        InchSize("1-1/8\" (1.1250\")", 1.1250, listOf(7, 12)),
+        InchSize("1-1/4\" (1.2500\")", 1.2500, listOf(7, 12)),
+        InchSize("1-3/8\" (1.3750\")", 1.3750, listOf(6, 12)),
+        InchSize("1-1/2\" (1.5000\")", 1.5000, listOf(6, 12)),
+        InchSize("1-3/4\" (1.7500\")", 1.7500, listOf(5))
     )
+
+    /** Saved sessions stored the size as a list position; these are the lists those positions referred to. */
+    private val LEGACY_METRIC_D = listOf(0.25, 0.5, 1.0, 1.6, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 20.0, 24.0, 30.0, 36.0)
+    private val LEGACY_INCH_D = listOf(0.073, 0.086, 0.112, 0.138, 0.164, 0.19, 0.25, 0.3125, 0.375, 0.4375, 0.5, 0.625, 0.75, 0.875, 1.0)
+
+    /** Nominal diameter in mm of a size position. */
+    fun diameterMm(unit: UnitSystem, index: Int): Double =
+        if (unit == UnitSystem.METRIC) METRIC_SIZES.getOrElse(index) { METRIC_SIZES[defaultSizeIndex(unit)] }.d
+        else INCH_SIZES.getOrElse(index) { INCH_SIZES[defaultSizeIndex(unit)] }.dInch * 25.4
+
+    /** Position of the size closest to a diameter in mm. */
+    fun sizeIndexFor(unit: UnitSystem, dMm: Double): Int =
+        if (unit == UnitSystem.METRIC) METRIC_SIZES.indices.minByOrNull { kotlin.math.abs(METRIC_SIZES[it].d - dMm) } ?: 0
+        else INCH_SIZES.indices.minByOrNull { kotlin.math.abs(INCH_SIZES[it].dInch * 25.4 - dMm) } ?: 0
+
+    /** M10 or 3/8". */
+    fun defaultSizeIndex(unit: UnitSystem): Int = sizeIndexFor(unit, if (unit == UnitSystem.METRIC) 10.0 else 9.525)
+
+    /** Maps a position saved by an older version (before sizes were inserted) onto today's list. */
+    fun migrateLegacySizeIndex(unit: UnitSystem, legacyIndex: Int): Int {
+        val d = if (unit == UnitSystem.METRIC) LEGACY_METRIC_D.getOrNull(legacyIndex)
+        else LEGACY_INCH_D.getOrNull(legacyIndex)?.times(25.4)
+        return if (d == null) defaultSizeIndex(unit) else sizeIndexFor(unit, d)
+    }
 
     val METRIC_LENGTHS = listOf(6.0, 10.0, 16.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 75.0, 100.0, 120.0, 150.0)
     val INCH_LENGTHS = listOf(12.7, 25.4, 38.1, 50.8, 63.5, 76.2, 101.6) // 0.5", 1", 1.5", 2", 2.5", 3", 4"
 }
 
 object ThreadClassCatalog {
+    // ISO 965-1 / 965-3 classes: pitch-diameter tolerance, then crest tolerance (e.g. 4g6g). First entry is the default.
     val METRIC_EXTERNAL = listOf(
-        "6g",
-        "4g6g",
-        "4h",
-        "6h",
-        "6e",
-        "6f",
-        "8g",
-        "4g",
-        "5g6g"
+        "6g", "3h4h", "4g", "4h", "4g6g", "4h6h", "5g6g", "5h4h", "5h6h",
+        "6d", "6e", "6f", "6h", "7e6e", "7g6g", "7h6h", "8g", "8h", "9g8g",
+        "4h6h-MJ"
     )
 
     val METRIC_INTERNAL = listOf(
-        "6H",
-        "5H",
-        "4H",
-        "6G",
-        "7H"
+        "6H", "4H", "4H5H", "5G", "5H", "5H6H", "6G", "7G", "7H", "8G", "8H",
+        "6AZ", "6AX", "4H5H-MJ", "5H6H-MJ"
     )
 
     val INCH_EXTERNAL = listOf(
@@ -2061,6 +2125,27 @@ object ThreadClassCatalog {
             "3B" -> "3B (Close Precision Internal Fit)"
             "3B-UNJ" -> "3B-UNJ (Aerospace Controlled Root AS8879)"
             "1B" -> "1B (Loose Internal Fit)"
+            "3h4h" -> "3h4h (Finest Zero-Allowance Fit)"
+            "4h6h" -> "4h6h (Close Pitch, Medium Crest)"
+            "5h4h" -> "5h4h (Close Zero-Allowance, Fine Crest)"
+            "5h6h" -> "5h6h (Close Zero-Allowance Fit)"
+            "6d" -> "6d (Extra-Large Allowance, Heavy Coatings)"
+            "7e6e" -> "7e6e (Coarse Fit, Large Allowance)"
+            "7g6g" -> "7g6g (Coarse Fit with Allowance)"
+            "7h6h" -> "7h6h (Coarse Zero-Allowance Fit)"
+            "8h" -> "8h (Loose Zero-Allowance Fit)"
+            "9g8g" -> "9g8g (Very Loose Fit)"
+            "4h6h-MJ" -> "4h6h MJ (Aerospace ISO 5855, Controlled Root)"
+            "4H5H" -> "4H5H (Close Pitch, Fine Minor)"
+            "5G" -> "5G (Close Fit with Plating Allowance)"
+            "5H6H" -> "5H6H (Close Pitch, Medium Minor)"
+            "7G" -> "7G (Coarse Fit with Allowance)"
+            "8G" -> "8G (Loose Fit with Allowance)"
+            "8H" -> "8H (Loose Internal Fit)"
+            "6AZ" -> "6AZ (Oversize Nut for Centrifuged Hot-Dip Galv, ISO 965-5)"
+            "6AX" -> "6AX (Oversize Nut for Heavy Hot-Dip Galv, ISO 965-5)"
+            "4H5H-MJ" -> "4H5H MJ (Aerospace ISO 5855 Internal)"
+            "5H6H-MJ" -> "5H6H MJ (Aerospace ISO 5855 Internal)"
             else -> code
         }
     }

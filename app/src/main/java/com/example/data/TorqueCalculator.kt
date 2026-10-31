@@ -39,11 +39,11 @@ object TorqueCalculator {
     fun typicalFriction(coating: CoatingType, family: MaterialFamily): Pair<Double, Double> {
         if (family == MaterialFamily.STAINLESS || family == MaterialFamily.TITANIUM) return 0.20 to 0.20 // galling-prone, unlubricated
         return when (coating) {
-            CoatingType.GEOMET, CoatingType.DACROMET, CoatingType.ZN_NI -> 0.12 to 0.12 // with integrated lubricant / top coat
+            CoatingType.GEOMET, CoatingType.DACROMET, CoatingType.ZN_NI, CoatingType.MAGNI_565 -> 0.12 to 0.12 // with integrated lubricant / top coat
             CoatingType.PTFE_XYLAN -> 0.08 to 0.08
             CoatingType.PHOSPHATE, CoatingType.PHOSPHATE_MN, CoatingType.BLACK_OXIDE -> 0.14 to 0.14 // oiled
             CoatingType.HOT_DIP_GALV -> 0.16 to 0.16 // waxed nut assumed
-            CoatingType.ZINC_BLUE, CoatingType.ZINC_YELLOW -> 0.16 to 0.16 // no lubricant
+            CoatingType.ZINC_BLUE, CoatingType.ZINC_YELLOW, CoatingType.ZN_FE, CoatingType.TIN -> 0.16 to 0.16 // no lubricant
             else -> if (coating.name.contains("CAD")) 0.09 to 0.09 else 0.14 to 0.14
         }
     }

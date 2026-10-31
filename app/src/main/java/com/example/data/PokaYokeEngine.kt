@@ -40,13 +40,27 @@ object PokaYokeEngine {
 
     /** Minimum strength the selected property class guarantees (ISO 898-1 Table 3 / ISO 3506-1). */
     fun classStrength(pc: PropertyClass, dMm: Double, material: MaterialInfo): ClassStrength = when (pc) {
+        PropertyClass.CLASS_4_6 -> ClassStrength(400.0, 240.0, 225.0, true)
         PropertyClass.CLASS_4_8 -> ClassStrength(420.0, 340.0, 310.0, true)
+        PropertyClass.CLASS_5_6 -> ClassStrength(500.0, 300.0, 280.0, true)
         PropertyClass.CLASS_5_8 -> ClassStrength(520.0, 420.0, 380.0, true)
+        PropertyClass.CLASS_6_8 -> ClassStrength(600.0, 480.0, 440.0, true)
         PropertyClass.CLASS_8_8 -> if (dMm <= 16.0) ClassStrength(800.0, 640.0, 580.0, true) else ClassStrength(830.0, 660.0, 600.0, true)
+        PropertyClass.CLASS_9_8 -> ClassStrength(900.0, 720.0, 650.0, true)
         PropertyClass.CLASS_10_9 -> ClassStrength(1040.0, 940.0, 830.0, true)
         PropertyClass.CLASS_12_9 -> ClassStrength(1220.0, 1100.0, 970.0, true)
         // ISO 3506-1: A2-70 / A4-70 — the proof check uses the 0.2 % yield (Rp0.2) load
         PropertyClass.A2_70 -> ClassStrength(700.0, 450.0, 450.0, false)
+        PropertyClass.A2_50 -> ClassStrength(500.0, 210.0, 210.0, false)
+        PropertyClass.A4_80 -> ClassStrength(800.0, 600.0, 600.0, false)
+        // SAE J429 minima (ksi → MPa): Grade 2 74/57/55 ≤ 3/4", 60/36/33 above; Grade 5 120/92/85 ≤ 1", 105/81/74 above; Grade 8 150/130/120
+        PropertyClass.SAE_GRADE_2 -> if (dMm <= 19.05) ClassStrength(510.0, 393.0, 379.0, false) else ClassStrength(414.0, 248.0, 228.0, false)
+        PropertyClass.SAE_GRADE_5 -> if (dMm <= 25.4) ClassStrength(827.0, 634.0, 586.0, false) else ClassStrength(724.0, 558.0, 510.0, false)
+        PropertyClass.SAE_GRADE_8 -> ClassStrength(1034.0, 896.0, 827.0, false)
+        // ASTM A574: 180 ksi ≤ 1/2", 170 ksi above, 153 ksi yield. ASTM A193 B7: 125/105 ksi ≤ 2-1/2", 115/95 above.
+        // Neither table gives a proof stress here, so proof = 0.9 × yield, as for the other non-ISO classes.
+        PropertyClass.ASTM_A574 -> ClassStrength(if (dMm <= 12.7) 1241.0 else 1172.0, 1055.0, 0.9 * 1055.0, false)
+        PropertyClass.ASTM_A193_B7 -> if (dMm <= 63.5) ClassStrength(862.0, 724.0, 0.9 * 724.0, false) else ClassStrength(793.0, 655.0, 0.9 * 655.0, false)
         // Aerospace / non-ferrous: the procurement spec of the alloy governs, so use the material's own values
         else -> ClassStrength(material.postForgingTargetUtsMpa, material.yieldStrengthMpa, material.yieldStrengthMpa * 0.9, false)
     }
@@ -66,13 +80,33 @@ object PokaYokeEngine {
 
     fun isFullyThreaded(type: FastenerType) = type in FULL_THREAD_TYPES
 
+    private val STAINLESS_CLASSES = setOf(PropertyClass.A2_50, PropertyClass.A2_70, PropertyClass.A4_80)
+    /** Inch steel grades: like ISO 898-1 they need carbon / alloy steel, but they are not ISO classes. */
+    private val INCH_STEEL_CLASSES = setOf(
+        PropertyClass.SAE_GRADE_2, PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574, PropertyClass.ASTM_A193_B7
+    )
+    private val QT_CLASSES = setOf(
+        PropertyClass.CLASS_8_8, PropertyClass.CLASS_9_8, PropertyClass.CLASS_10_9, PropertyClass.CLASS_12_9,
+        PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574, PropertyClass.ASTM_A193_B7
+    )
+    private val ALUMINIUM_ONLY_COATINGS = setOf(CoatingType.ANODIZE_II, CoatingType.HARD_ANODIZE, CoatingType.CHEM_FILM)
+
     /** ISO 898-2 nut property class that mates with a bolt class (ISO 3506-2 / aerospace spec for others). */
     fun nutClassFor(pc: PropertyClass): String = when (pc) {
-        PropertyClass.CLASS_4_8, PropertyClass.CLASS_5_8 -> "5"
+        PropertyClass.CLASS_4_6, PropertyClass.CLASS_4_8, PropertyClass.CLASS_5_6, PropertyClass.CLASS_5_8 -> "5"
+        PropertyClass.CLASS_6_8 -> "6"
+        PropertyClass.CLASS_9_8 -> "9"
         PropertyClass.CLASS_8_8 -> "8"
         PropertyClass.CLASS_10_9 -> "10"
         PropertyClass.CLASS_12_9 -> "12"
         PropertyClass.A2_70 -> "A2-70 / A4-70 (ISO 3506-2)"
+        PropertyClass.A2_50 -> "A2-50 / A4-50 (ISO 3506-2)"
+        PropertyClass.A4_80 -> "A2-80 / A4-80 (ISO 3506-2)"
+        PropertyClass.SAE_GRADE_2 -> "SAE J995 Grade 2"
+        PropertyClass.SAE_GRADE_5 -> "SAE J995 Grade 5"
+        PropertyClass.SAE_GRADE_8 -> "SAE J995 Grade 8"
+        PropertyClass.ASTM_A193_B7 -> "ASTM A194 Grade 2H"
+        PropertyClass.ASTM_A574 -> "per joint design (ASTM A563 / A194)"
         else -> "per mating aerospace nut spec (NAS/MS)"
     }
 
@@ -256,10 +290,10 @@ object PokaYokeEngine {
         val pc = propertyClass
         if (pc != null && !isWasher) {
             val cs = classStrength(pc, d, material)
-            if (cs.isIsoSteelClass && family != MaterialFamily.CARBON_ALLOY_STEEL) {
+            if ((cs.isIsoSteelClass || pc in INCH_STEEL_CLASSES) && family != MaterialFamily.CARBON_ALLOY_STEEL) {
                 critical("Class ${pc.label.substringBefore(" (")} needs carbon/alloy steel", "ISO 898-1 classes apply only to carbon and alloy steel; ${material.name} is ${family.name.lowercase().replace('_', ' ')}.", "Use the material's own class (A2-70/A4-80 for austenitic stainless, aerospace class for Ti/Ni alloys) or change the material.")
-            } else if (pc == PropertyClass.A2_70 && family != MaterialFamily.STAINLESS) {
-                critical("A2-70/A4-80 needs stainless steel", "${material.name} is not a stainless steel.", "Select SS304 / SS316 or change the property class.")
+            } else if (pc in STAINLESS_CLASSES && family != MaterialFamily.STAINLESS) {
+                critical("${pc.label.substringBefore(" (")} needs stainless steel", "${material.name} is not a stainless steel.", "Select SS304 / SS316 or change the property class.")
             } else if (pc == PropertyClass.AERO_AL && family != MaterialFamily.ALUMINUM) {
                 critical("Aluminium class with non-aluminium material", "${material.name} is not an aluminium alloy.", "Select an aluminium alloy (2024, 7075, 2219) or change the class.")
             } else if (pc == PropertyClass.AERO_1100 && family != MaterialFamily.TITANIUM) {
@@ -268,7 +302,13 @@ object PokaYokeEngine {
             if (material.postForgingTargetUtsMpa < cs.rmMinMpa * 0.98 || material.postForgingTargetUtsMpa < pc.utsMpa * 0.98) {
                 critical("Material cannot reach the class strength", "${material.name} reaches about ${material.postForgingTargetUtsMpa.toInt()} MPa, but ${pc.label.substringBefore(" (")} needs at least ${maxOf(cs.rmMinMpa, pc.utsMpa).toInt()} MPa.", "Select a stronger, hardenable material (e.g. 4140/42CrMo4 for 12.9, 10B21 or 4135 for 10.9).")
             }
-            if (pc in listOf(PropertyClass.CLASS_8_8, PropertyClass.CLASS_10_9, PropertyClass.CLASS_12_9) && !material.hasHighHardness && family == MaterialFamily.CARBON_ALLOY_STEEL) {
+            if (pc == PropertyClass.CLASS_9_8 && d > 16.0) {
+                critical("Class 9.8 is limited to M16", "ISO 898-1 defines class 9.8 only for d ≤ 16 mm; M$d selected.", "Use class 8.8 or 10.9 for this size.")
+            }
+            if (pc in INCH_STEEL_CLASSES && unit == UnitSystem.METRIC && pc != PropertyClass.ASTM_A574 && pc != PropertyClass.ASTM_A193_B7) {
+                warn("SAE J429 grade on a metric thread", "SAE J429 grades are defined for inch fasteners.", "Use an ISO 898-1 property class for metric threads.")
+            }
+            if (pc in QT_CLASSES && !material.hasHighHardness && family == MaterialFamily.CARBON_ALLOY_STEEL) {
                 critical("Material is not quench-and-temper grade", "${material.name} cannot be quenched and tempered to ${pc.label.substringBefore(" (")}.", "Use a medium-carbon, boron or alloy steel.")
             }
         }
@@ -326,6 +366,14 @@ object PokaYokeEngine {
             }
         }
 
+        // ---- 7b. Coating suits the material ----
+        if (coating in ALUMINIUM_ONLY_COATINGS && family != MaterialFamily.ALUMINUM) {
+            critical("${coating.label.substringBefore(" (")} is for aluminium only", "${material.name} is not an aluminium alloy; anodizing and chromate conversion only form on aluminium.", "Choose a coating made for this material (e.g. Zn-Ni or zinc flake for steel, passivation for stainless).")
+        }
+        if (coating == CoatingType.TI_ANODIZE && family != MaterialFamily.TITANIUM) {
+            critical("Titanium anodize needs a titanium alloy", "${material.name} is not titanium.", "Select a titanium alloy or a coating made for this material.")
+        }
+
         // ---- 8. Coating thickness vs thread allowance (ISO 4042: coating adds 4 × t to the pitch diameter) ----
         if (!type.isUnthreaded && !isWasher && coating.thicknessMaxUm > 2.0 && coating != CoatingType.HOT_DIP_GALV) {
             val allowanceUm = abs(fundamentalDeviationMm) * 1000.0
@@ -351,13 +399,15 @@ object PokaYokeEngine {
         if (!type.isUnthreaded && pc != null && !isWasher) {
             val nutClass = nutClassFor(pc)
             val minLoadKn = classStrength(pc, d, material).rmMinMpa * stressAreaMm2 / 1000.0
+            val isoNut = classStrength(pc, d, material).isIsoSteelClass
             if (isNut) {
-                mandatory("Nut class $nutClass (ISO 898-2)", "Matches ${pc.label.substringBefore(" (")} bolts. Proof load must be at least the mating bolt's minimum breaking load, ${"%.1f".format(java.util.Locale.US, minLoadKn)} kN, so the bolt breaks before the thread strips.", "Mark the nut '$nutClass' and certify the proof-load test per ISO 898-2.")
+                mandatory(if (isoNut) "Nut class $nutClass (ISO 898-2)" else "Nut grade: $nutClass", "Matches ${pc.label.substringBefore(" (")} bolts. Proof load must be at least the mating bolt's minimum breaking load, ${"%.1f".format(java.util.Locale.US, minLoadKn)} kN, so the bolt breaks before the thread strips.", "Mark the nut '$nutClass' and certify the proof-load test per ISO 898-2.")
                 if (standard == ProductStandard.ISO_4033) {
                     warn("Thin nut (ISO 4033)", "Thin/jam nuts are classes 04/05 and cannot carry the full bolt load.", "Use ISO 4032 or ISO 4033 only as a lock/jam nut.")
                 }
             } else {
-                mandatory("Mate with nut class $nutClass or higher", "A lower-class nut strips before a ${pc.label.substringBefore(" (")} bolt reaches its ${"%.1f".format(java.util.Locale.US, minLoadKn)} kN breaking load.", "Specify the nut on the BOM as class $nutClass+ (e.g. ISO 4032-$nutClass) with the same thread size.")
+                mandatory(if (isoNut) "Mate with nut class $nutClass or higher" else "Mate with nut: $nutClass", "A lower-class nut strips before a ${pc.label.substringBefore(" (")} bolt reaches its ${"%.1f".format(java.util.Locale.US, minLoadKn)} kN breaking load.",
+                    if (isoNut) "Specify the nut on the BOM as class $nutClass+ (e.g. ISO 4032-$nutClass) with the same thread size." else "Specify the nut on the BOM as $nutClass with the same thread size.")
             }
         }
 

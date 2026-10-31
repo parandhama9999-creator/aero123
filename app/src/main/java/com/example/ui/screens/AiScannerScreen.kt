@@ -132,7 +132,8 @@ fun AiScannerScreen(
             },
             unitSystem = UnitSystem.METRIC,
             nominalSizeIndex = com.example.data.FastenerCatalog.METRIC_SIZES.indices
-                .minByOrNull { kotlin.math.abs(com.example.data.FastenerCatalog.METRIC_SIZES[it].d - sampleType.nominalDiaMm) } ?: 11,
+                .minByOrNull { kotlin.math.abs(com.example.data.FastenerCatalog.METRIC_SIZES[it].d - sampleType.nominalDiaMm) }
+                ?: com.example.data.FastenerCatalog.defaultSizeIndex(com.example.data.UnitSystem.METRIC),
             nominalDiaMm = sampleType.nominalDiaMm,
             pitchValue = sampleType.pitchMm,
             lengthMm = sampleType.lengthMm,

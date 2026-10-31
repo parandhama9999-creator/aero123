@@ -25,6 +25,8 @@ data class AeroFastState(
     var unitSystem: String = UnitSystem.METRIC.name,
     var standard: String = ProductStandard.ISO_4014.name,
     var sizeIndex: Int = 11,
+    /** Nominal diameter in mm; restores the size even when the size list changes. 0 = saved by an older version. */
+    var sizeDiaMm: Double = 0.0,
     var pitchValue: Double = 1.50,
     var lengthMm: Double = 60.0,
     var propClass: String = PropertyClass.CLASS_10_9.name,
@@ -48,6 +50,7 @@ data class AeroFastState(
         obj.put("unitSystem", unitSystem)
         obj.put("standard", standard)
         obj.put("sizeIndex", sizeIndex)
+        obj.put("sizeDiaMm", sizeDiaMm)
         obj.put("pitchValue", pitchValue)
         obj.put("lengthMm", lengthMm)
         obj.put("propClass", propClass)
@@ -102,6 +105,7 @@ data class AeroFastState(
                     unitSystem = obj.optString("unitSystem", UnitSystem.METRIC.name),
                     standard = obj.optString("standard", ProductStandard.ISO_4014.name),
                     sizeIndex = obj.optInt("sizeIndex", 11),
+                    sizeDiaMm = obj.optDouble("sizeDiaMm", 0.0),
                     pitchValue = obj.optDouble("pitchValue", 1.50),
                     lengthMm = obj.optDouble("lengthMm", 60.0),
                     propClass = obj.optString("propClass", PropertyClass.CLASS_10_9.name),

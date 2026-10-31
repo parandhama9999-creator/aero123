@@ -157,10 +157,10 @@ object CalculationEngine {
         propertyClass: PropertyClass? = null
     ): FastenerCalculationResult {
         val d: Double = customNominalDiaMm ?: if (unitSystem == UnitSystem.METRIC) {
-            val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[11] }
+            val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
             metric.d
         } else {
-            val inch = FastenerCatalog.INCH_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.INCH_SIZES[8] }
+            val inch = FastenerCatalog.INCH_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.INCH_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.INCH)] }
             ((inch.dInch * 25.4) * 1000).roundToInt() / 1000.0
         }
         val p = if (unitSystem == UnitSystem.METRIC || pitchValue < 5.0) {
@@ -175,10 +175,10 @@ object CalculationEngine {
         } else if (customNominalDiaMm != null) {
             "Custom Ø${customNominalDiaMm}×${p.round(3)} - $threadClass"
         } else if (unitSystem == UnitSystem.METRIC) {
-            val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[11] }
+            val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
             "M${metric.d.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }}×$p - $threadClass"
         } else {
-            val inch = FastenerCatalog.INCH_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.INCH_SIZES[8] }
+            val inch = FastenerCatalog.INCH_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.INCH_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.INCH)] }
             val sizeName = inch.label.substringBefore(" ")
             "$sizeName-${pitchValue.toInt()} $threadClass"
         }
@@ -207,19 +207,13 @@ object CalculationEngine {
             val tdMajGrade6 = 0.180 * p.pow(0.65)
 
             if (isNut) {
-                // Metric Internal Nut Fits: 6H, 5H, 4H, 6G, 7H
-                val ei = if (threadClass == "6G") (0.015 + 0.011 * p) else 0.0
-                val gradeMult = when (threadClass) {
-                    "4H" -> 0.63
-                    "5H" -> 0.80
-                    "6H", "6G" -> 1.00
-                    "7H" -> 1.25
-                    else -> 1.00
-                }
-                val td2Nut = gradeMult * 1.32 * td2Grade6
+                // Metric internal: any ISO 965 class, e.g. 6H, 4H5H, 6G, 6AZ, 5H6H-MJ
+                val cls = IsoThreadClass.parse(threadClass)
+                val ei = IsoThreadClass.internalEi(cls.position, p)
+                val td2Nut = IsoThreadClass.gradeFactor(cls.pitchGrade) * 1.32 * td2Grade6
                 // ISO 965-1 TD1 grade 6: 433P − 190P^1.22 µm (P < 1 mm), 230P^0.7 µm (P ≥ 1 mm)
                 val td1Grade6 = if (p < 1.0) (0.433 * p - 0.190 * p.pow(1.22)) else 0.230 * p.pow(0.7)
-                val td1Nut = gradeMult * td1Grade6
+                val td1Nut = IsoThreadClass.gradeFactor(cls.crestGrade) * td1Grade6
 
                 es = ei
                 td2 = td2Nut
@@ -234,7 +228,8 @@ object CalculationEngine {
                 majorMax = majorMin + (0.15 * p)
                 majorMean = (majorMin + majorMax) / 2.0
 
-                val d1Basic = d - (1.082532 * p)
+                // MJ (ISO 5855) internal threads have a truncated minor diameter for the larger external root radius
+                val d1Basic = d - ((if (cls.isMj) 0.974278 else 1.082532) * p)
                 minorMin = d1Basic + ei
                 minorMax = minorMin + td1Nut
 
@@ -242,24 +237,11 @@ object CalculationEngine {
                 blankDia = (minorMin + minorMax) / 2.0
                 blankTolHalf = (minorMax - minorMin) / 2.0
             } else {
-                // Metric External Fits: 6g, 4g6g, 4h, 6h, 6e, 6f, 8g, 4g, 5g6g
-                val deviation = when {
-                    threadClass.contains("h") -> 0.0
-                    threadClass.contains("e") -> -(0.050 + 0.011 * p)
-                    threadClass.contains("f") -> -(0.030 + 0.011 * p)
-                    else -> -(0.015 + 0.011 * p) // g class
-                }
-                val pitchGradeMult = when (threadClass) {
-                    "4h", "4g", "4g6g" -> 0.63
-                    "5g6g" -> 0.80
-                    "8g" -> 1.60
-                    else -> 1.00 // 6g, 6h, 6e, 6f
-                }
-                val majorGradeMult = when (threadClass) {
-                    "4h", "4g" -> 0.63
-                    "8g" -> 1.60
-                    else -> 1.00
-                }
+                // Metric external: any ISO 965 class, e.g. 6g, 4g6g, 6d, 9g8g, 4h6h-MJ
+                val cls = IsoThreadClass.parse(threadClass)
+                val deviation = IsoThreadClass.externalEs(cls.position, p)
+                val pitchGradeMult = IsoThreadClass.gradeFactor(cls.pitchGrade)
+                val majorGradeMult = IsoThreadClass.majorGradeFactor(cls.crestGrade)
 
                 es = deviation
                 td2 = pitchGradeMult * td2Grade6
@@ -274,11 +256,19 @@ object CalculationEngine {
                 majorMin = majorMax - tdMaj
                 majorMean = (majorMax + majorMin) / 2.0
 
-                // Root (d3) follows the flanks: d3 = d2 − 0.57735·P (ISO 965-1, e.g. M10×1.5-6g d3 max 8.128)
-                minorMax = d2Max - (0.577350 * p)
-                minorMin = d2Min - (0.577350 * p)
-                rootRMin = 0.125 * p
-                rootRMax = 0.144 * p
+                if (cls.isMj) {
+                    // MJ (ISO 5855) controlled root radius 0.150P – 0.180P, same profile basis as UNJ
+                    minorMax = d2Max - (0.50518 * p)
+                    minorMin = d2Min - (0.5658 * p)
+                    rootRMin = 0.15011 * p
+                    rootRMax = 0.18042 * p
+                } else {
+                    // Root (d3) follows the flanks: d3 = d2 − 0.57735·P (ISO 965-1, e.g. M10×1.5-6g d3 max 8.128)
+                    minorMax = d2Max - (0.577350 * p)
+                    minorMin = d2Min - (0.577350 * p)
+                    rootRMin = 0.125 * p
+                    rootRMax = 0.144 * p
+                }
 
                 val d2Target = d2Min + (0.55 * td2)
                 blankDia = d2Target - (0.014 * p) + (material.km * p)
@@ -729,6 +719,11 @@ object CalculationEngine {
 
     // Steels that get the generic quench & temper cycle; every other alloy keeps its own catalogue cycle
     // (aluminium, copper, nickel and maraging alloys must never see an 860 °C austenitize + oil quench).
+    /** ISO 898-1 classes that need no quench & temper: cold formed / work hardened. */
+    private val COLD_FORMED_CLASSES = setOf(
+        PropertyClass.CLASS_4_6, PropertyClass.CLASS_4_8, PropertyClass.CLASS_5_6, PropertyClass.CLASS_5_8, PropertyClass.CLASS_6_8
+    )
+
     private val QT_STEELS = setOf(
         "10B21", "4135", "4140", "4340", "42CRMO4", "AISI_51B37", "EN24", "EN24_ESR", "8740",
         "AISI_4130", "30KHGSA", "16KHGSN", "35NCD16", "SS410"
@@ -748,12 +743,13 @@ object CalculationEngine {
             hydrogenBakingCycle = if (hasHeRisk) bakeCycle else base.hydrogenBakingCycle
         )
         val isSteelClass = propertyClass in listOf(
-            PropertyClass.CLASS_4_8, PropertyClass.CLASS_5_8, PropertyClass.CLASS_8_8, PropertyClass.CLASS_10_9, PropertyClass.CLASS_12_9
+            PropertyClass.CLASS_4_6, PropertyClass.CLASS_4_8, PropertyClass.CLASS_5_6, PropertyClass.CLASS_5_8, PropertyClass.CLASS_6_8,
+            PropertyClass.CLASS_8_8, PropertyClass.CLASS_9_8, PropertyClass.CLASS_10_9, PropertyClass.CLASS_12_9
         )
 
         return when {
-            // ISO 898-1 classes 4.8 / 5.8 are cold-formed (work hardened): no quench & temper
-            (propertyClass == PropertyClass.CLASS_4_8 || propertyClass == PropertyClass.CLASS_5_8) &&
+            // ISO 898-1 classes 4.6 / 4.8 / 5.6 / 5.8 / 6.8 need no quench & temper (cold formed / work hardened)
+            propertyClass != null && propertyClass in COLD_FORMED_CLASSES &&
                 PokaYokeEngine.materialFamily(material) == MaterialFamily.CARBON_ALLOY_STEEL -> {
                 baseWithBake.copy(
                     austenitizingOrSolutionTempC = "N/A — cold formed, no hardening (ISO 898-1 ${propertyClass.label.substringBefore(" (")})",
@@ -761,7 +757,14 @@ object CalculationEngine {
                     quenchMedium = "N/A",
                     temperingOrAgingTempC = "Optional stress relief 520°C – 560°C after heading",
                     temperingOrAgingTimeHours = "60–90 mins if stress relieved",
-                    targetHardnessHrc = if (propertyClass == PropertyClass.CLASS_4_8) "130–220 HV (≈ 71–95 HRB)" else "160–220 HV (≈ 82–95 HRB)",
+                    // ISO 898-1 Table 3 hardness ranges
+                    targetHardnessHrc = when (propertyClass) {
+                        PropertyClass.CLASS_4_6 -> "120–220 HV"
+                        PropertyClass.CLASS_4_8 -> "130–220 HV (≈ 71–95 HRB)"
+                        PropertyClass.CLASS_5_6 -> "155–220 HV"
+                        PropertyClass.CLASS_6_8 -> "190–250 HV"
+                        else -> "160–220 HV (≈ 82–95 HRB)"
+                    },
                     standardReference = "ISO 898-1",
                     isDoubleTemper = false,
                     isAging = false
@@ -950,6 +953,7 @@ object CalculationEngine {
                 val tempTemp = when {
                     key == "SS410" -> "600°C – 650°C (Tempering)"
                     propertyClass == PropertyClass.CLASS_8_8 -> if (isBoron) "480°C – 540°C (Tempering, ≥ 425°C ISO 898-1)" else "560°C – 620°C (Tempering, ≥ 425°C ISO 898-1)"
+                    propertyClass == PropertyClass.CLASS_9_8 -> "≥ 425°C (Tempering, ISO 898-1 minimum)"
                     propertyClass == PropertyClass.CLASS_10_9 -> if (isBoron) "425°C – 460°C (Tempering, ≥ 425°C ISO 898-1)" else "500°C – 560°C (Tempering, ≥ 425°C ISO 898-1)"
                     propertyClass == PropertyClass.CLASS_12_9 -> "440°C – 500°C (Tempering, ≥ 425°C ISO 898-1)"
                     key == "4340" -> "480°C – 540°C (Double Tempering)"
@@ -967,6 +971,7 @@ object CalculationEngine {
                 val hardness = when {
                     key == "SS410" -> "36–42 HRC"
                     propertyClass == PropertyClass.CLASS_8_8 -> if (d <= 16.0) "22–32 HRC (Class 8.8, d ≤ 16)" else "23–34 HRC (Class 8.8, d > 16)"
+                    propertyClass == PropertyClass.CLASS_9_8 -> "290–360 HV (Class 9.8, d ≤ 16)"
                     propertyClass == PropertyClass.CLASS_10_9 -> "32–39 HRC (Class 10.9)"
                     propertyClass == PropertyClass.CLASS_12_9 -> "39–44 HRC (Class 12.9)"
                     else -> base.targetHardnessHrc.ifBlank { "32–39 HRC" }
