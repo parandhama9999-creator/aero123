@@ -575,6 +575,62 @@ fun FastenerSizingScreen(
                             Text(text = "Stock to extrude: ${"%.2f".format(java.util.Locale.US, preLen(bMin))} – ${"%.2f".format(java.util.Locale.US, preLen(bMin + 2 * pitchMm))} mm", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
                             Text(text = "Length under head before extrusion: ${"%.2f".format(java.util.Locale.US, underHeadBefore(bMin))} – ${"%.2f".format(java.util.Locale.US, underHeadBefore(bMin + 2 * pitchMm))} mm", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
                             Text(text = "Extruded section = Ø blank × b plus the 30° cone; plain shank stays at Ø${mm(ds)}. Range is for b min → b + 2P. Volume constant: L_pre = (A_blank·b + V_cone) / A_shank.", fontSize = 10.sp, color = customColors.textMuted)
+
+                            // Head stock: forged round head (with trim cheese) as a length of shank wire
+                            val headDims = result.headDimensions
+                            val isHex = selectedFastenerType in setOf(FastenerType.HEX_BOLT, FastenerType.HEX_BOLT_FULL, FastenerType.HEAVY_HEX_BOLT)
+                            val isFlange = selectedFastenerType == FastenerType.FLANGE_BOLT
+                            if (headDims != null && (isHex || isFlange)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(text = "HEAD STOCK & TRIM CHEESE", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
+                                var headForgedVol = 0.0
+                                var cheeseVol = 0.0
+                                if (isHex) {
+                                    val sHex = headDims.acrossFlatsS
+                                    val k = headDims.headHeightK
+                                    val e = sHex / kotlin.math.cos(Math.toRadians(30.0))
+                                    val dForged = 1.2 * e
+                                    headForgedVol = Math.PI / 4.0 * dForged * dForged * k
+                                    cheeseVol = headForgedVol - kotlin.math.sqrt(3.0) / 2.0 * sHex * sHex * k
+                                    Text(text = "Forged round head: Ø${mm(dForged)} (1.2 × e ${mm(e)}) × k ${mm(k)} mm", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                                } else {
+                                    // DIN 6921 (1983) dc max, k max, s from supplier catalogues; flange thickness c must come from the drawing
+                                    val din6921 = mapOf(6.0 to Triple(14.2, 6.6, 10.0), 8.0 to Triple(18.0, 8.1, 13.0), 10.0 to Triple(22.3, 9.2, 15.0),
+                                        12.0 to Triple(26.6, 11.5, 16.0), 16.0 to Triple(35.0, 14.4, 21.0))
+                                    val row = din6921.entries.firstOrNull { kotlin.math.abs(it.key - dMm) < 0.01 }?.value
+                                    var dcText by remember(dMm) { mutableStateOf(row?.first?.toString() ?: "") }
+                                    var kText by remember(dMm) { mutableStateOf(row?.second?.toString() ?: headDims.headHeightK.toString()) }
+                                    var sText by remember(dMm) { mutableStateOf(row?.third?.toString() ?: headDims.acrossFlatsS.toString()) }
+                                    var cText by remember(dMm) { mutableStateOf("") }
+                                    Text(text = if (row != null) "dc, k, s pre-filled from DIN 6921 (1983 edition, supplier tables). Enter flange thickness c from the drawing." else "No DIN 6921 row for this size: enter dc, k, s and c from the drawing.", fontSize = 10.sp, color = customColors.textMuted)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                                        listOf(Triple<String, String, (String) -> Unit>("dc", dcText, { v: String -> dcText = v }), Triple<String, String, (String) -> Unit>("k", kText, { v: String -> kText = v }),
+                                            Triple<String, String, (String) -> Unit>("s", sText, { v: String -> sText = v }), Triple<String, String, (String) -> Unit>("c", cText, { v: String -> cText = v })).forEach { (lbl, value, set) ->
+                                            OutlinedTextField(
+                                                value = value, onValueChange = set, singleLine = true, label = { Text(lbl, fontSize = 10.sp) },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = customColors.textMain),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    }
+                                    val dc = dcText.toDoubleOrNull(); val kF = kText.toDoubleOrNull(); val sF = sText.toDoubleOrNull(); val c = cText.toDoubleOrNull()
+                                    if (dc != null && kF != null && sF != null && c != null && c > 0 && kF > c) {
+                                        val dCollar = dc + 4.0
+                                        val collarVol = Math.PI / 4.0 * dCollar * dCollar * c
+                                        cheeseVol = Math.PI / 4.0 * (dCollar * dCollar - dc * dc) * c
+                                        headForgedVol = collarVol + kotlin.math.sqrt(3.0) / 2.0 * sF * sF * (kF - c)
+                                        Text(text = "Forged collar: Ø${mm(dCollar)} (dc + 2×2) × c ${mm(c)} mm, trimmed to Ø${mm(dc)}", fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                                    }
+                                }
+                                if (headForgedVol > 0.0) {
+                                    val density = (FastenerCatalog.MATERIALS[selectedMaterialKey]?.density ?: 7.85) / 1000.0
+                                    val headStock = headForgedVol / aShank
+                                    Text(text = "Head stock      : ${"%.2f".format(java.util.Locale.US, headStock)} mm of Ø${mm(ds)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                                    Text(text = "Trim cheese     : ${"%.0f".format(java.util.Locale.US, cheeseVol)} mm³ = ${"%.2f".format(java.util.Locale.US, cheeseVol * density)} g", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                                    Text(text = "Cut-off length  : ${"%.2f".format(java.util.Locale.US, headStock + underHeadBefore(bMin))} – ${"%.2f".format(java.util.Locale.US, headStock + underHeadBefore(bMin + 2 * pitchMm))} mm", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.accentPrimary)
+                                }
+                            }
                         }
                     }
                 }
