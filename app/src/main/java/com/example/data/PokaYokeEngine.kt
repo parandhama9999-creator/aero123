@@ -65,13 +65,13 @@ object PokaYokeEngine {
         else -> ClassStrength(material.postForgingTargetUtsMpa, material.yieldStrengthMpa, material.yieldStrengthMpa * 0.9, false)
     }
 
-    private val NUT_STANDARDS = setOf(
+    internal val NUT_STANDARDS = setOf(
         ProductStandard.ISO_4032, ProductStandard.ISO_4033, ProductStandard.DIN_6923, ProductStandard.ISO_7040,
         ProductStandard.ISO_7042, ProductStandard.DIN_935, ProductStandard.DIN_1587, ProductStandard.DIN_929, ProductStandard.ASME_B18_2_2,
         ProductStandard.ASTM_A194, ProductStandard.MS21042, ProductStandard.MS20500,
         ProductStandard.DIN_74361_NUT, ProductStandard.HI_LOK_COLLAR_STD, ProductStandard.MS21047
     )
-    private val WASHER_STANDARDS = setOf(ProductStandard.ISO_7089, ProductStandard.ISO_7093, ProductStandard.DIN_127, ProductStandard.ASTM_F436)
+    internal val WASHER_STANDARDS = setOf(ProductStandard.ISO_7089, ProductStandard.ISO_7093, ProductStandard.DIN_127, ProductStandard.ASTM_F436)
 
     private val FULL_THREAD_TYPES = setOf(
         FastenerType.HEX_BOLT_FULL, FastenerType.SOCKET_SET, FastenerType.SOCKET_BUTTON,
@@ -80,16 +80,16 @@ object PokaYokeEngine {
 
     fun isFullyThreaded(type: FastenerType) = type in FULL_THREAD_TYPES
 
-    private val STAINLESS_CLASSES = setOf(PropertyClass.A2_50, PropertyClass.A2_70, PropertyClass.A4_80)
+    internal val STAINLESS_CLASSES = setOf(PropertyClass.A2_50, PropertyClass.A2_70, PropertyClass.A4_80)
     /** Inch steel grades: like ISO 898-1 they need carbon / alloy steel, but they are not ISO classes. */
-    private val INCH_STEEL_CLASSES = setOf(
+    internal val INCH_STEEL_CLASSES = setOf(
         PropertyClass.SAE_GRADE_2, PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574, PropertyClass.ASTM_A193_B7
     )
-    private val QT_CLASSES = setOf(
+    internal val QT_CLASSES = setOf(
         PropertyClass.CLASS_8_8, PropertyClass.CLASS_9_8, PropertyClass.CLASS_10_9, PropertyClass.CLASS_12_9,
         PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574, PropertyClass.ASTM_A193_B7
     )
-    private val ALUMINIUM_ONLY_COATINGS = setOf(CoatingType.ANODIZE_II, CoatingType.HARD_ANODIZE, CoatingType.CHEM_FILM)
+    internal val ALUMINIUM_ONLY_COATINGS = setOf(CoatingType.ANODIZE_II, CoatingType.HARD_ANODIZE, CoatingType.CHEM_FILM)
 
     /** ISO 898-2 nut property class that mates with a bolt class (ISO 3506-2 / aerospace spec for others). */
     fun nutClassFor(pc: PropertyClass): String = when (pc) {
@@ -287,7 +287,8 @@ object PokaYokeEngine {
         }
 
         // ---- 4. Material vs property class ----
-        val pc = propertyClass
+        // Washers are not graded by bolt property class, so the class never drives their checks
+        val pc = if (isWasher) null else propertyClass
         if (pc != null && !isWasher) {
             val cs = classStrength(pc, d, material)
             if ((cs.isIsoSteelClass || pc in INCH_STEEL_CLASSES) && family != MaterialFamily.CARBON_ALLOY_STEEL) {
@@ -361,7 +362,7 @@ object PokaYokeEngine {
             if (d < 8.0) {
                 warn("Hot-dip galvanizing below M8", "ISO 10684 covers M8–M64; smaller threads fill with zinc.", "Use electro-zinc or zinc flake for small sizes.")
             }
-            if (!isNut && !type.isUnthreaded && !threadClass.contains("e") && !threadClass.contains("1A")) {
+            if (!isNut && !isWasher && !type.isUnthreaded && !threadClass.contains("e") && !threadClass.contains("1A")) {
                 critical("HDG thread needs oversize fit", "45–65 µm zinc will not fit a ${threadClass} external thread.", "Use 6az / 6e external with oversize-tapped nuts (6AZ/6AX per ISO 965-5), or undercut the bolt thread before galvanizing.")
             }
         }
@@ -437,87 +438,5 @@ object PokaYokeEngine {
         }
 
         return issues.sortedBy { it.severity.ordinal }
-    }
-
-    /** Filter standards by fastener type and unit system. */
-    fun getValidStandards(type: FastenerType, unit: UnitSystem): List<ProductStandard> {
-        val all = ProductStandard.values().toList()
-        val typeValid = when {
-            type.isWasher -> all.filter { it in WASHER_STANDARDS }
-            type.isNut -> all.filter { it in NUT_STANDARDS }
-            else -> all // bolts, screws, studs use most standards
-        }
-        // Filter by unit system and category
-        return typeValid.filter { std ->
-            when (unit) {
-                UnitSystem.METRIC -> std.category == "ISO/DIN Metric"
-                UnitSystem.INCH -> std.category == "ASME/Imperial" || std.category == "Aerospace/Defense"
-            }
-        }
-    }
-
-    /** Filter property classes by unit system and material family. */
-    fun getValidPropertyClasses(unit: UnitSystem, material: MaterialInfo): List<PropertyClass> {
-        val family = materialFamily(material)
-        val all = PropertyClass.values().toList()
-
-        return all.filter { pc ->
-            when (unit) {
-                UnitSystem.INCH -> {
-                    // Inch: SAE, ASTM, A2/A4 for stainless, aerospace alloys use AERO_* classes
-                    when (family) {
-                        MaterialFamily.STAINLESS -> pc in STAINLESS_CLASSES
-                        MaterialFamily.CARBON_ALLOY_STEEL -> pc in INCH_STEEL_CLASSES
-                        else -> pc.name.startsWith("AERO_")
-                    }
-                }
-                UnitSystem.METRIC -> {
-                    // Metric: ISO 898-1 classes, ISO 3506 (stainless), or aerospace
-                    when (family) {
-                        MaterialFamily.STAINLESS -> pc in STAINLESS_CLASSES
-                        MaterialFamily.CARBON_ALLOY_STEEL -> pc.name.contains("CLASS_") || pc.name.contains("QT_") || pc in QT_CLASSES
-                        else -> pc.name.startsWith("AERO_")
-                    }
-                }
-            }
-        }
-    }
-
-    /** Filter coatings by material family (aluminium only allows ANODIZE/CHEM_FILM, titanium has TI_ANODIZE, etc.). */
-    fun getValidCoatings(material: MaterialInfo): List<CoatingType> {
-        val family = materialFamily(material)
-        val all = CoatingType.values().toList()
-
-        return all.filter { coating ->
-            when (family) {
-                MaterialFamily.ALUMINUM -> coating in ALUMINIUM_ONLY_COATINGS
-                MaterialFamily.TITANIUM -> coating in setOf(CoatingType.TI_ANODIZE, CoatingType.CHEM_FILM) || coating == CoatingType.NONE
-                MaterialFamily.NICKEL_SUPERALLOY -> coating in setOf(CoatingType.CHEM_FILM, CoatingType.NONE) || coating.name.contains("CHEM") || coating.name.contains("NONE")
-                MaterialFamily.STAINLESS -> coating in setOf(CoatingType.NONE, CoatingType.ZN_FE, CoatingType.MAGNI_565, CoatingType.DELTA_PROTEKT) || coating == CoatingType.NONE
-                else -> true // Carbon/alloy steel accepts all
-            }
-        }
-    }
-
-    /** Filter materials by property class (stainless classes only match stainless materials, SAE grades only match carbon steel, etc.). */
-    fun getValidMaterials(propertyClass: PropertyClass, unit: UnitSystem, allMaterials: Map<String, MaterialInfo>): List<MaterialInfo> {
-        return allMaterials.values.filter { mat ->
-            val family = materialFamily(mat)
-            when (propertyClass) {
-                // Stainless grades (A2/A4) only match stainless materials
-                PropertyClass.A2_50, PropertyClass.A2_70, PropertyClass.A4_80 -> family == MaterialFamily.STAINLESS
-                // SAE/ASTM inch grades only match carbon/alloy steel
-                PropertyClass.SAE_GRADE_2, PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574, PropertyClass.ASTM_A193_B7 ->
-                    family == MaterialFamily.CARBON_ALLOY_STEEL && unit == UnitSystem.INCH
-                // ISO 898-1 metric classes match carbon/alloy steel
-                PropertyClass.CLASS_4_6, PropertyClass.CLASS_4_8, PropertyClass.CLASS_5_6, PropertyClass.CLASS_5_8, PropertyClass.CLASS_6_8,
-                PropertyClass.CLASS_8_8, PropertyClass.CLASS_9_8, PropertyClass.CLASS_10_9, PropertyClass.CLASS_12_9 ->
-                    family == MaterialFamily.CARBON_ALLOY_STEEL && unit == UnitSystem.METRIC
-                // Aerospace classes match aerospace materials (titanium, nickel superalloy, etc.)
-                PropertyClass.AERO_1100, PropertyClass.AERO_1380, PropertyClass.AERO_1750 ->
-                    family in setOf(MaterialFamily.TITANIUM, MaterialFamily.NICKEL_SUPERALLOY, MaterialFamily.ALUMINUM)
-                else -> true
-            }
-        }
     }
 }

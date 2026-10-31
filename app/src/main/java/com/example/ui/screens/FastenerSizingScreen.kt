@@ -54,6 +54,7 @@ import com.example.data.FastenerCatalog
 import com.example.data.FastenerType
 import com.example.data.ProductStandard
 import com.example.data.PropertyClass
+import com.example.data.SelectionFilter
 import com.example.data.ThreadClassCatalog
 import com.example.data.UnitSystem
 import com.example.ui.components.BlueprintCanvasView
@@ -268,7 +269,7 @@ fun FastenerSizingScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val validStandards = PokaYokeEngine.getValidStandards(selectedFastenerType, selectedUnitSystem)
+                        val validStandards = SelectionFilter.standards(selectedFastenerType, selectedUnitSystem)
                         SelectorDropdown(
                             label = "3. Product Standard",
                             selectedText = selectedStandard.label,
@@ -333,7 +334,10 @@ fun FastenerSizingScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val pitchList = if (selectedUnitSystem == UnitSystem.METRIC) {
+                        val threaded = SelectionFilter.hasThread(selectedFastenerType)
+                        val pitchList = if (!threaded) {
+                            listOf(NOT_APPLICABLE_THREAD)
+                        } else if (selectedUnitSystem == UnitSystem.METRIC) {
                             val metric = FastenerCatalog.METRIC_SIZES.getOrElse(selectedSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
                             metric.pitches.mapIndexed { idx, p -> "$p mm (${if (idx == 0) "Coarse" else "Fine"})" }
                         } else {
@@ -347,7 +351,9 @@ fun FastenerSizingScreen(
                                 "$tpi TPI ($series)"
                             }
                         }
-                        val currentPitchText = if (selectedUnitSystem == UnitSystem.METRIC) {
+                        val currentPitchText = if (!threaded) {
+                            NOT_APPLICABLE_THREAD
+                        } else if (selectedUnitSystem == UnitSystem.METRIC) {
                             "$selectedPitchValue mm"
                         } else {
                             "${selectedPitchValue.toInt()} TPI"
@@ -358,7 +364,9 @@ fun FastenerSizingScreen(
                             selectedText = currentPitchText,
                             items = pitchList,
                             onItemSelected = { idx ->
-                                if (selectedUnitSystem == UnitSystem.METRIC) {
+                                if (!threaded) {
+                                    Unit
+                                } else if (selectedUnitSystem == UnitSystem.METRIC) {
                                     val metric = FastenerCatalog.METRIC_SIZES.getOrElse(selectedSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
                                     onPitchSelected(metric.pitches[idx])
                                 } else {
@@ -397,21 +405,24 @@ fun FastenerSizingScreen(
                     ) {
                         val materialsList = FastenerCatalog.MATERIALS.values.toList()
                         val currentMat = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: materialsList[2]
-                        val validPropClasses = PokaYokeEngine.getValidPropertyClasses(selectedUnitSystem, currentMat)
+                        val graded = SelectionFilter.usesPropertyClass(selectedFastenerType)
+                        val validPropClasses = SelectionFilter.propertyClasses(selectedFastenerType, selectedUnitSystem, result.nominalDiaMm)
                         SelectorDropdown(
                             label = "7. Property Class",
-                            selectedText = selectedPropClass.label,
-                            items = validPropClasses.map { it.label },
+                            selectedText = if (graded) selectedPropClass.label else NOT_APPLICABLE_WASHER,
+                            items = if (graded) validPropClasses.map { it.label } else listOf(NOT_APPLICABLE_WASHER),
                             onItemSelected = {
-                                val pc = validPropClasses[it]
-                                onPropClassSelected(pc)
-                                onMaterialSelected(pc.defaultMatKey)
+                                if (graded) {
+                                    val pc = validPropClasses[it]
+                                    onPropClassSelected(pc)
+                                    onMaterialSelected(SelectionFilter.materialForClass(selectedFastenerType, pc, result.nominalDiaMm, selectedMaterialKey, FastenerCatalog.MATERIALS))
+                                }
                             },
                             modifier = Modifier.weight(1.1f)
                         )
 
                         Column(modifier = Modifier.weight(1.2f)) {
-                            val filteredMaterials = PokaYokeEngine.getValidMaterials(selectedPropClass, selectedUnitSystem, FastenerCatalog.MATERIALS)
+                            val filteredMaterials = SelectionFilter.materials(selectedFastenerType, selectedPropClass, result.nominalDiaMm, FastenerCatalog.MATERIALS.values)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -460,16 +471,17 @@ fun FastenerSizingScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val threadClasses = ThreadClassCatalog.getOptions(selectedUnitSystem, selectedFastenerType.isNut)
-                        val threadClassLabels = threadClasses.map { ThreadClassCatalog.getLabel(it) }
+                        val threadedPart = SelectionFilter.hasThread(selectedFastenerType)
+                        val threadClasses = SelectionFilter.threadClasses(selectedUnitSystem, selectedFastenerType)
+                        val threadClassLabels = if (threadedPart) threadClasses.map { ThreadClassCatalog.getLabel(it) } else listOf(NOT_APPLICABLE_THREAD)
                         val materialForCoating = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: FastenerCatalog.MATERIALS.values.toList()[2]
-                        val validCoatings = PokaYokeEngine.getValidCoatings(materialForCoating)
+                        val validCoatings = SelectionFilter.coatings(selectedFastenerType, materialForCoating, selectedPropClass, result.nominalDiaMm, selectedThreadClass)
 
                         SelectorDropdown(
                             label = "9. Thread Class",
-                            selectedText = ThreadClassCatalog.getLabel(selectedThreadClass),
+                            selectedText = if (threadedPart) ThreadClassCatalog.getLabel(selectedThreadClass) else NOT_APPLICABLE_THREAD,
                             items = threadClassLabels,
-                            onItemSelected = { onThreadClassSelected(threadClasses[it]) },
+                            onItemSelected = { if (threadedPart) onThreadClassSelected(threadClasses[it]) },
                             modifier = Modifier.weight(1.0f)
                         )
                         SelectorDropdown(
@@ -1209,6 +1221,9 @@ fun FastenerSizingScreen(
         }
     }
 }
+
+private const val NOT_APPLICABLE_THREAD = "N/A — no thread"
+private const val NOT_APPLICABLE_WASHER = "N/A — washer (graded by hardness)"
 
 @Composable
 fun SelectorDropdown(

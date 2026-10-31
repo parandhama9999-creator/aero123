@@ -78,6 +78,7 @@ import com.example.data.FastenerCatalog
 import com.example.data.FastenerType
 import com.example.data.ProductStandard
 import com.example.data.PropertyClass
+import com.example.data.SelectionFilter
 import com.example.data.ThreadClassCatalog
 import com.example.data.UnitSystem
 import com.example.ui.components.PricingDialog
@@ -236,6 +237,33 @@ fun AeroFastApp() {
     LaunchedEffect(selectedMaterialKey, FastenerCatalog.MATERIALS.size) {
         if (FastenerCatalog.MATERIALS[selectedMaterialKey] == null) {
             Toast.makeText(context, "⚠️ Material '$selectedMaterialKey' not found — showing 10B21. Re-select or re-add the alloy.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Keep every Sizing selector consistent with the ones above it, whichever path changed them
+    // (dropdowns, alloy catalogue, drawing scan or a restored session)
+    LaunchedEffect(
+        selectedFastenerType, selectedUnitSystem, selectedStandard, selectedSizeIndex, selectedPropClass,
+        selectedMaterialKey, selectedThreadClass, selectedCoating, appliedExtractedSpec, FastenerCatalog.MATERIALS.size
+    ) {
+        val current = SelectionFilter.Selection(
+            type = selectedFastenerType,
+            unit = selectedUnitSystem,
+            standard = selectedStandard,
+            dMm = appliedExtractedSpec?.nominalDiaMm ?: FastenerCatalog.diameterMm(selectedUnitSystem, selectedSizeIndex),
+            propertyClass = selectedPropClass,
+            materialKey = selectedMaterialKey,
+            threadClass = selectedThreadClass,
+            coating = selectedCoating
+        )
+        val fixed = SelectionFilter.normalize(current, FastenerCatalog.MATERIALS)
+        if (fixed != current) {
+            selectedStandard = fixed.standard
+            selectedPropClass = fixed.propertyClass
+            selectedMaterialKey = fixed.materialKey
+            selectedThreadClass = fixed.threadClass
+            selectedCoating = fixed.coating
+            triggerFirebaseSync()
         }
     }
 
