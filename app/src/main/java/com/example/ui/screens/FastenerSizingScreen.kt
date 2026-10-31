@@ -557,6 +557,25 @@ fun FastenerSizingScreen(
                         Text(text = "Thread length b : min ${mm(bMin)}  max ${mm(bMin + 2 * pitchMm)} mm", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
                         Text(text = "Plain shank     : min ${mm(selectedLength - bMin - 2 * pitchMm)}  max ${mm(selectedLength - bMin)} mm", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
                         Text(text = "b = $bRule = ${mm(bMin)} mm min; max adds 2P (${mm(2 * pitchMm)} mm). Shank + thread = L.", fontSize = 10.sp, color = customColors.textMuted)
+
+                        // Forward extrusion of the thread section: Ø shank (wire) → Ø rolling blank through a 15°/side (30° included) cone.
+                        // Volume is conserved, so the stock length before extrusion is the reduced volume over the shank area.
+                        val ds = result.wireDiaMm
+                        val db = result.blankTargetDia
+                        if (ds > db) {
+                            val coneLen = (ds - db) / 2.0 / kotlin.math.tan(Math.toRadians(15.0))
+                            val coneVol = Math.PI * coneLen / 12.0 * (ds * ds + ds * db + db * db)
+                            val aShank = Math.PI / 4.0 * ds * ds
+                            val aBlank = Math.PI / 4.0 * db * db
+                            fun preLen(bLen: Double) = (aBlank * bLen + coneVol) / aShank
+                            fun underHeadBefore(bLen: Double) = selectedLength - bLen - coneLen + preLen(bLen)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(text = "BEFORE EXTRUSION (Ø${mm(ds)} → Ø${"%.3f".format(java.util.Locale.US, db)}, 15°/side)", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
+                            Text(text = "Cone length     : ${"%.2f".format(java.util.Locale.US, coneLen)} mm", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                            Text(text = "Stock to extrude: ${"%.2f".format(java.util.Locale.US, preLen(bMin))} – ${"%.2f".format(java.util.Locale.US, preLen(bMin + 2 * pitchMm))} mm", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                            Text(text = "Length under head before extrusion: ${"%.2f".format(java.util.Locale.US, underHeadBefore(bMin))} – ${"%.2f".format(java.util.Locale.US, underHeadBefore(bMin + 2 * pitchMm))} mm", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                            Text(text = "Extruded section = Ø blank × b plus the 30° cone; plain shank stays at Ø${mm(ds)}. Range is for b min → b + 2P. Volume constant: L_pre = (A_blank·b + V_cone) / A_shank.", fontSize = 10.sp, color = customColors.textMuted)
+                        }
                     }
                 }
             }
