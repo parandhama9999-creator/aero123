@@ -38,6 +38,16 @@ object PokaYokeEngine {
         }
     }
 
+    /** ISO 3506-1 A2/A4 classes cover only austenitic A2 (304-type) and A4 (316-type) stainless. */
+    fun isAusteniticA2A4(m: MaterialInfo): Boolean {
+        if (materialFamily(m) != MaterialFamily.STAINLESS) return false
+        val id = (m.key + " " + m.name).uppercase()
+        return id.contains("304") || id.contains("316")
+    }
+
+    /** Fastener types bought to aerospace procurement specs rather than ISO 898-1 / SAE J429 grades. */
+    fun isAerospaceType(type: FastenerType) = type.category == "Aerospace" || type == FastenerType.TWELVE_POINT
+
     /** Minimum strength the selected property class guarantees (ISO 898-1 Table 3 / ISO 3506-1). */
     fun classStrength(pc: PropertyClass, dMm: Double, material: MaterialInfo): ClassStrength = when (pc) {
         PropertyClass.CLASS_4_6 -> ClassStrength(400.0, 240.0, 225.0, true)
@@ -107,6 +117,7 @@ object PokaYokeEngine {
         PropertyClass.SAE_GRADE_8 -> "SAE J995 Grade 8"
         PropertyClass.ASTM_A193_B7 -> "ASTM A194 Grade 2H"
         PropertyClass.ASTM_A574 -> "per joint design (ASTM A563 / A194)"
+        PropertyClass.MATERIAL_SPEC -> "per the mating nut's procurement spec (same alloy family)"
         else -> "per mating aerospace nut spec (NAS/MS)"
     }
 
@@ -293,8 +304,10 @@ object PokaYokeEngine {
             val cs = classStrength(pc, d, material)
             if ((cs.isIsoSteelClass || pc in INCH_STEEL_CLASSES) && family != MaterialFamily.CARBON_ALLOY_STEEL) {
                 critical("Class ${pc.label.substringBefore(" (")} needs carbon/alloy steel", "ISO 898-1 classes apply only to carbon and alloy steel; ${material.name} is ${family.name.lowercase().replace('_', ' ')}.", "Use the material's own class (A2-70/A4-80 for austenitic stainless, aerospace class for Ti/Ni alloys) or change the material.")
-            } else if (pc in STAINLESS_CLASSES && family != MaterialFamily.STAINLESS) {
-                critical("${pc.label.substringBefore(" (")} needs stainless steel", "${material.name} is not a stainless steel.", "Select SS304 / SS316 or change the property class.")
+            } else if (pc in STAINLESS_CLASSES && !isAusteniticA2A4(material)) {
+                critical("${pc.label.substringBefore(" (")} needs A2/A4 austenitic stainless", "ISO 3506-1 A2/A4 classes cover 304-type (A2) and 316-type (A4) steels only; ${material.name} is not one of them.", "Select SS304 / SS316 / SS316L, or use 'Per material spec' for martensitic, PH and other stainless grades.")
+            } else if (pc == PropertyClass.MATERIAL_SPEC && family == MaterialFamily.CARBON_ALLOY_STEEL && !material.isAero) {
+                critical("Commercial steel needs a grade", "${material.name} fasteners are graded by ISO 898-1 (metric) or SAE J429 / ASTM (inch).", "Select the ISO / SAE property class.")
             } else if (pc == PropertyClass.AERO_AL && family != MaterialFamily.ALUMINUM) {
                 critical("Aluminium class with non-aluminium material", "${material.name} is not an aluminium alloy.", "Select an aluminium alloy (2024, 7075, 2219) or change the class.")
             } else if (pc == PropertyClass.AERO_1100 && family != MaterialFamily.TITANIUM) {
@@ -305,6 +318,9 @@ object PokaYokeEngine {
             }
             if (pc == PropertyClass.CLASS_9_8 && d > 16.0) {
                 critical("Class 9.8 is limited to M16", "ISO 898-1 defines class 9.8 only for d ≤ 16 mm; M$d selected.", "Use class 8.8 or 10.9 for this size.")
+            }
+            if (isAerospaceType(type) && (cs.isIsoSteelClass || pc in INCH_STEEL_CLASSES || pc in STAINLESS_CLASSES)) {
+                warn("Commercial class on an aerospace fastener", "${type.label.substringBefore(" (")} is bought to an aerospace procurement spec (NAS / MS / AMS), not ${pc.label.substringBefore(" (")}.", "Use an aerospace class or 'Per material spec' with the alloy's AMS specification.")
             }
             if (pc in INCH_STEEL_CLASSES && unit == UnitSystem.METRIC && pc != PropertyClass.ASTM_A574 && pc != PropertyClass.ASTM_A193_B7) {
                 warn("SAE J429 grade on a metric thread", "SAE J429 grades are defined for inch fasteners.", "Use an ISO 898-1 property class for metric threads.")

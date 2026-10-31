@@ -79,7 +79,10 @@ object SelectionFilter {
         return listOf(default) + ProductStandard.values().filter { it in fits && it != default }
     }
 
-    private val RIVET_CLASSES = listOf(PropertyClass.AERO_AL, PropertyClass.AERO_1100, PropertyClass.AERO_1380)
+    private val RIVET_CLASSES = listOf(PropertyClass.MATERIAL_SPEC, PropertyClass.AERO_AL, PropertyClass.AERO_1100, PropertyClass.AERO_1380)
+    private val AERO_CLASSES = listOf(
+        PropertyClass.MATERIAL_SPEC, PropertyClass.AERO_1100, PropertyClass.AERO_1380, PropertyClass.AERO_1750, PropertyClass.AERO_AL
+    )
     private val SAE_GRADES = setOf(PropertyClass.SAE_GRADE_2, PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8)
     private val ISO_STEEL_CLASSES = setOf(
         PropertyClass.CLASS_4_6, PropertyClass.CLASS_4_8, PropertyClass.CLASS_5_6, PropertyClass.CLASS_5_8, PropertyClass.CLASS_6_8,
@@ -89,6 +92,7 @@ object SelectionFilter {
     /** Property classes for the product, unit and size (ISO 898-1 for metric, SAE/ASTM for inch, 9.8 only to M16). */
     fun propertyClasses(type: FastenerType, unit: UnitSystem, dMm: Double): List<PropertyClass> {
         if (type.isUnthreaded) return RIVET_CLASSES
+        if (PokaYokeEngine.isAerospaceType(type)) return AERO_CLASSES
         return PropertyClass.values().filter { pc ->
             when {
                 unit == UnitSystem.METRIC && pc in SAE_GRADES -> false
@@ -106,7 +110,8 @@ object SelectionFilter {
         val cs = PokaYokeEngine.classStrength(pc, dMm, material)
         val familyOk = when {
             cs.isIsoSteelClass || pc in PokaYokeEngine.INCH_STEEL_CLASSES -> family == MaterialFamily.CARBON_ALLOY_STEEL
-            pc in PokaYokeEngine.STAINLESS_CLASSES -> family == MaterialFamily.STAINLESS
+            pc in PokaYokeEngine.STAINLESS_CLASSES -> PokaYokeEngine.isAusteniticA2A4(material)
+            pc == PropertyClass.MATERIAL_SPEC -> family != MaterialFamily.CARBON_ALLOY_STEEL || material.isAero
             pc == PropertyClass.AERO_AL -> family == MaterialFamily.ALUMINUM
             pc == PropertyClass.AERO_1100 -> family == MaterialFamily.TITANIUM
             else -> true

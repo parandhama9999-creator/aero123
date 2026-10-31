@@ -148,7 +148,9 @@ enum class PropertyClass(val label: String, val defaultMatKey: String, val utsMp
     AERO_1100("Aero Titanium (1050-1120 MPa • STA)", "TI_GR5", 1120.0),
     AERO_1380("Aero Superalloy (1380-1420 MPa • Aged)", "INCONEL718", 1380.0),
     AERO_1750("Aero Ultra-High (1720–1950 MPa • 300M/MP35N)", "300M", 1950.0),
-    AERO_AL("Aerospace Aluminum (450–570 MPa • T6/T73)", "AL7075", 570.0)
+    AERO_AL("Aerospace Aluminum (450–570 MPa • T6/T73)", "AL7075", 570.0),
+    // Strength comes from the alloy's own procurement spec (classStrength falls back to the material values)
+    MATERIAL_SPEC("Per material spec (AMS / ASTM / MIL) • alloy's own strength", "A286", 0.0)
 }
 
 enum class CoatingType(

@@ -10,7 +10,7 @@ class SelectionFilterTest {
     private fun sizes(unit: UnitSystem) = if (unit == UnitSystem.METRIC) listOf(3.0, 6.0, 10.0, 20.0, 36.0) else listOf(6.35, 9.525, 19.05, 25.4)
 
     private val filteredWarnings = listOf("Zinc coating on corrosion-resistant alloy", "Zinc/cadmium on aluminium fastener", "Cadmium is restricted",
-        "Hot-dip galvanizing below M8", "Titanium class with non-titanium material", "SAE J429 grade on a metric thread", "Inch standard with metric thread")
+        "Hot-dip galvanizing below M8", "Commercial class on an aerospace fastener", "Titanium class with non-titanium material", "SAE J429 grade on a metric thread", "Inch standard with metric thread")
 
     @Test fun everyOfferedCombinationPassesTheGate() {
         var combos = 0
@@ -78,5 +78,30 @@ class SelectionFilterTest {
     @Test fun defaultsAreOffered() {
         for (type in FastenerType.values()) for (unit in UnitSystem.values())
             assertEquals(PokaYokeEngine.defaultStandard(type, unit), SelectionFilter.standards(type, unit).first())
+    }
+
+    @Test fun everyCatalogueAlloyCanBeSelected() {
+        val types = listOf(FastenerType.HEX_BOLT, FastenerType.NAS_CLOSE_TOL_BOLT, FastenerType.SOLID_RIVET)
+        for (m in cat.values) {
+            val reachable = types.any { t -> UnitSystem.values().any { u ->
+                SelectionFilter.propertyClasses(t, u, 6.35).any { SelectionFilter.materialFitsClass(m, it, 6.35) } } }
+            assertTrue("${m.key} fits no property class", reachable)
+        }
+    }
+
+    @Test fun a2a4ClassesOfferOnly304And316() {
+        for (pc in listOf(PropertyClass.A2_50, PropertyClass.A2_70, PropertyClass.A4_80)) {
+            val keys = SelectionFilter.materials(FastenerType.METAL_LOCK_NUT, pc, 6.0, cat.values).map { it.key }.toSet()
+            assertTrue("$pc: $keys", keys.isNotEmpty() && keys.all { it in setOf("SS304", "SS316", "SS316L") })
+        }
+        for (k in listOf("SS410", "17_4PH", "15_5PH", "13_8PH", "CUSTOM_455", "AM350", "NITRONIC60", "14KH17N2", "20X13", "30X13"))
+            assertFalse(k, SelectionFilter.materialFitsClass(cat[k]!!, PropertyClass.A2_70, 6.0))
+    }
+
+    @Test fun aerospaceTypesOfferNoCommercialClasses() {
+        val classes = SelectionFilter.propertyClasses(FastenerType.TWELVE_POINT, UnitSystem.METRIC, 6.0)
+        assertFalse(PropertyClass.CLASS_4_6 in classes)
+        assertTrue(PropertyClass.MATERIAL_SPEC in classes)
+        assertTrue("4340" in SelectionFilter.materials(FastenerType.NAS_CLOSE_TOL_BOLT, PropertyClass.MATERIAL_SPEC, 6.35, cat.values).map { it.key })
     }
 }
