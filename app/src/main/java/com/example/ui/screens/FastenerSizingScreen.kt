@@ -526,6 +526,42 @@ fun FastenerSizingScreen(
             }
         }
 
+        // Thread length b (standard minimum) and plain shank for bolts and screws
+        if (SelectionFilter.hasThread(selectedFastenerType) && !selectedFastenerType.isNut && !selectedFastenerType.isStud) {
+            val dMm = result.nominalDiaMm
+            val pitchMm = if (selectedUnitSystem == UnitSystem.METRIC) selectedPitchValue else 25.4 / selectedPitchValue
+            val bMin = com.example.data.PokaYokeEngine.threadLengthB(selectedFastenerType, selectedUnitSystem, dMm, selectedLength)
+            val fullThread = com.example.data.PokaYokeEngine.isFullyThreaded(selectedFastenerType) || bMin + 2 * pitchMm >= selectedLength
+            val bRule = when {
+                selectedUnitSystem == UnitSystem.INCH -> if (selectedLength <= 152.4) "2D + 1/4\" (L ≤ 6\")" else "2D + 1/2\" (L > 6\")"
+                selectedFastenerType == FastenerType.SHCS || selectedFastenerType == FastenerType.HEXALOBULAR_SCREW -> "2d + 12 (ISO 4762)"
+                selectedLength <= 125.0 -> "2d + 6 (L ≤ 125)"
+                selectedLength <= 200.0 -> "2d + 12 (125 < L ≤ 200)"
+                else -> "2d + 25 (L > 200)"
+            }
+            fun mm(v: Double) = "%.1f".format(java.util.Locale.US, v)
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = customColors.bgCard,
+                border = androidx.compose.foundation.BorderStroke(1.dp, customColors.border),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(text = "THREAD & SHANK LENGTH (L = ${mm(selectedLength)} mm)", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
+                    if (fullThread) {
+                        Text(text = "Full thread: ${mm(selectedLength)} mm (no plain shank)", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                        if (!com.example.data.PokaYokeEngine.isFullyThreaded(selectedFastenerType)) {
+                            Text(text = "L ≤ b + 2P, so this length is made fully threaded (e.g. ISO 4017 instead of ISO 4014).", fontSize = 10.sp, color = customColors.textMuted)
+                        }
+                    } else {
+                        Text(text = "Thread length b : min ${mm(bMin)}  max ${mm(bMin + 2 * pitchMm)} mm", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                        Text(text = "Plain shank     : min ${mm(selectedLength - bMin - 2 * pitchMm)}  max ${mm(selectedLength - bMin)} mm", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                        Text(text = "b = $bRule = ${mm(bMin)} mm min; max adds 2P (${mm(2 * pitchMm)} mm). Shank + thread = L.", fontSize = 10.sp, color = customColors.textMuted)
+                    }
+                }
+            }
+        }
+
         // Authoritative Turning Blank / Tap Drill Card
         if (!result.fastenerType.isUnthreaded) {
         Surface(
