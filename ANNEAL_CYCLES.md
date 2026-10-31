@@ -118,10 +118,11 @@ Rows marked **ENTER PER GRADE** are values the catalogue does not carry.
 
 Low Z and low spm mean the grade work-hardens fast and cannot take many blows between anneals.
 
-For a grade supplied mill-annealed the wire needs no incoming anneal, but an INTERMEDIATE
-anneal between blows uses the solution cycle the catalogue already carries, shown in the last column.
+> **Do not use the last column as an intermediate-anneal cycle.** It is the catalogue's heat-treat
+> temperature. For titanium that is a *solution treatment* (e.g. Ti-6Al-4V 955 °C), ~200 °C above the
+> mill anneal (704 – 788 °C). Researched mill-anneal cycles with sources: **MILL_ANNEAL_CYCLES.md**.
 
-| Grade | Route | Z % | n | spm | Intermediate anneal cycle (catalogue HT spec) |
+| Grade | Route | Z % | n | spm | Catalogue heat-treat temperature (not an anneal for Ti) |
 |---|---|---:|---:|---:|---|
 | **RENE41** | Mill-annealed — supplied ready to head | 18.0 | 0.13 | 25 | 1080°C – 1120°C (Vacuum Solution 2 hrs) |
 | **WASPALOY** | Mill-annealed — supplied ready to head | 20.0 | 0.14 | 30 | Stage 1 Solution: 1010°C–1040°C (4 hrs) |
