@@ -410,10 +410,8 @@ fun FastenerSizingScreen(
                             modifier = Modifier.weight(1.1f)
                         )
 
-                        val materialsList = FastenerCatalog.MATERIALS.values.toList()
-                        val currentMat = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: materialsList[2]
-
                         Column(modifier = Modifier.weight(1.2f)) {
+                            val filteredMaterials = PokaYokeEngine.getValidMaterials(selectedPropClass, selectedUnitSystem, FastenerCatalog.MATERIALS)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -439,9 +437,9 @@ fun FastenerSizingScreen(
                             SelectorDropdown(
                                 label = "",
                                 selectedText = "${currentMat.name} (km=${currentMat.km})",
-                                items = materialsList.map { "${it.name} (k_m=${it.km})" },
+                                items = filteredMaterials.map { "${it.name} (k_m=${it.km})" },
                                 onItemSelected = { idx ->
-                                    onMaterialSelected(materialsList[idx].key)
+                                    onMaterialSelected(filteredMaterials[idx].key)
                                 }
                             )
                         }
@@ -464,6 +462,8 @@ fun FastenerSizingScreen(
                     ) {
                         val threadClasses = ThreadClassCatalog.getOptions(selectedUnitSystem, selectedFastenerType.isNut)
                         val threadClassLabels = threadClasses.map { ThreadClassCatalog.getLabel(it) }
+                        val materialForCoating = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: FastenerCatalog.MATERIALS.values.toList()[2]
+                        val validCoatings = PokaYokeEngine.getValidCoatings(materialForCoating)
 
                         SelectorDropdown(
                             label = "9. Thread Class",
@@ -472,10 +472,6 @@ fun FastenerSizingScreen(
                             onItemSelected = { onThreadClassSelected(threadClasses[it]) },
                             modifier = Modifier.weight(1.0f)
                         )
-
-                        val materialsList2 = FastenerCatalog.MATERIALS.values.toList()
-                        val currentMat2 = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: materialsList2[2]
-                        val validCoatings = PokaYokeEngine.getValidCoatings(currentMat2)
                         SelectorDropdown(
                             label = "10. Coating",
                             selectedText = selectedCoating.label,

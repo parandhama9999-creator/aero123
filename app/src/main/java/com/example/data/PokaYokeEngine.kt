@@ -498,4 +498,26 @@ object PokaYokeEngine {
             }
         }
     }
+
+    /** Filter materials by property class (stainless classes only match stainless materials, SAE grades only match carbon steel, etc.). */
+    fun getValidMaterials(propertyClass: PropertyClass, unit: UnitSystem, allMaterials: Map<String, MaterialInfo>): List<MaterialInfo> {
+        return allMaterials.values.filter { mat ->
+            val family = materialFamily(mat)
+            when (propertyClass) {
+                // Stainless grades (A2/A4) only match stainless materials
+                PropertyClass.A2_50, PropertyClass.A2_70, PropertyClass.A4_80 -> family == MaterialFamily.STAINLESS
+                // SAE/ASTM inch grades only match carbon/alloy steel
+                PropertyClass.SAE_GRADE_2, PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574, PropertyClass.ASTM_A193_B7 ->
+                    family == MaterialFamily.CARBON_ALLOY_STEEL && unit == UnitSystem.INCH
+                // ISO 898-1 metric classes match carbon/alloy steel
+                PropertyClass.CLASS_4_6, PropertyClass.CLASS_4_8, PropertyClass.CLASS_5_6, PropertyClass.CLASS_5_8, PropertyClass.CLASS_6_8,
+                PropertyClass.CLASS_8_8, PropertyClass.CLASS_9_8, PropertyClass.CLASS_10_9, PropertyClass.CLASS_12_9 ->
+                    family == MaterialFamily.CARBON_ALLOY_STEEL && unit == UnitSystem.METRIC
+                // Aerospace classes match aerospace materials (titanium, nickel superalloy, etc.)
+                PropertyClass.AERO_1100, PropertyClass.AERO_1380, PropertyClass.AERO_1750 ->
+                    family in setOf(MaterialFamily.TITANIUM, MaterialFamily.NICKEL_SUPERALLOY, MaterialFamily.ALUMINUM)
+                else -> true
+            }
+        }
+    }
 }
