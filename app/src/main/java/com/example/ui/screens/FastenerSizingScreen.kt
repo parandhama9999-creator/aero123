@@ -268,11 +268,12 @@ fun FastenerSizingScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val validStandards = PokaYokeEngine.getValidStandards(selectedFastenerType, selectedUnitSystem)
                         SelectorDropdown(
                             label = "3. Product Standard",
                             selectedText = selectedStandard.label,
-                            items = ProductStandard.values().map { it.label },
-                            onItemSelected = { onStandardSelected(ProductStandard.values()[it]) },
+                            items = validStandards.map { it.label },
+                            onItemSelected = { onStandardSelected(validStandards[it]) },
                             modifier = Modifier.weight(1.2f)
                         )
 
@@ -394,12 +395,15 @@ fun FastenerSizingScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val materialsList = FastenerCatalog.MATERIALS.values.toList()
+                        val currentMat = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: materialsList[2]
+                        val validPropClasses = PokaYokeEngine.getValidPropertyClasses(selectedUnitSystem, currentMat)
                         SelectorDropdown(
                             label = "7. Property Class",
                             selectedText = selectedPropClass.label,
-                            items = PropertyClass.values().map { it.label },
+                            items = validPropClasses.map { it.label },
                             onItemSelected = {
-                                val pc = PropertyClass.values()[it]
+                                val pc = validPropClasses[it]
                                 onPropClassSelected(pc)
                                 onMaterialSelected(pc.defaultMatKey)
                             },
@@ -469,11 +473,14 @@ fun FastenerSizingScreen(
                             modifier = Modifier.weight(1.0f)
                         )
 
+                        val materialsList2 = FastenerCatalog.MATERIALS.values.toList()
+                        val currentMat2 = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: materialsList2[2]
+                        val validCoatings = PokaYokeEngine.getValidCoatings(currentMat2)
                         SelectorDropdown(
                             label = "10. Coating",
                             selectedText = selectedCoating.label,
-                            items = CoatingType.values().map { it.label },
-                            onItemSelected = { onCoatingSelected(CoatingType.values()[it]) },
+                            items = validCoatings.map { it.label },
+                            onItemSelected = { onCoatingSelected(validCoatings[it]) },
                             modifier = Modifier.weight(1.2f)
                         )
 

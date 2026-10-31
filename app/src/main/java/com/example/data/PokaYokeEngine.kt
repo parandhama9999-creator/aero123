@@ -438,4 +438,64 @@ object PokaYokeEngine {
 
         return issues.sortedBy { it.severity.ordinal }
     }
+
+    /** Filter standards by fastener type and unit system. */
+    fun getValidStandards(type: FastenerType, unit: UnitSystem): List<ProductStandard> {
+        val all = ProductStandard.values().toList()
+        val typeValid = when {
+            type.isWasher -> all.filter { it in WASHER_STANDARDS }
+            type.isNut -> all.filter { it in NUT_STANDARDS }
+            else -> all // bolts, screws, studs use most standards
+        }
+        // Filter by unit system and category
+        return typeValid.filter { std ->
+            when (unit) {
+                UnitSystem.METRIC -> std.category == "ISO/DIN Metric"
+                UnitSystem.INCH -> std.category == "ASME/Imperial" || std.category == "Aerospace/Defense"
+            }
+        }
+    }
+
+    /** Filter property classes by unit system and material family. */
+    fun getValidPropertyClasses(unit: UnitSystem, material: MaterialInfo): List<PropertyClass> {
+        val family = materialFamily(material)
+        val all = PropertyClass.values().toList()
+
+        return all.filter { pc ->
+            when (unit) {
+                UnitSystem.INCH -> {
+                    // Inch: SAE, ASTM, A2/A4 for stainless, aerospace alloys use AERO_* classes
+                    when (family) {
+                        MaterialFamily.STAINLESS -> pc in STAINLESS_CLASSES
+                        MaterialFamily.CARBON_ALLOY_STEEL -> pc in INCH_STEEL_CLASSES
+                        else -> pc.name.startsWith("AERO_")
+                    }
+                }
+                UnitSystem.METRIC -> {
+                    // Metric: ISO 898-1 classes, ISO 3506 (stainless), or aerospace
+                    when (family) {
+                        MaterialFamily.STAINLESS -> pc in STAINLESS_CLASSES
+                        MaterialFamily.CARBON_ALLOY_STEEL -> pc.name.contains("CLASS_") || pc.name.contains("QT_") || pc in QT_CLASSES
+                        else -> pc.name.startsWith("AERO_")
+                    }
+                }
+            }
+        }
+    }
+
+    /** Filter coatings by material family (aluminium only allows ANODIZE/CHEM_FILM, titanium has TI_ANODIZE, etc.). */
+    fun getValidCoatings(material: MaterialInfo): List<CoatingType> {
+        val family = materialFamily(material)
+        val all = CoatingType.values().toList()
+
+        return all.filter { coating ->
+            when (family) {
+                MaterialFamily.ALUMINUM -> coating in ALUMINIUM_ONLY_COATINGS
+                MaterialFamily.TITANIUM -> coating in setOf(CoatingType.TI_ANODIZE, CoatingType.CHEM_FILM) || coating == CoatingType.NONE
+                MaterialFamily.NICKEL_SUPERALLOY -> coating in setOf(CoatingType.CHEM_FILM, CoatingType.NONE) || coating.name.contains("CHEM") || coating.name.contains("NONE")
+                MaterialFamily.STAINLESS -> coating in setOf(CoatingType.NONE, CoatingType.ZN_FE, CoatingType.MAGNI_565, CoatingType.DELTA_PROTEKT) || coating == CoatingType.NONE
+                else -> true // Carbon/alloy steel accepts all
+            }
+        }
+    }
 }
