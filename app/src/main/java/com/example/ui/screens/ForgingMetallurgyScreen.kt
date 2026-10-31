@@ -291,6 +291,9 @@ fun ForgingMetallurgyScreen(
             }
         }
 
+        // Wire preparation: soft anneal happens BEFORE cut-off and heading
+        SoftAnnealCard(result = result)
+
         // 5-Station Cold Heading Die Progression Canvas
         ColdHeadingProgressionCanvas(result = result)
 
@@ -1359,6 +1362,124 @@ private fun DrawScope.drawStation(
                     up = !up
                 }
             }, DieColors.outline.copy(alpha = 0.7f), style = Stroke(0.8f))
+        }
+    }
+}
+
+@Composable
+private fun SoftAnnealCard(result: FastenerCalculationResult) {
+    val spec = result.softAnnealSpec ?: return
+    val customColors = LocalCustomColors.current
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = customColors.bgCard,
+        border = androidx.compose.foundation.BorderStroke(1.dp, customColors.border),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "SOFT ANNEAL \u2014 WIRE PREPARATION",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        color = customColors.textMain
+                    )
+                    Text(
+                        text = spec.route.label + " \u2022 " + result.material.name,
+                        fontSize = 9.sp,
+                        color = customColors.textMuted
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (spec.inHouseAnnealNeeded) customColors.accentPrimary.copy(alpha = 0.15f)
+                    else customColors.bgElevated
+                ) {
+                    Text(
+                        text = if (spec.inHouseAnnealNeeded) "ANNEAL REQUIRED" else "SUPPLIED ANNEALED",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (spec.inHouseAnnealNeeded) customColors.accentPrimary else customColors.textMuted,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = spec.route.purpose,
+                fontSize = 9.sp,
+                color = customColors.textMuted,
+                modifier = Modifier.padding(top = 2.dp, bottom = 6.dp)
+            )
+
+            if (spec.temperatureC.isNotBlank()) {
+                HtStageCard(
+                    stage = "Anneal cycle",
+                    temperature = spec.temperatureC,
+                    soakTime = spec.soakTime,
+                    subDetail = "Cooling: " + spec.coolingRate + "  \u2022  Atmosphere: " + spec.atmosphere
+                )
+            }
+
+            HtStageCard(
+                stage = "Incoming wire condition",
+                temperature = spec.targetUtsMpa,
+                soakTime = spec.targetHardnessHb,
+                subDetail = listOf(spec.targetHardnessHrb, spec.structureTarget)
+                    .filter { it.isNotBlank() }.joinToString("  \u2022  ")
+            )
+
+            spec.softeningRatio?.let { ratio ->
+                Text(
+                    text = "Wire anneals to " + (ratio * 100).toInt() + " % of the finished UTS " +
+                        "(" + result.material.postForgingTargetUtsMpa.toInt() + " MPa)",
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = customColors.textMuted,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            if (spec.unsourced.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "NOT IN CATALOGUE \u2014 ENTER PER GRADE",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AlertRed
+                )
+                spec.unsourced.forEach {
+                    Text(
+                        text = "\u2022 " + it,
+                        fontSize = 9.sp,
+                        color = customColors.textMuted
+                    )
+                }
+            }
+
+            spec.notes.forEach {
+                Text(
+                    text = it,
+                    fontSize = 9.sp,
+                    color = customColors.textMuted,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            Text(
+                text = spec.standardReference,
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                color = customColors.accentPrimary,
+                modifier = Modifier.padding(top = 6.dp)
+            )
         }
     }
 }

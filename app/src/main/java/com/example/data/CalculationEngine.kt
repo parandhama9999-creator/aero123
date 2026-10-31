@@ -104,7 +104,9 @@ data class FastenerCalculationResult(
     val propertyClass: PropertyClass? = null,
     val pokaYokeIssues: List<PokaYokeIssue> = emptyList(),
     val headDimensions: HeadDimensions? = null,
-    val headingPlan: HeadingPlan? = null
+    val headingPlan: HeadingPlan? = null,
+    /** Wire-preparation anneal that happens before cut-off and heading. */
+    val softAnnealSpec: SoftAnnealSpec? = null
 ) {
     val criticalIssues: List<PokaYokeIssue> get() = pokaYokeIssues.filter { it.severity == PokaYokeSeverity.CRITICAL }
     /** True when any CRITICAL rule fails: reports must not show the part as approved. */
@@ -633,6 +635,7 @@ object CalculationEngine {
             forgingStages = numberedStages,
             headingPlan = headingPlan,
             heatTreatmentSpec = calculateDynamicHeatTreatment(material, d, hasHeRisk, propertyClass),
+            softAnnealSpec = SoftAnnealEngine.build(material),
             cncCycleTimeSec = totalCncSec.round(1),
             cncSpindleRpm = calcRpm,
             cncToolList = cncTools,
