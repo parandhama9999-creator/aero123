@@ -472,7 +472,7 @@ fun FastenerSizingScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val threadedPart = SelectionFilter.hasThread(selectedFastenerType)
-                        val threadClasses = SelectionFilter.threadClasses(selectedUnitSystem, selectedFastenerType)
+                        val threadClasses = SelectionFilter.threadClasses(selectedUnitSystem, selectedFastenerType, selectedStandard)
                         val threadClassLabels = if (threadedPart) threadClasses.map { ThreadClassCatalog.getLabel(it) } else listOf(NOT_APPLICABLE_THREAD)
                         val materialForCoating = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: FastenerCatalog.MATERIALS.values.toList()[2]
                         val validCoatings = SelectionFilter.coatings(selectedFastenerType, materialForCoating, selectedPropClass, result.nominalDiaMm, selectedThreadClass)

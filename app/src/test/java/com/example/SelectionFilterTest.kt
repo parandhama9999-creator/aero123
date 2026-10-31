@@ -10,7 +10,7 @@ class SelectionFilterTest {
     private fun sizes(unit: UnitSystem) = if (unit == UnitSystem.METRIC) listOf(3.0, 6.0, 10.0, 20.0, 36.0) else listOf(6.35, 9.525, 19.05, 25.4)
 
     private val filteredWarnings = listOf("Zinc coating on corrosion-resistant alloy", "Zinc/cadmium on aluminium fastener", "Cadmium is restricted",
-        "Hot-dip galvanizing below M8", "Commercial class on an aerospace fastener", "Titanium class with non-titanium material", "SAE J429 grade on a metric thread", "Inch standard with metric thread")
+        "Hot-dip galvanizing below M8", "Commercial class on an aerospace fastener", "Aerospace alloy on a commercial class", "Titanium class with non-titanium material", "SAE J429 grade on a metric thread", "Inch standard with metric thread")
 
     @Test fun everyOfferedCombinationPassesTheGate() {
         var combos = 0
@@ -26,14 +26,14 @@ class SelectionFilterTest {
             for (std in stds) for (pc in pcs) {
                 val mats = SelectionFilter.materials(type, pc, dd, cat.values)
                 if (mats.isEmpty()) { failures += "EMPTY materials: $type $unit d=$dd $pc"; continue }
-                for (m in mats) for (tc in SelectionFilter.threadClasses(unit, type)) {
+                for (m in mats) for (tc in SelectionFilter.threadClasses(unit, type, std)) {
                     val coats = SelectionFilter.coatings(type, m, pc, dd, tc)
                     if (coats.isEmpty()) { failures += "EMPTY coatings: $type $pc ${m.key} $tc"; continue }
                     for (c in coats) {
                         combos++
                         val issues = PokaYokeEngine.check(type, unit, std, idx, pitch, dd, 4 * dd + 20, tc, pc, m, c, 100,
                             0.0, 0.0, 100.0, false, 50.0, null)
-                        val bad = issues.filter { it.severity == PokaYokeSeverity.CRITICAL || it.severity == PokaYokeSeverity.WARNING && it.title in filteredWarnings && !(it.title == "Inch standard with metric thread" && std == PokaYokeEngine.defaultStandard(type, unit)) }
+                        val bad = issues.filter { it.severity == PokaYokeSeverity.CRITICAL || it.title.startsWith("Thread class not per") || it.severity == PokaYokeSeverity.WARNING && it.title in filteredWarnings && !(it.title == "Inch standard with metric thread" && std == PokaYokeEngine.defaultStandard(type, unit)) }
                         if (bad.isNotEmpty()) failures += "$type $unit d=$dd ${std.code} $pc ${m.key} $tc ${c.name}: ${bad.map { it.title }.distinct()}"
                     }
                 }
@@ -96,6 +96,15 @@ class SelectionFilterTest {
         }
         for (k in listOf("SS410", "17_4PH", "15_5PH", "13_8PH", "CUSTOM_455", "AM350", "NITRONIC60", "14KH17N2", "20X13", "30X13"))
             assertFalse(k, SelectionFilter.materialFitsClass(cat[k]!!, PropertyClass.A2_70, 6.0))
+    }
+
+    @Test fun screenshotComboIsCorrected() {
+        val s = SelectionFilter.Selection(FastenerType.HEX_BOLT, UnitSystem.METRIC, ProductStandard.ISO_4014, 10.0, PropertyClass.CLASS_8_8, "35NCD16", "4g6g", CoatingType.ZN_NI)
+        val n = SelectionFilter.normalize(s, cat)
+        assertEquals("6g", n.threadClass)
+        assertEquals("35NCD16", n.materialKey)
+        assertEquals(PropertyClass.MATERIAL_SPEC, n.propertyClass)
+        assertFalse("35NCD16" in SelectionFilter.materials(FastenerType.HEX_BOLT, PropertyClass.CLASS_8_8, 10.0, cat.values).map { it.key })
     }
 
     @Test fun aerospaceTypesOfferNoCommercialClasses() {

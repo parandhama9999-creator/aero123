@@ -117,6 +117,7 @@ object SelectionFilter {
             else -> true
         }
         if (!familyOk) return false
+        if (material.isAero && PokaYokeEngine.isCommercialClass(pc)) return false
         val uts = material.postForgingTargetUtsMpa
         if (uts < cs.rmMinMpa * 0.98 || uts < pc.utsMpa * 0.98) return false
         if (pc in PokaYokeEngine.QT_CLASSES && family == MaterialFamily.CARBON_ALLOY_STEEL && !material.hasHighHardness) return false
@@ -126,7 +127,11 @@ object SelectionFilter {
     fun materials(type: FastenerType, pc: PropertyClass, dMm: Double, all: Collection<MaterialInfo>): List<MaterialInfo> =
         if (!usesPropertyClass(type)) all.toList() else all.filter { materialFitsClass(it, pc, dMm) }
 
-    fun threadClasses(unit: UnitSystem, type: FastenerType): List<String> = ThreadClassCatalog.getOptions(unit, type.isNut)
+    fun threadClasses(unit: UnitSystem, type: FastenerType, standard: ProductStandard): List<String> {
+        val all = ThreadClassCatalog.getOptions(unit, type.isNut)
+        val allowed = PokaYokeEngine.standardThreadClasses(standard, type.isNut) ?: return all
+        return all.filter { it in allowed }.ifEmpty { all }
+    }
 
     fun coatingFits(coating: CoatingType, type: FastenerType, material: MaterialInfo, pc: PropertyClass, dMm: Double, threadClass: String): Boolean {
         val family = PokaYokeEngine.materialFamily(material)
@@ -193,7 +198,7 @@ object SelectionFilter {
             }
         }
 
-        val tcs = threadClasses(s.unit, s.type)
+        val tcs = threadClasses(s.unit, s.type, s.standard)
         if (s.threadClass !in tcs) s = s.copy(threadClass = tcs.first())
 
         val mat = catalogue[s.materialKey]

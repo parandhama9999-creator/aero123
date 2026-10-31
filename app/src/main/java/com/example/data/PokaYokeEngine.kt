@@ -49,6 +49,23 @@ object PokaYokeEngine {
     fun isInchOnlyStandard(s: ProductStandard) = s.category == "ASME/Imperial" || s.code.startsWith("NAS") || s.code.startsWith("MS")
     fun isMetricOnlyStandard(s: ProductStandard) = s.category == "ISO/DIN Metric" || s.code.startsWith("EN ")
 
+    /**
+     * Thread tolerance classes a product standard allows: ISO/DIN commercial parts 6g / 6H, plus 6f / 6e / 6h and
+     * 6G for coated parts (ISO 4042) and 6AZ / 6AX galvanized nuts (ISO 10684); ASME B18.2.x 2A / 2B (1A / 1B for
+     * galvanizing), ASME B18.3 socket screws 3A. null = no restriction (aerospace and special-thread standards).
+     */
+    fun standardThreadClasses(s: ProductStandard, isNut: Boolean): List<String>? = when {
+        s == ProductStandard.DIN_7500 || s.category == "Aerospace/Defense" -> null
+        s.category == "ISO/DIN Metric" -> if (isNut) listOf("6H", "6G", "6AZ", "6AX") else listOf("6g", "6f", "6e", "6h")
+        // ASME / ASTM specs also have metric editions (A325M, A193M, A194M) that use the ISO commercial classes
+        s == ProductStandard.ASME_B18_3 -> if (isNut) null else listOf("3A", "2A", "6g", "6f", "6e", "6h")
+        else -> if (isNut) listOf("2B", "1B", "6H", "6G", "6AZ", "6AX") else listOf("2A", "1A", "6g", "6f", "6e", "6h")
+    }
+
+    /** Commercial grades (ISO 898-1, SAE / ASTM, ISO 3506) are made from commercial wire, not aerospace-spec alloy. */
+    fun isCommercialClass(pc: PropertyClass) =
+        classStrength(pc, 10.0, FastenerCatalog.MATERIALS.values.first()).isIsoSteelClass || pc in INCH_STEEL_CLASSES || pc in STAINLESS_CLASSES
+
     /** Fastener types bought to aerospace procurement specs rather than ISO 898-1 / SAE J429 grades. */
     fun isAerospaceType(type: FastenerType) = type.category == "Aerospace" || type == FastenerType.TWELVE_POINT
 
@@ -292,6 +309,10 @@ object PokaYokeEngine {
                     critical("Non-standard TPI", "${size.label} does not have ${pitchValue.toInt()} TPI in ASME B1.1 (allowed: ${size.tpis.joinToString()}).", "Select the UNC or UNF thread for this size.")
                 }
             }
+            val stdClasses = standardThreadClasses(standard, isNut)?.filter { it in ThreadClassCatalog.getOptions(unit, isNut) }?.ifEmpty { null }
+            if (stdClasses != null && threadClass !in stdClasses && threadClass in ThreadClassCatalog.getOptions(unit, isNut)) {
+                warn("Thread class not per ${standard.code}", "${standard.code} specifies ${stdClasses.first()}${if (stdClasses.size > 1) " (or ${stdClasses.drop(1).joinToString(" / ")} for coated parts)" else ""}; $threadClass is a special class.", "Use ${stdClasses.joinToString(" / ")}, or put the special class on the drawing as a deviation.")
+            }
             val validClasses = ThreadClassCatalog.getOptions(unit, isNut)
             if (threadClass !in validClasses) {
                 critical("Wrong thread tolerance class", "'$threadClass' is not a valid ${if (isNut) "internal" else "external"} ${unit.name.lowercase()} class.", "Use one of: ${validClasses.joinToString()}.")
@@ -322,6 +343,9 @@ object PokaYokeEngine {
             }
             if (pc == PropertyClass.CLASS_9_8 && d > 16.0) {
                 critical("Class 9.8 is limited to M16", "ISO 898-1 defines class 9.8 only for d ≤ 16 mm; M$d selected.", "Use class 8.8 or 10.9 for this size.")
+            }
+            if (material.isAero && isCommercialClass(pc)) {
+                warn("Aerospace alloy on a commercial class", "${material.name} is bought to an aerospace (AMS / VAR) specification; ${pc.label.substringBefore(" (")} is a commercial grade made from commercial wire.", "Use a commercial grade (e.g. 10B21, 42CrMo4, 4140) or class 'Per material spec' for the aerospace alloy.")
             }
             if (isAerospaceType(type) && (cs.isIsoSteelClass || pc in INCH_STEEL_CLASSES || pc in STAINLESS_CLASSES)) {
                 warn("Commercial class on an aerospace fastener", "${type.label.substringBefore(" (")} is bought to an aerospace procurement spec (NAS / MS / AMS), not ${pc.label.substringBefore(" (")}.", "Use an aerospace class or 'Per material spec' with the alloy's AMS specification.")
