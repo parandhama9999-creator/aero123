@@ -1,0 +1,5 @@
+*
+!app/src/main/java/com/example/data/**
+!server/**
+server/build
+server/.gradle
