@@ -19,3 +19,25 @@ class BoltForgingTest {
         assertEquals(f.cutOffLengthMm!! * Math.PI / 4 * 9.85 * 9.85, f.finishedVolumeMm3!! + f.cheeseVolumeMm3!!, 0.5)
     }
 }
+
+class ProgressionMatchesCardTest {
+    @Test fun dieProgressionUsesSameSlugAsCard() {
+        val m = FastenerCatalog.MATERIALS["10B21"]!!
+        for (d in listOf(6.0, 10.0, 16.0)) for (len in listOf(40.0, 60.0, 150.0)) for (scan in listOf(false, true)) {
+            val idx = FastenerCatalog.sizeIndexFor(UnitSystem.METRIC, d)
+            val r = CalculationEngine.calculate(FastenerType.HEX_BOLT, UnitSystem.METRIC, ProductStandard.ISO_4014, idx,
+                FastenerCatalog.METRIC_SIZES[idx].pitches.first(), len, "6g", m, CoatingType.ZN_NI, 100,
+                propertyClass = PropertyClass.CLASS_8_8,
+                drawingThreadLengthMm = if (scan) 2 * d + 10 else null, drawingShankDiaMm = if (scan) d - 0.1 else null,
+                drawingAcrossFlatsMm = if (scan) d * 1.5 else null, drawingHeadHeightMm = if (scan) d * 0.65 else null)
+            val plan = r.headingPlan!!
+            val card = BoltForging.compute(FastenerType.HEX_BOLT, UnitSystem.METRIC, d, FastenerCatalog.METRIC_SIZES[idx].pitches.first(), len,
+                r.blankTargetDia, r.wireDiaMm, r.headDimensions,  m.density,
+                if (scan) 2 * d + 10 else PokaYokeEngine.threadLengthB(FastenerType.HEX_BOLT, UnitSystem.METRIC, d, len),
+                if (scan) d - 0.1 else null, if (scan) d * 1.5 else null, if (scan) d * 0.65 else null, null, null)
+            assertEquals("d=$d L=$len scan=$scan", card.cutOffLengthMm!!, plan.slugLengthMm, 0.01)
+            assertEquals("Trim to hex", plan.stations.last().title)
+            org.junit.Assert.assertTrue("vol err ${plan.maxVolumeError}", plan.maxVolumeError < 0.005)
+        }
+    }
+}

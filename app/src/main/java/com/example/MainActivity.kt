@@ -334,7 +334,11 @@ fun AeroFastApp() {
             marginPct = marginPct,
             customNominalDiaMm = appliedExtractedSpec?.nominalDiaMm,
             extractedRadius = appliedExtractedSpec?.radius,
-            propertyClass = selectedPropClass
+            propertyClass = selectedPropClass,
+            drawingThreadLengthMm = appliedExtractedSpec?.threadLengthMm,
+            drawingShankDiaMm = appliedExtractedSpec?.shankDiaMm,
+            drawingAcrossFlatsMm = appliedExtractedSpec?.headAcrossFlatsMm,
+            drawingHeadHeightMm = appliedExtractedSpec?.headHeightMm
         )
     }
 

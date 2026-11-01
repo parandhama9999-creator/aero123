@@ -46,15 +46,15 @@ class HeadingProgressionTest {
     @Test fun hexBolt_progressionEndsAtIsoGeometry() {
         val r = calc(FastenerType.HEX_BOLT, ProductStandard.ISO_4014, "6g")
         val plan = r.headingPlan!!
-        // Head stock L/D ≈ 1.9 → single upset blow: extrude, upset, hex form
-        assertEquals(1, plan.upsetBlows)
-        assertEquals(listOf("Shear cut-off", "Square & forward extrude", "Head upset", "Hex form"), plan.stations.map { it.title })
+        // Trimmed hex: round preform at 1.2 × e carries the cheese, so head stock L/D > 2.3 → cone pre-upset, upset, trim
+        assertEquals(2, plan.upsetBlows)
+        assertEquals(listOf("Shear cut-off", "Square & forward extrude", "Cone pre-upset", "Head upset (round, for trimming)", "Trim to hex"), plan.stations.map { it.title })
         val last = plan.stations.last()
         assertEquals(SectionShape.HEX, last.segments.last().shape)
         assertEquals(16.0, last.segments.last().dBottomMm, 1e-9)
         assertEquals(60.0 + 6.4, last.heightMm, 1e-9)
         assertEquals(r.cutOffLengthMm, plan.slugLengthMm, 0.05)
-        assertTrue(r.recommendedMachine.startsWith("3-Die"))
+        assertTrue(r.recommendedMachine.startsWith("4-Die"))
         assertTrue(r.forgingStages.last().title.contains("Thread rolling"))
     }
 

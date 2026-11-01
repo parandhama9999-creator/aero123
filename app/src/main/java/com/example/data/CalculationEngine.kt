@@ -154,7 +154,12 @@ object CalculationEngine {
         marginPct: Double = 22.0,
         customNominalDiaMm: Double? = null,
         extractedRadius: Double? = null,
-        propertyClass: PropertyClass? = null
+        propertyClass: PropertyClass? = null,
+        // Geometry read from a scanned drawing; null = use the standard / table value
+        drawingThreadLengthMm: Double? = null,
+        drawingShankDiaMm: Double? = null,
+        drawingAcrossFlatsMm: Double? = null,
+        drawingHeadHeightMm: Double? = null
     ): FastenerCalculationResult {
         val d: Double = customNominalDiaMm ?: if (unitSystem == UnitSystem.METRIC) {
             val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
@@ -362,7 +367,7 @@ object CalculationEngine {
         val prePlateOffsetUm = 4.0 * coating.thicknessMaxUm
 
         // Geometry & Volume
-        val lt = PokaYokeEngine.threadLengthB(fastenerType, unitSystem, d, lengthMm)
+        val lt = drawingThreadLengthMm ?: PokaYokeEngine.threadLengthB(fastenerType, unitSystem, d, lengthMm)
         val unthreadedLen = max(0.0, lengthMm - lt)
         val dw = ((d * 0.985) * 100).roundToInt() / 100.0 // Wire feedstock diameter
         // Real head / nut geometry from ISO 4014, 4032, 4762 and ASME B18.2.1/B18.2.2 tables
@@ -379,9 +384,22 @@ object CalculationEngine {
             fastenerType.isUnthreaded -> (PI / 4.0) * s.pow(2.0) * k
             else -> (sqrt(3.0) / 2.0) * s.pow(2.0) * k
         }
-        val headArea = if (isSocketHead || fastenerType.isUnthreaded) (PI / 4.0) * s.pow(2.0) else (sqrt(3.0) / 2.0) * s.pow(2.0)
+        // Trimmed hex bolts: head forged round at 1.2 × across corners, trimmed to hex; thread section extruded through a 15° cone.
+        // Computed once here so the die progression, the Sizing card and the scanner all use the same slug.
+        val boltForging = if (fastenerType in BoltForging.HEX_TYPES && !fastenerType.isUnthreaded) BoltForging.compute(
+            type = fastenerType, unit = unitSystem, dMm = d, pitchMm = p, lengthMm = lengthMm,
+            blankDiaMm = blankDia, wireDiaMm = dw, tableHead = dims, densityGPerCm3 = material.density,
+            threadLengthMm = lt, shankDiaMm = drawingShankDiaMm, acrossFlatsMm = drawingAcrossFlatsMm,
+            headHeightMm = drawingHeadHeightMm, flangeDiaMm = null, flangeThicknessMm = null
+        ).takeIf { it.finishedVolumeMm3 != null && it.cheeseVolumeMm3 != null } else null
+        val forgedHeadDia = boltForging?.let { 1.2 * (drawingAcrossFlatsMm ?: s) / kotlin.math.cos(Math.toRadians(30.0)) }
+        val headArea = when {
+            forgedHeadDia != null -> (PI / 4.0) * forgedHeadDia.pow(2.0)
+            isSocketHead || fastenerType.isUnthreaded -> (PI / 4.0) * s.pow(2.0)
+            else -> (sqrt(3.0) / 2.0) * s.pow(2.0)
+        }
 
-        val totalVolMm3 = if (isNut) {
+        val totalVolMm3 = if (boltForging != null) boltForging.finishedVolumeMm3!! else if (isNut) {
             ((headArea - (PI / 4.0) * blankDia.pow(2.0)) * dims.nutHeightM)
         } else {
             volHead + (PI / 4.0) * d.pow(2.0) * unthreadedLen + (PI / 4.0) * blankDia.pow(2.0) * lt -
@@ -393,11 +411,14 @@ object CalculationEngine {
         val wireAreaMm2 = (PI / 4.0) * dw.pow(2.0)
         val headingPlan = HeadingProgression.build(
             type = fastenerType, wireDiaMm = dw, nominalDiaMm = d, lengthMm = lengthMm, threadLengthMm = lt,
-            blankDiaMm = blankDia, partVolumeMm3 = totalVolMm3, head = dims, socket = socket, threadLabel = threadLabel
+            blankDiaMm = blankDia, partVolumeMm3 = totalVolMm3, head = dims, socket = socket, threadLabel = threadLabel,
+            forging = boltForging, forgedHeadDiaMm = forgedHeadDia,
+            trimmedHexS = drawingAcrossFlatsMm ?: s, trimmedHexK = drawingHeadHeightMm ?: k
         )
         // Slug also carries material removed during heading (pierced nut web)
         val cutOffLenMm = headingPlan?.slugLengthMm ?: (totalVolMm3 / wireAreaMm2)
-        val ldRatio = if (volHead > 0) ((volHead / wireAreaMm2) / dw) else 0.0
+        val ldRatio = boltForging?.headStockMm?.let { it / (boltForging.shankDiaMm) }
+            ?: if (volHead > 0) ((volHead / wireAreaMm2) / dw) else 0.0
 
         // Forging Mechanics & UTS Calculations
         val trueStrainEps = ln(max(1.15, ldRatio + 1.0))

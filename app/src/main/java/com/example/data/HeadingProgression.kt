@@ -102,10 +102,15 @@ object HeadingProgression {
         partVolumeMm3: Double,
         head: HeadDimensions,
         socket: Pair<Double, Double>?,
-        threadLabel: String
+        threadLabel: String,
+        forging: BoltForgingResult? = null,
+        forgedHeadDiaMm: Double? = null,
+        trimmedHexS: Double = head.acrossFlatsS,
+        trimmedHexK: Double = head.headHeightK
     ): HeadingPlan? = when {
         type.isWasher -> null
         type.isNut -> nut(wireDiaMm, blankDiaMm, partVolumeMm3, head, threadLabel)
+        forging != null && forgedHeadDiaMm != null -> trimmedHex(type, lengthMm, forging, forgedHeadDiaMm, trimmedHexS, trimmedHexK, threadLabel)
         else -> {
             val lt = threadLengthMm.coerceIn(0.0, lengthMm)
             val headVol = partVolumeMm3 - area(blankDiaMm) * lt - area(nominalDiaMm) * (lengthMm - lt)
@@ -131,6 +136,83 @@ object HeadingProgression {
         OffHeaderOp("Pointing", "Chamfer thread start to minor diameter (45°)"),
         OffHeaderOp("Thread rolling", "Roll $threadLabel on flat or cylindrical dies")
     )
+
+    /** Hex head forged round (1.2 × e), then trimmed: the slug carries the cheese, the trim station removes it. */
+    private fun trimmedHex(
+        type: FastenerType, length: Double, fg: BoltForgingResult, dRound: Double, s: Double, k: Double, threadLabel: String
+    ): HeadingPlan {
+        val wire = fg.shankDiaMm
+        val aw = area(wire)
+        val cheese = fg.cheeseVolumeMm3!!
+        val headForged = fg.headStockMm!! * aw
+        val slugVol = fg.finishedVolumeMm3!! + cheese
+        val slugLen = slugVol / aw
+        val stock = fg.headStockMm
+        val ld = stock / wire
+        val blows = when {
+            ld <= SINGLE_BLOW_LD -> 1
+            ld <= TWO_BLOW_LD -> 2
+            else -> 3
+        }
+        val lt = fg.threadLengthMm
+        val shank = buildList {
+            if (lt > 0.0) add(ProfileSegment(lt, fg.blankDiaMm))
+            if (fg.coneLengthMm > 0.0) add(ProfileSegment(fg.coneLengthMm, fg.blankDiaMm, wire))
+            val body = length - lt - fg.coneLengthMm
+            if (body > 0.0) add(ProfileSegment(body, wire))
+        }
+        val reductionPct = (1.0 - area(fg.blankDiaMm) / aw) * 100.0
+        val stations = mutableListOf(cutOff(wire, slugLen))
+        stations += HeadingStation(
+            index = 1,
+            title = "Square & forward extrude",
+            operation = "Square sheared ends; extrude thread section Ø${f(wire)} → Ø${f(fg.blankDiaMm, 3)} × ${f(lt, 1)} mm through 15°/side cone " +
+                "(${f(fg.coneLengthMm)} mm, ${f(reductionPct, 0)} % area reduction); stock before extrusion ${f(fg.stockToExtrudeMm)} mm; head stock ${f(stock, 1)} mm, L/D ${f(ld)}",
+            segments = shank + ProfileSegment(stock, wire),
+            inDieMm = length
+        )
+        val coneFractions = when (blows) {
+            1 -> emptyList()
+            2 -> listOf(0.62)
+            else -> listOf(0.75, 0.52)
+        }
+        coneFractions.forEachIndexed { i, fraction ->
+            var hc = stock * fraction
+            var dc = coneLargeEnd(headForged, wire, hc)
+            if (dc > 0.9 * dRound) {
+                dc = 0.9 * dRound
+                hc = 12.0 * headForged / (PI * (dc * dc + dc * wire + wire * wire))
+            }
+            stations += HeadingStation(
+                index = stations.size,
+                title = if (coneFractions.size > 1) "Cone pre-upset ${i + 1}" else "Cone pre-upset",
+                operation = "Gather head stock in cone punch: Ø${f(dc)} → Ø${f(wire)} × ${f(hc, 1)} mm (L/D ${f(ld)} > $SINGLE_BLOW_LD)",
+                segments = shank + ProfileSegment(hc, dc, wire),
+                inDieMm = length
+            )
+        }
+        stations += HeadingStation(
+            index = stations.size,
+            title = "Head upset (round, for trimming)",
+            operation = "Upset round head Ø${f(dRound)} (1.2 × across corners) × ${f(headForged / area(dRound))} mm against die face",
+            segments = shank + ProfileSegment(headForged / area(dRound), dRound),
+            inDieMm = length,
+            isPeakBlow = true
+        )
+        stations += HeadingStation(
+            index = stations.size,
+            title = "Trim to hex",
+            operation = "Trim round head to hex s=${f(s)} × k=${f(k)} mm; trim cheese ${f(cheese, 0)} mm³ removed",
+            segments = shank + ProfileSegment(k, s, shape = SectionShape.HEX),
+            inDieMm = length,
+            scrapMm3 = cheese
+        )
+        val notes = buildList {
+            if (ld > THREE_BLOW_LD) add("Head stock L/D ${f(ld)} exceeds the 3-blow limit ($THREE_BLOW_LD): use larger wire or warm forming.")
+            if (reductionPct > 30.0) add("Open-die extrusion ${f(reductionPct, 0)} % exceeds ~30 %: extrude in a closed (trapped) die to avoid upsetting the shank.")
+        }
+        return HeadingPlan(wire, slugLen, slugVol, stations, rollingOps(threadLabel), blows, notes)
+    }
 
     private fun headed(
         type: FastenerType, wire: Double, d: Double, length: Double, lt: Double, blank: Double,

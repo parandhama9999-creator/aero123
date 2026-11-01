@@ -42,12 +42,13 @@ object BoltForging {
         flangeDiaMm: Double?, flangeThicknessMm: Double?
     ): BoltForgingResult {
         val missing = mutableListOf<String>()
-        val b = threadLengthMm ?: PokaYokeEngine.threadLengthB(type, unit, dMm, lengthMm)
+        val b = minOf(threadLengthMm ?: PokaYokeEngine.threadLengthB(type, unit, dMm, lengthMm), lengthMm)
         val ds = shankDiaMm ?: wireDiaMm
         val db = blankDiaMm
         val aShank = PI / 4 * ds * ds
         val aBlank = PI / 4 * db * db
-        val cone = if (ds > db) (ds - db) / 2 / tan(Math.toRadians(15.0)) else 0.0
+        // 15°/side cone; on short bolts it is squeezed into whatever plain length is left under the head
+        val cone = if (ds > db) minOf((ds - db) / 2 / tan(Math.toRadians(15.0)), maxOf(0.0, lengthMm - b)) else 0.0
         val coneVol = PI * cone / 12 * (ds * ds + ds * db + db * db)
         val stock = (aBlank * b + coneVol) / aShank
         val underHeadBefore = lengthMm - b - cone + stock
