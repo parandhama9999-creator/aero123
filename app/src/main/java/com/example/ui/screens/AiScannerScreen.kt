@@ -695,11 +695,14 @@ private fun BoltForgingPanel(spec: ExtractedFastenerSpec) {
             threadClass = spec.threadClass, material = material, coating = spec.coating, batchQty = 1,
             customNominalDiaMm = spec.nominalDiaMm, propertyClass = spec.propertyClass
         )
+        val fl = if (spec.fastenerType == FastenerType.FLANGE_BOLT) com.example.data.BoltForging.resolveFlange(
+            spec.nominalDiaMm, spec.flangeDiaMm, spec.headHeightMm, spec.headAcrossFlatsMm, spec.flangeThicknessMm) else null
         com.example.data.BoltForging.compute(
             type = spec.fastenerType, unit = spec.unitSystem, dMm = spec.nominalDiaMm, pitchMm = pitchMm, lengthMm = spec.lengthMm,
             blankDiaMm = calc.blankTargetDia, wireDiaMm = calc.wireDiaMm, tableHead = calc.headDimensions, densityGPerCm3 = material.density,
-            threadLengthMm = spec.threadLengthMm, shankDiaMm = spec.shankDiaMm, acrossFlatsMm = spec.headAcrossFlatsMm,
-            headHeightMm = spec.headHeightMm, flangeDiaMm = spec.flangeDiaMm, flangeThicknessMm = spec.flangeThicknessMm
+            threadLengthMm = spec.threadLengthMm, shankDiaMm = spec.shankDiaMm,
+            acrossFlatsMm = fl?.s ?: spec.headAcrossFlatsMm, headHeightMm = fl?.k ?: spec.headHeightMm,
+            flangeDiaMm = fl?.dc, flangeThicknessMm = fl?.c
         )
     }
     fun n(v: Double, dp: Int = 2) = "%.${dp}f".format(java.util.Locale.US, v)

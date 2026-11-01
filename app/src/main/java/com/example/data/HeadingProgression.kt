@@ -106,11 +106,14 @@ object HeadingProgression {
         forging: BoltForgingResult? = null,
         forgedHeadDiaMm: Double? = null,
         trimmedHexS: Double = head.acrossFlatsS,
-        trimmedHexK: Double = head.headHeightK
+        trimmedHexK: Double = head.headHeightK,
+        flangeDiaMm: Double? = null,
+        flangeThicknessMm: Double? = null
     ): HeadingPlan? = when {
         type.isWasher -> null
         type.isNut -> nut(wireDiaMm, blankDiaMm, partVolumeMm3, head, threadLabel)
-        forging != null && forgedHeadDiaMm != null -> trimmedHex(type, lengthMm, forging, forgedHeadDiaMm, trimmedHexS, trimmedHexK, threadLabel)
+        forging != null && forgedHeadDiaMm != null ->
+            trimmedHex(type, lengthMm, forging, forgedHeadDiaMm, trimmedHexS, trimmedHexK, threadLabel, flangeDiaMm, flangeThicknessMm)
         else -> {
             val lt = threadLengthMm.coerceIn(0.0, lengthMm)
             val headVol = partVolumeMm3 - area(blankDiaMm) * lt - area(nominalDiaMm) * (lengthMm - lt)
@@ -139,8 +142,10 @@ object HeadingProgression {
 
     /** Hex head forged round (1.2 × e), then trimmed: the slug carries the cheese, the trim station removes it. */
     private fun trimmedHex(
-        type: FastenerType, length: Double, fg: BoltForgingResult, dRound: Double, s: Double, k: Double, threadLabel: String
+        type: FastenerType, length: Double, fg: BoltForgingResult, dRound: Double, s: Double, k: Double, threadLabel: String,
+        flangeDc: Double? = null, flangeC: Double? = null
     ): HeadingPlan {
+        val isFlange = flangeDc != null && flangeC != null
         val wire = fg.shankDiaMm
         val aw = area(wire)
         val cheese = fg.cheeseVolumeMm3!!
@@ -191,22 +196,43 @@ object HeadingProgression {
                 inDieMm = length
             )
         }
-        stations += HeadingStation(
-            index = stations.size,
-            title = "Head upset (round, for trimming)",
-            operation = "Upset round head Ø${f(dRound)} (1.2 × across corners) × ${f(headForged / area(dRound))} mm against die face",
-            segments = shank + ProfileSegment(headForged / area(dRound), dRound),
-            inDieMm = length,
-            isPeakBlow = true
-        )
-        stations += HeadingStation(
-            index = stations.size,
-            title = "Trim to hex",
-            operation = "Trim round head to hex s=${f(s)} × k=${f(k)} mm; trim cheese ${f(cheese, 0)} mm³ removed",
-            segments = shank + ProfileSegment(k, s, shape = SectionShape.HEX),
-            inDieMm = length,
-            scrapMm3 = cheese
-        )
+        if (isFlange) {
+            val c = flangeC!!
+            val hexPart = ProfileSegment(k - c, s, shape = SectionShape.HEX)
+            stations += HeadingStation(
+                index = stations.size,
+                title = "Head upset (hex + oversize collar)",
+                operation = "Form hex s=${f(s)} and collar Ø${f(dRound)} (dc + 2×2 mm) × c=${f(c)} mm",
+                segments = shank + ProfileSegment(c, dRound) + hexPart,
+                inDieMm = length,
+                isPeakBlow = true
+            )
+            stations += HeadingStation(
+                index = stations.size,
+                title = "Trim flange collar",
+                operation = "Trim collar Ø${f(dRound)} → Ø${f(flangeDc!!)} mm; trim cheese ${f(cheese, 0)} mm³ removed",
+                segments = shank + ProfileSegment(c, flangeDc) + hexPart,
+                inDieMm = length,
+                scrapMm3 = cheese
+            )
+        } else {
+            stations += HeadingStation(
+                index = stations.size,
+                title = "Head upset (round, for trimming)",
+                operation = "Upset round head Ø${f(dRound)} (1.2 × across corners) × ${f(headForged / area(dRound))} mm against die face",
+                segments = shank + ProfileSegment(headForged / area(dRound), dRound),
+                inDieMm = length,
+                isPeakBlow = true
+            )
+            stations += HeadingStation(
+                index = stations.size,
+                title = "Trim to hex",
+                operation = "Trim round head to hex s=${f(s)} × k=${f(k)} mm; trim cheese ${f(cheese, 0)} mm³ removed",
+                segments = shank + ProfileSegment(k, s, shape = SectionShape.HEX),
+                inDieMm = length,
+                scrapMm3 = cheese
+            )
+        }
         val notes = buildList {
             if (ld > THREE_BLOW_LD) add("Head stock L/D ${f(ld)} exceeds the 3-blow limit ($THREE_BLOW_LD): use larger wire or warm forming.")
             if (reductionPct > 30.0) add("Open-die extrusion ${f(reductionPct, 0)} % exceeds ~30 %: extrude in a closed (trapped) die to avoid upsetting the shank.")

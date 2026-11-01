@@ -105,6 +105,7 @@ data class FastenerCalculationResult(
     val pokaYokeIssues: List<PokaYokeIssue> = emptyList(),
     val headDimensions: HeadDimensions? = null,
     val headingPlan: HeadingPlan? = null,
+    val boltForging: BoltForgingResult? = null,
     /** Wire-preparation anneal that happens before cut-off and heading. */
     val softAnnealSpec: SoftAnnealSpec? = null
 ) {
@@ -159,7 +160,9 @@ object CalculationEngine {
         drawingThreadLengthMm: Double? = null,
         drawingShankDiaMm: Double? = null,
         drawingAcrossFlatsMm: Double? = null,
-        drawingHeadHeightMm: Double? = null
+        drawingHeadHeightMm: Double? = null,
+        drawingFlangeDiaMm: Double? = null,
+        drawingFlangeThicknessMm: Double? = null
     ): FastenerCalculationResult {
         val d: Double = customNominalDiaMm ?: if (unitSystem == UnitSystem.METRIC) {
             val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
@@ -386,13 +389,26 @@ object CalculationEngine {
         }
         // Trimmed hex bolts: head forged round at 1.2 × across corners, trimmed to hex; thread section extruded through a 15° cone.
         // Computed once here so the die progression, the Sizing card and the scanner all use the same slug.
-        val boltForging = if (fastenerType in BoltForging.HEX_TYPES && !fastenerType.isUnthreaded) BoltForging.compute(
-            type = fastenerType, unit = unitSystem, dMm = d, pitchMm = p, lengthMm = lengthMm,
-            blankDiaMm = blankDia, wireDiaMm = dw, tableHead = dims, densityGPerCm3 = material.density,
-            threadLengthMm = lt, shankDiaMm = drawingShankDiaMm, acrossFlatsMm = drawingAcrossFlatsMm,
-            headHeightMm = drawingHeadHeightMm, flangeDiaMm = null, flangeThicknessMm = null
-        ).takeIf { it.finishedVolumeMm3 != null && it.cheeseVolumeMm3 != null } else null
-        val forgedHeadDia = boltForging?.let { 1.2 * (drawingAcrossFlatsMm ?: s) / kotlin.math.cos(Math.toRadians(30.0)) }
+        val flange = if (fastenerType == FastenerType.FLANGE_BOLT)
+            BoltForging.resolveFlange(d, drawingFlangeDiaMm, drawingHeadHeightMm, drawingAcrossFlatsMm, drawingFlangeThicknessMm) else null
+        val boltForging = when {
+            fastenerType in BoltForging.HEX_TYPES -> BoltForging.compute(
+                type = fastenerType, unit = unitSystem, dMm = d, pitchMm = p, lengthMm = lengthMm,
+                blankDiaMm = blankDia, wireDiaMm = dw, tableHead = dims, densityGPerCm3 = material.density,
+                threadLengthMm = lt, shankDiaMm = drawingShankDiaMm, acrossFlatsMm = drawingAcrossFlatsMm,
+                headHeightMm = drawingHeadHeightMm, flangeDiaMm = null, flangeThicknessMm = null
+            )
+            flange != null && flange.complete -> BoltForging.compute(
+                type = fastenerType, unit = unitSystem, dMm = d, pitchMm = p, lengthMm = lengthMm,
+                blankDiaMm = blankDia, wireDiaMm = dw, tableHead = dims, densityGPerCm3 = material.density,
+                threadLengthMm = lt, shankDiaMm = drawingShankDiaMm, acrossFlatsMm = flange.s,
+                headHeightMm = flange.k, flangeDiaMm = flange.dc, flangeThicknessMm = flange.c
+            )
+            else -> null
+        }?.takeIf { it.finishedVolumeMm3 != null && it.cheeseVolumeMm3 != null }
+        val trimS = if (flange != null && boltForging != null) flange.s!! else drawingAcrossFlatsMm ?: s
+        val trimK = if (flange != null && boltForging != null) flange.k!! else drawingHeadHeightMm ?: k
+        val forgedHeadDia = boltForging?.let { if (flange != null) flange.dc!! + 4.0 else 1.2 * trimS / kotlin.math.cos(Math.toRadians(30.0)) }
         val headArea = when {
             forgedHeadDia != null -> (PI / 4.0) * forgedHeadDia.pow(2.0)
             isSocketHead || fastenerType.isUnthreaded -> (PI / 4.0) * s.pow(2.0)
@@ -412,8 +428,8 @@ object CalculationEngine {
         val headingPlan = HeadingProgression.build(
             type = fastenerType, wireDiaMm = dw, nominalDiaMm = d, lengthMm = lengthMm, threadLengthMm = lt,
             blankDiaMm = blankDia, partVolumeMm3 = totalVolMm3, head = dims, socket = socket, threadLabel = threadLabel,
-            forging = boltForging, forgedHeadDiaMm = forgedHeadDia,
-            trimmedHexS = drawingAcrossFlatsMm ?: s, trimmedHexK = drawingHeadHeightMm ?: k
+            forging = boltForging, forgedHeadDiaMm = forgedHeadDia, trimmedHexS = trimS, trimmedHexK = trimK,
+            flangeDiaMm = flange?.dc?.takeIf { boltForging != null }, flangeThicknessMm = flange?.c?.takeIf { boltForging != null }
         )
         // Slug also carries material removed during heading (pierced nut web)
         val cutOffLenMm = headingPlan?.slugLengthMm ?: (totalVolMm3 / wireAreaMm2)
@@ -657,6 +673,7 @@ object CalculationEngine {
             recommendedMachine = recommendedMachine,
             forgingStages = numberedStages,
             headingPlan = headingPlan,
+            boltForging = boltForging,
             heatTreatmentSpec = calculateDynamicHeatTreatment(material, d, hasHeRisk, propertyClass),
             softAnnealSpec = SoftAnnealEngine.build(material),
             cncCycleTimeSec = totalCncSec.round(1),

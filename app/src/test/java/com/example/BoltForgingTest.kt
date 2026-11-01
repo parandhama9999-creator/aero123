@@ -41,3 +41,23 @@ class ProgressionMatchesCardTest {
         }
     }
 }
+
+class FlangeProgressionTest {
+    @Test fun flangeBoltWithThicknessGetsTrimmedCollar() {
+        val m = FastenerCatalog.MATERIALS["10B21"]!!
+        val idx = FastenerCatalog.sizeIndexFor(UnitSystem.METRIC, 10.0)
+        val r = CalculationEngine.calculate(FastenerType.FLANGE_BOLT, UnitSystem.METRIC, ProductStandard.ISO_1665, idx, 1.5, 60.0, "6g", m,
+            CoatingType.ZN_NI, 100, propertyClass = PropertyClass.CLASS_8_8, drawingFlangeThicknessMm = 2.0)
+        val plan = r.headingPlan!!
+        assertEquals("Trim flange collar", plan.stations.last().title)
+        val f = r.boltForging!!
+        assertEquals(f.cutOffLengthMm!!, plan.slugLengthMm, 0.01)
+        org.junit.Assert.assertTrue("vol err ${plan.maxVolumeError}", plan.maxVolumeError < 0.005)
+        // DIN 6921 M10: dc 22.3 → collar 26.3 × 2.0; cheese = π/4 (26.3² − 22.3²) × 2
+        assertEquals(Math.PI / 4 * (26.3 * 26.3 - 22.3 * 22.3) * 2.0, f.cheeseVolumeMm3!!, 0.01)
+        // Without c the old progression is kept and no forging figures are claimed
+        val r2 = CalculationEngine.calculate(FastenerType.FLANGE_BOLT, UnitSystem.METRIC, ProductStandard.ISO_1665, idx, 1.5, 60.0, "6g", m,
+            CoatingType.ZN_NI, 100, propertyClass = PropertyClass.CLASS_8_8)
+        assertEquals(null, r2.boltForging)
+    }
+}

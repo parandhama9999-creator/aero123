@@ -315,8 +315,13 @@ fun AeroFastApp() {
         htRatePerKg,
         marginPct,
         selectedPropClass,
-        appliedExtractedSpec
+        appliedExtractedSpec,
+        com.example.ui.components.ManualFlange.diaMm, com.example.ui.components.ManualFlange.dc,
+        com.example.ui.components.ManualFlange.k, com.example.ui.components.ManualFlange.s, com.example.ui.components.ManualFlange.c
     ) {
+        val sizingD = appliedExtractedSpec?.nominalDiaMm ?: FastenerCatalog.diameterMm(selectedUnitSystem, selectedSizeIndex)
+        val flange = selectedFastenerType == FastenerType.FLANGE_BOLT
+        val mf = com.example.ui.components.ManualFlange
         CalculationEngine.calculate(
             fastenerType = selectedFastenerType,
             unitSystem = selectedUnitSystem,
@@ -337,8 +342,10 @@ fun AeroFastApp() {
             propertyClass = selectedPropClass,
             drawingThreadLengthMm = appliedExtractedSpec?.threadLengthMm,
             drawingShankDiaMm = appliedExtractedSpec?.shankDiaMm,
-            drawingAcrossFlatsMm = appliedExtractedSpec?.headAcrossFlatsMm,
-            drawingHeadHeightMm = appliedExtractedSpec?.headHeightMm
+            drawingAcrossFlatsMm = appliedExtractedSpec?.headAcrossFlatsMm ?: if (flange) mf.sFor(sizingD) else null,
+            drawingHeadHeightMm = appliedExtractedSpec?.headHeightMm ?: if (flange) mf.kFor(sizingD) else null,
+            drawingFlangeDiaMm = appliedExtractedSpec?.flangeDiaMm ?: if (flange) mf.dcFor(sizingD) else null,
+            drawingFlangeThicknessMm = appliedExtractedSpec?.flangeThicknessMm ?: if (flange) mf.cFor(sizingD) else null
         )
     }
 
@@ -576,7 +583,12 @@ fun AeroFastApp() {
                                     selectedFastenerType = spec.fastenerType
                                     selectedUnitSystem = spec.unitSystem
                                     selectedSizeIndex = spec.nominalSizeIndex
-                                    selectedPitchValue = spec.pitchValue
+                                    // The scanner reports pitch in mm; inch sizes are selected by TPI, so snap to the size's nearest standard TPI
+                                    selectedPitchValue = if (spec.unitSystem == UnitSystem.INCH) {
+                                        val tpis = FastenerCatalog.INCH_SIZES.getOrNull(spec.nominalSizeIndex)?.tpis.orEmpty()
+                                        val tpi = if (spec.pitchValue in 0.01..5.0) 25.4 / spec.pitchValue else spec.pitchValue
+                                        tpis.minByOrNull { kotlin.math.abs(it - tpi) }?.toDouble() ?: tpi
+                                    } else spec.pitchValue
                                     selectedLength = spec.lengthMm
                                     selectedPropClass = spec.propertyClass
                                     selectedMaterialKey = spec.materialKey

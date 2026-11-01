@@ -35,6 +35,26 @@ object BoltForging {
 
     fun applies(type: FastenerType) = type in HEX_TYPES || type == FastenerType.FLANGE_BOLT
 
+    data class FlangeGeom(val dc: Double?, val k: Double?, val s: Double?, val c: Double?) {
+        val complete get() = dc != null && k != null && s != null && c != null && c > 0 && k > c
+    }
+
+    /** DIN 6921 (1983 edition, supplier tables): d → dc max, k max, s (null = no source found). */
+    private val DIN_6921 = mapOf<Double, Triple<Double, Double, Double?>>(
+        5.0 to Triple(11.8, 5.4, 8.0), 6.0 to Triple(14.2, 6.6, 10.0), 8.0 to Triple(18.0, 8.1, 13.0),
+        10.0 to Triple(22.3, 9.2, 15.0), 12.0 to Triple(26.6, 11.5, 16.0), 16.0 to Triple(35.0, 14.4, 21.0),
+        20.0 to Triple(43.0, 17.1, null)
+    )
+
+    fun din6921(dMm: Double): FlangeGeom? =
+        DIN_6921.entries.firstOrNull { kotlin.math.abs(it.key - dMm) < 0.01 }?.value?.let { FlangeGeom(it.first, it.second, it.third, null) }
+
+    /** Drawing / typed values first, then DIN 6921; flange thickness c only ever comes from the drawing. */
+    fun resolveFlange(dMm: Double, dc: Double?, k: Double?, s: Double?, c: Double?): FlangeGeom {
+        val din = din6921(dMm)
+        return FlangeGeom(dc ?: din?.dc, k ?: din?.k, s ?: din?.s, c)
+    }
+
     fun compute(
         type: FastenerType, unit: UnitSystem, dMm: Double, pitchMm: Double, lengthMm: Double,
         blankDiaMm: Double, wireDiaMm: Double, tableHead: HeadDimensions?, densityGPerCm3: Double,
