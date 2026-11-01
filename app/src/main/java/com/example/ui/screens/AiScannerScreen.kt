@@ -501,6 +501,10 @@ fun AiScannerScreen(
                                 SpecItemRow("Coating", spec.coating.label)
                             }
 
+                            if (com.example.data.BoltForging.applies(spec.fastenerType)) {
+                                BoltForgingPanel(spec)
+                            }
+
                             // Every dimension the AI read off the drawing, with its tolerance
                             if (spec.detectedDimensions.isNotEmpty()) {
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -675,3 +679,53 @@ private fun SampleChip(
         }
     }
 }
+
+/** Finished volume, trim cheese and previous-stage (pre-extrusion) length straight from the scanned drawing. */
+@Composable
+private fun BoltForgingPanel(spec: ExtractedFastenerSpec) {
+    val customColors = LocalCustomColors.current
+    val material = FastenerCatalog.MATERIALS[spec.materialKey] ?: FastenerCatalog.MATERIALS["10B21"] ?: return
+    val pitchMm = if (spec.unitSystem == com.example.data.UnitSystem.METRIC) spec.pitchValue
+        else if (spec.pitchValue > 3.0) 25.4 / spec.pitchValue else spec.pitchValue
+    val f = remember(spec) {
+        val calc = com.example.data.CalculationEngine.calculate(
+            fastenerType = spec.fastenerType, unitSystem = spec.unitSystem,
+            standard = com.example.data.PokaYokeEngine.defaultStandard(spec.fastenerType, spec.unitSystem),
+            nominalSizeIndex = spec.nominalSizeIndex, pitchValue = spec.pitchValue, lengthMm = spec.lengthMm,
+            threadClass = spec.threadClass, material = material, coating = spec.coating, batchQty = 1,
+            customNominalDiaMm = spec.nominalDiaMm, propertyClass = spec.propertyClass
+        )
+        com.example.data.BoltForging.compute(
+            type = spec.fastenerType, unit = spec.unitSystem, dMm = spec.nominalDiaMm, pitchMm = pitchMm, lengthMm = spec.lengthMm,
+            blankDiaMm = calc.blankTargetDia, wireDiaMm = calc.wireDiaMm, tableHead = calc.headDimensions, densityGPerCm3 = material.density,
+            threadLengthMm = spec.threadLengthMm, shankDiaMm = spec.shankDiaMm, acrossFlatsMm = spec.headAcrossFlatsMm,
+            headHeightMm = spec.headHeightMm, flangeDiaMm = spec.flangeDiaMm, flangeThicknessMm = spec.flangeThicknessMm
+        )
+    }
+    fun n(v: Double, dp: Int = 2) = "%.${dp}f".format(java.util.Locale.US, v)
+    fun src(fromDrawing: Boolean) = if (fromDrawing) "drawing" else "standard"
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = customColors.bgCard,
+        border = BorderStroke(1.dp, customColors.accentSecondary.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+    ) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("FORGING DATA FROM DRAWING", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
+            f.finishedVolumeMm3?.let { SpecItemRow("Finished volume", "${n(it, 0)} mm³ = ${n(it * f.densityGPerMm3)} g") }
+            f.cheeseVolumeMm3?.let { SpecItemRow("Trim cheese", "${n(it, 0)} mm³ = ${n(it * f.densityGPerMm3)} g") }
+            f.headStockMm?.let { SpecItemRow("Head stock", "${n(it)} mm of Ø${n(f.shankDiaMm)}") }
+            SpecItemRow("Thread length b (${src(f.threadFromDrawing)})", "${n(f.threadLengthMm, 1)} mm")
+            SpecItemRow("Shank Ø (${src(f.shankFromDrawing)}) → blank Ø", "${n(f.shankDiaMm)} → ${n(f.blankDiaMm, 3)} mm")
+            SpecItemRow("Cone 15°/side", "${n(f.coneLengthMm)} mm")
+            SpecItemRow("Stock to extrude", "${n(f.stockToExtrudeMm)} mm")
+            SpecItemRow("Length under head before extrusion", "${n(f.lengthUnderHeadBeforeMm)} mm")
+            f.cutOffLengthMm?.let { SpecItemRow("Cut-off length", "${n(it)} mm") }
+            Text(f.headNote + " (${src(f.headFromDrawing)})", fontSize = 10.sp, color = customColors.textMuted)
+            if (f.missing.isNotEmpty()) {
+                Text("Not on drawing (standard value used where one exists): ${f.missing.joinToString()}", fontSize = 10.sp, color = customColors.accentPrimary)
+            }
+        }
+    }
+}
+
