@@ -193,60 +193,6 @@ object GeminiAiService {
         return match?.value?.toDoubleOrNull() ?: default
     }
 
-    private data class OfflineSpecParams(
-        val dia: Double,
-        val pitch: Double,
-        val len: Double,
-        val type: FastenerType,
-        val mat: String,
-        val pClass: PropertyClass,
-        val thread: String
-    )
-
-    fun generateOfflineBlueprintSpec(bitmap: Bitmap? = null, modelName: String = "Built-in Vision Engine"): ExtractedFastenerSpec {
-        val ratio = if (bitmap != null && bitmap.height > 0) bitmap.width.toDouble() / bitmap.height.toDouble() else 1.5
-        val params = when {
-            ratio > 2.2 -> OfflineSpecParams(12.0, 1.75, 75.0, FastenerType.STUD, "4340", PropertyClass.CLASS_10_9, "6g")
-            ratio > 1.7 -> OfflineSpecParams(8.0, 1.25, 45.0, FastenerType.SHCS, "Ti-6Al-4V", PropertyClass.AERO_1100, "4h6h")
-            ratio > 1.3 -> OfflineSpecParams(12.0, 1.75, 60.0, FastenerType.FLANGE_BOLT, "4140", PropertyClass.CLASS_10_9, "6g")
-            ratio < 1.0 -> OfflineSpecParams(10.0, 1.5, 30.0, FastenerType.HEX_NUT, "10B21", PropertyClass.CLASS_10_9, "6H")
-            else -> OfflineSpecParams(10.0, 1.5, 50.0, FastenerType.HEX_BOLT, "10B21", PropertyClass.CLASS_10_9, "6g")
-        }
-        val (nominalDia, pitchVal, lengthVal, fType, matKey, propClass, threadCls) = params
-
-        var closestIdx = 0
-        var minDiff = Double.MAX_VALUE
-        FastenerCatalog.METRIC_SIZES.forEachIndexed { index, metric ->
-            val diff = abs(metric.d - nominalDia)
-            if (diff < minDiff) {
-                minDiff = diff
-                closestIdx = index
-            }
-        }
-
-        return ExtractedFastenerSpec(
-            fastenerType = fType,
-            unitSystem = UnitSystem.METRIC,
-            nominalSizeIndex = closestIdx,
-            nominalDiaMm = nominalDia,
-            pitchValue = pitchVal,
-            lengthMm = lengthVal,
-            propertyClass = propClass,
-            materialKey = matKey,
-            threadClass = threadCls,
-            coating = CoatingType.ZN_NI,
-            technicalSummary = "Blueprint Vision Inspection: ${fType.label} (M${nominalDia.toInt()}x${pitchVal}), Length ${lengthVal}mm, Class ${propClass.label}, Alloy $matKey, Finish Zn-Ni with hydrogen de-embrittlement baking.",
-            detectedDimensions = listOf(
-                DetectedDimension("OD / Major Dia", "${nominalDia}0 mm", "h9 tolerance"),
-                DetectedDimension("Pitch / Thread", "${pitchVal}0 mm", "$threadCls callout"),
-                DetectedDimension("Total Length L", "${lengthVal}0 mm", "±0.50 mm"),
-                DetectedDimension("Head / Wrenching", "Standard", "NOM")
-            ),
-            isAiVisionExtracted = true,
-            modelUsed = modelName
-        )
-    }
-
     suspend fun extractBlueprintSpecFromImage(
         imageBitmap: Bitmap,
         context: Context,
@@ -262,8 +208,10 @@ object GeminiAiService {
 
         val apiKey = getEffectiveApiKey(context)
         if (!hasLiveApiKey(context)) {
-            val fallbackSpec = generateOfflineBlueprintSpec(imageBitmap, "Built-in OCR (Zero-API Mode)")
-            return@withContext Result.success(fallbackSpec)
+            // Without a key nothing reads the drawing: never show invented values as "detected"
+            return@withContext Result.failure(IllegalStateException(
+                "No Gemini API key: the drawing was NOT read. Tap the Key button, add your Gemini API key, then analyze again. " +
+                    "(The sample drawings above work without a key.)"))
         }
 
         val base64Image = bitmapToBase64(imageBitmap)
