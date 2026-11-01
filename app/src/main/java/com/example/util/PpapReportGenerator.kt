@@ -98,6 +98,29 @@ object PpapReportGenerator {
         sb.append(" Measured Mean / Sigma: ________ mm / ________ mm\n")
         sb.append(" Cp = ________   Cpk = ________   (acceptance: Cpk >= 1.67)\n\n")
 
+        // Process sheet: the same forging figures and die stations the app shows
+        sb.append("\n--------------------------------------------------------------------------------\n")
+        sb.append(" PROCESS SHEET - COLD HEADING\n")
+        sb.append("--------------------------------------------------------------------------------\n")
+        result.boltForging?.let { f ->
+            fun n(v: Double, dp: Int = 2) = String.format(Locale.US, "%.${dp}f", v)
+            sb.append(" Wire / shank Ø       : ${n(f.shankDiaMm)} mm  -> blank Ø ${n(f.blankDiaMm, 3)} mm (15°/side cone ${n(f.coneLengthMm)} mm)\n")
+            sb.append(" Thread length b      : ${n(f.threadLengthMm, 1)} mm\n")
+            sb.append(" Stock to extrude     : ${n(f.stockToExtrudeMm)} mm\n")
+            sb.append(" Under head pre-extr. : ${n(f.lengthUnderHeadBeforeMm)} mm\n")
+            f.headStockMm?.let { sb.append(" Head stock           : ${n(it)} mm\n") }
+            f.finishedVolumeMm3?.let { sb.append(" Finished volume      : ${n(it, 0)} mm3 = ${n(it * f.densityGPerMm3)} g\n") }
+            f.cheeseVolumeMm3?.let { sb.append(" Trim cheese          : ${n(it, 0)} mm3 = ${n(it * f.densityGPerMm3)} g\n") }
+            f.cutOffLengthMm?.let { sb.append(" CUT-OFF LENGTH       : ${n(it)} mm\n") }
+            sb.append(" Head                 : ${f.headNote}\n")
+        }
+        result.headingPlan?.let { plan ->
+            sb.append(" Slug                 : Ø${String.format(Locale.US, "%.2f", plan.slugDiaMm)} x ${String.format(Locale.US, "%.2f", plan.slugLengthMm)} mm, ${plan.upsetBlows} upset blow(s)\n")
+            plan.stations.forEach { st -> sb.append("  St ${st.index}: ${st.title} - ${st.operation}\n") }
+            plan.offHeaderOps.forEach { op -> sb.append("  Off-header: ${op.title} - ${op.operation}\n") }
+            plan.notes.forEach { sb.append("  Note: $it\n") }
+        }
+
         // Status is never "approved" by the app: it can only be blocked by poka-yoke or awaiting measured evidence
         sb.append("================================================================================\n")
         sb.append(

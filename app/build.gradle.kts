@@ -105,6 +105,8 @@ dependencies {
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.core.ktx)
   implementation("androidx.security:security-crypto:1.1.0-alpha06")
+  // On-device text recognition for the scanner when no Gemini key is set (model bundled, works offline)
+  implementation("com.google.mlkit:text-recognition:16.0.1")
   // implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)

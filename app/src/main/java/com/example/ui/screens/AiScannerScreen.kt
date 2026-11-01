@@ -103,6 +103,7 @@ fun AiScannerScreen(
     var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isAnalyzing by remember { mutableStateOf(false) }
     var extractedSpec by remember { mutableStateOf<ExtractedFastenerSpec?>(null) }
+    var ocrValues by remember { mutableStateOf<List<com.example.util.OcrValue>?>(null) }
     var extractionError by remember { mutableStateOf<String?>(null) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -156,6 +157,21 @@ fun AiScannerScreen(
     fun analyzeBitmap(bitmap: Bitmap) {
         isAnalyzing = true
         extractionError = null
+        ocrValues = null
+        if (!GeminiAiService.hasLiveApiKey(context)) {
+            // No AI key: read the numbers on the phone and let the user say what each one is
+            CoroutineScope(Dispatchers.Main).launch {
+                runCatching { com.example.util.OcrDimensionReader.read(bitmap) }
+                    .onSuccess { vals ->
+                        extractedSpec = null
+                        if (vals.isEmpty()) extractionError = "No numbers could be read from this image. Try a sharper photo, or add a Gemini key (Key button) for full AI reading."
+                        else ocrValues = vals
+                    }
+                    .onFailure { extractionError = "On-phone text reading failed: ${it.message}" }
+                isAnalyzing = false
+            }
+            return
+        }
         CoroutineScope(Dispatchers.Main).launch {
             val result = GeminiAiService.extractBlueprintSpecFromImage(bitmap, context)
             isAnalyzing = false
@@ -465,6 +481,13 @@ fun AiScannerScreen(
                     }
                 }
 
+                ocrValues?.let { vals ->
+                    OcrAssignPanel(vals, currentResult) { spec ->
+                        extractedSpec = spec
+                        ocrValues = null
+                    }
+                }
+
                 extractedSpec?.let { spec ->
                     Spacer(modifier = Modifier.height(14.dp))
                     Surface(
@@ -728,6 +751,73 @@ private fun BoltForgingPanel(spec: ExtractedFastenerSpec) {
             if (f.missing.isNotEmpty()) {
                 Text("Not on drawing (standard value used where one exists): ${f.missing.joinToString()}", fontSize = 10.sp, color = customColors.accentPrimary)
             }
+        }
+    }
+}
+
+private val OCR_ROLES = listOf("—", "Nominal d", "Length L", "Thread length b", "Shank Ø", "Across flats s", "Head height k", "Flange Ø dc", "Flange thickness c")
+
+/** On-phone OCR result: the user assigns each number; type, material, class and coating come from the current Sizing selection. */
+@Composable
+private fun OcrAssignPanel(
+    values: List<com.example.util.OcrValue>,
+    current: com.example.data.FastenerCalculationResult,
+    onUse: (ExtractedFastenerSpec) -> Unit
+) {
+    val customColors = LocalCustomColors.current
+    val roles = remember(values) { androidx.compose.runtime.mutableStateMapOf<Int, String>() }
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = customColors.bgElevated,
+        border = BorderStroke(1.dp, customColors.accentSecondary.copy(alpha = 0.6f)),
+        modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("READ ON PHONE (OCR) — TAP WHAT EACH NUMBER IS", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
+            Text("No Gemini key, so the drawing was read as text only. Type, material, class and coating are taken from your current Sizing selection (${current.fastenerType.label.substringBefore(" (")}). Add a key for full automatic reading.",
+                fontSize = 10.sp, color = customColors.textMuted)
+            values.forEachIndexed { i, v ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text((if (v.pitch != null) "M${v.value} × ${v.pitch}" else if (v.isDiameter) "Ø${v.value}" else "${v.value}") + " mm",
+                            fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                        Text(v.source.take(40), fontSize = 9.sp, color = customColors.textMuted)
+                    }
+                    SelectorDropdown(
+                        label = "",
+                        selectedText = roles[i] ?: OCR_ROLES.first(),
+                        items = OCR_ROLES,
+                        onItemSelected = { roles[i] = OCR_ROLES[it] },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            fun pick(role: String) = roles.entries.firstOrNull { it.value == role }?.let { values[it.key] }
+            val d = pick("Nominal d")
+            Button(
+                onClick = {
+                    val unit = current.unitSystem
+                    val dMm = d?.value ?: current.nominalDiaMm
+                    val assigned = roles.filterValues { it != OCR_ROLES.first() }
+                    onUse(ExtractedFastenerSpec(
+                        fastenerType = current.fastenerType, unitSystem = unit,
+                        nominalSizeIndex = FastenerCatalog.sizeIndexFor(unit, dMm), nominalDiaMm = dMm,
+                        pitchValue = d?.pitch ?: current.pitchMm,
+                        lengthMm = pick("Length L")?.value ?: current.lengthMm,
+                        propertyClass = current.propertyClass ?: PropertyClass.CLASS_8_8,
+                        materialKey = current.material.key, threadClass = current.threadClass, coating = current.coating,
+                        technicalSummary = "Read on phone (OCR); ${assigned.size} value(s) assigned by you. Type, material, class and coating from your Sizing selection.",
+                        detectedDimensions = assigned.map { (i, role) -> DetectedDimension(role, "${values[i].value} mm", values[i].source.take(30)) },
+                        isAiVisionExtracted = false,
+                        modelUsed = "On-phone OCR + your assignment",
+                        threadLengthMm = pick("Thread length b")?.value, shankDiaMm = pick("Shank Ø")?.value,
+                        headAcrossFlatsMm = pick("Across flats s")?.value, headHeightMm = pick("Head height k")?.value,
+                        flangeDiaMm = pick("Flange Ø dc")?.value, flangeThicknessMm = pick("Flange thickness c")?.value
+                    ))
+                },
+                enabled = roles.values.any { it != OCR_ROLES.first() },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Use these values", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }

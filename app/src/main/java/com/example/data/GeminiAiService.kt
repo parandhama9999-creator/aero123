@@ -193,6 +193,25 @@ object GeminiAiService {
         return match?.value?.toDoubleOrNull() ?: default
     }
 
+    /** The Sizing screen's forging results and die stations, so the Co-Pilot explains the same numbers the user sees. */
+    fun forgingContext(r: FastenerCalculationResult): String = buildString {
+        val f = r.boltForging
+        if (f != null) {
+            append("Forging (same values as the Sizing card): thread length b ${"%.1f".format(java.util.Locale.US, f.threadLengthMm)} mm; ")
+            append("shank Ø${"%.2f".format(java.util.Locale.US, f.shankDiaMm)} extruded to blank Ø${"%.3f".format(java.util.Locale.US, f.blankDiaMm)} through a 15°/side cone ${"%.2f".format(java.util.Locale.US, f.coneLengthMm)} mm; ")
+            append("stock before extrusion ${"%.2f".format(java.util.Locale.US, f.stockToExtrudeMm)} mm; length under head before extrusion ${"%.2f".format(java.util.Locale.US, f.lengthUnderHeadBeforeMm)} mm; ")
+            f.finishedVolumeMm3?.let { append("finished volume ${"%.0f".format(java.util.Locale.US, it)} mm³; ") }
+            f.cheeseVolumeMm3?.let { append("trim cheese ${"%.0f".format(java.util.Locale.US, it)} mm³; ") }
+            f.headStockMm?.let { append("head stock ${"%.2f".format(java.util.Locale.US, it)} mm; ") }
+            f.cutOffLengthMm?.let { append("cut-off ${"%.2f".format(java.util.Locale.US, it)} mm") }
+            append(". ${f.headNote}.\n")
+        }
+        r.headingPlan?.let { plan ->
+            append("Die progression (${plan.stations.size} stations, slug Ø${"%.2f".format(java.util.Locale.US, plan.slugDiaMm)} × ${"%.2f".format(java.util.Locale.US, plan.slugLengthMm)} mm):\n")
+            plan.stations.forEach { append("- ${it.index}. ${it.title}: ${it.operation}\n") }
+        }
+    }
+
     suspend fun extractBlueprintSpecFromImage(
         imageBitmap: Bitmap,
         context: Context,
@@ -718,7 +737,8 @@ object GeminiAiService {
                         "• **Pre-Roll Blank**: Ø${currentResult.blankTargetDia.round(3)} mm (±${currentResult.blankTolHalf.round(3)} mm)\n" +
                         "• **Pitch Sweet-Spot**: ${currentResult.pitchDiaSweet.round(3)} mm\n" +
                         "• **AMS 2759 Heat Treatment**: ${currentResult.heatTreatmentSpec.austenitizingOrSolutionTempC} soak ${currentResult.heatTreatmentSpec.soakingTimeMinutes}\n" +
-                        "• **Heading Press**: ${currentResult.recommendedMachine} (Head Tonnage: ${currentResult.forgingTonnage.round(1)} T)\n\n"
+                        "• **Heading Press**: ${currentResult.recommendedMachine} (Head Tonnage: ${currentResult.forgingTonnage.round(1)} T)\n" +
+                        forgingContext(currentResult) + "\n"
                     } else "") +
                     "💡 *You can ask about blank diameter sweet-spots, dynamic soaking times, heading tonnage, Fanuc G-code, or batch pricing.*"
         }
@@ -738,6 +758,7 @@ object GeminiAiService {
                     append("- Stage 5 Mandatory Hydrogen Bake: ${ht.bakingTempC} (${ht.bakingSoakTime})\n")
                 }
             }
+            if (currentResult != null) append(forgingContext(currentResult))
             if (extractedSpec != null) {
                 append("Active Drawing Summary: ${extractedSpec.technicalSummary}\n")
                 extractedSpec.detectedDimensions.take(4).forEach { dim ->
