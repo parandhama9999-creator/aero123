@@ -35,16 +35,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Fireplace
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.PrecisionManufacturing
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Straighten
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -85,13 +82,9 @@ import com.example.ui.components.PricingDialog
 import com.example.ui.components.SettingsDialog
 import com.example.ui.screens.AiCoPilotScreen
 import com.example.ui.screens.AiScannerScreen
-import com.example.ui.screens.FanucGCodeScreen
 import com.example.ui.screens.FastenerSizingScreen
 import com.example.ui.screens.ForgingMetallurgyScreen
-import com.example.ui.screens.QuotationScreen
 import com.example.ui.screens.EightDKnowledgeScreen
-import com.example.ui.screens.PitchGaugeScreen
-import com.example.ui.screens.JointTorqueScreen
 import androidx.compose.material.icons.filled.Engineering
 import com.example.ui.theme.AeroFastTheme
 import com.example.ui.theme.AppThemeMode
@@ -127,12 +120,8 @@ enum class NavigationTab(val tabIndex: Int, val defaultTitle: String, val icon: 
     SIZING(1, "1. Sizing", Icons.Default.Tune),
     FORGING(2, "2. HT & Forging", Icons.Default.Fireplace),
     SCANNER(3, "3. AI Scanner", Icons.Default.CameraAlt),
-    GCODE(4, "4. Fanuc G-Code", Icons.Default.Code),
-    QUOTATION(5, "5. Quotation", Icons.AutoMirrored.Filled.ReceiptLong),
-    COPILOT(6, "6. AI Co-Pilot", Icons.Default.SmartToy),
-    EIGHT_D(7, "7. 8D NPD Engine", Icons.Default.Engineering),
-    PITCH_GAUGE(8, "8. Pitch Gauge", Icons.Default.Straighten),
-    JOINT_CALC(9, "9. Joint Torque", Icons.Default.Build);
+    COPILOT(4, "4. AI Co-Pilot", Icons.Default.SmartToy),
+    EIGHT_D(5, "5. 8D NPD Engine", Icons.Default.Engineering);
 
     fun getTitle(lang: com.example.util.AppLanguage): String {
         return com.example.util.AppLocalization.getTabTitle(tabIndex, lang)
@@ -605,36 +594,6 @@ fun AeroFastApp() {
                             )
                         }
 
-                        NavigationTab.GCODE -> {
-                            FanucGCodeScreen(result = currentCalculation)
-                        }
-
-                        NavigationTab.QUOTATION -> {
-                            QuotationScreen(
-                                result = currentCalculation,
-                                currencyIsUsd = currencyIsUsd,
-                                onCurrencyToggled = {
-                                    currencyIsUsd = it
-                                    triggerFirebaseSync()
-                                },
-                                cncHourRate = cncHourRate,
-                                onCncHourRateChanged = {
-                                    cncHourRate = it
-                                    triggerFirebaseSync()
-                                },
-                                htRatePerKg = htRatePerKg,
-                                onHtRateChanged = {
-                                    htRatePerKg = it
-                                    triggerFirebaseSync()
-                                },
-                                marginPct = marginPct,
-                                onMarginChanged = {
-                                    marginPct = it
-                                    triggerFirebaseSync()
-                                }
-                            )
-                        }
-
                         NavigationTab.COPILOT -> {
                             AiCoPilotScreen(
                                 currentResult = currentCalculation,
@@ -649,14 +608,6 @@ fun AeroFastApp() {
 
                         NavigationTab.EIGHT_D -> {
                             EightDKnowledgeScreen(currentResult = currentCalculation)
-                        }
-
-                        NavigationTab.PITCH_GAUGE -> {
-                            PitchGaugeScreen(result = currentCalculation)
-                        }
-
-                        NavigationTab.JOINT_CALC -> {
-                            JointTorqueScreen(result = currentCalculation)
                         }
                     }
                 }
