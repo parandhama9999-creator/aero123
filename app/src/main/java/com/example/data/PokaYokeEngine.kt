@@ -96,6 +96,13 @@ object PokaYokeEngine {
         else -> ClassStrength(material.postForgingTargetUtsMpa, material.yieldStrengthMpa, material.yieldStrengthMpa * 0.9, false)
     }
 
+    /**
+     * Minimum Rm a material must reach to be sold as this class: the tabulated value of the grade for the size
+     * (ISO 898-1, SAE J429, ASTM, ISO 3506), or the bottom of the range where the alloy's own spec governs.
+     */
+    fun requiredRmMpa(pc: PropertyClass, dMm: Double, material: MaterialInfo): Double =
+        if (isCommercialClass(pc)) classStrength(pc, dMm, material).rmMinMpa else pc.utsMpa
+
     internal val NUT_STANDARDS = setOf(
         ProductStandard.ISO_4032, ProductStandard.ISO_4033, ProductStandard.DIN_6923, ProductStandard.ISO_7040,
         ProductStandard.ISO_7042, ProductStandard.DIN_935, ProductStandard.DIN_1587, ProductStandard.DIN_929, ProductStandard.ASME_B18_2_2,
@@ -340,8 +347,9 @@ object PokaYokeEngine {
             } else if (pc == PropertyClass.AERO_1100 && family != MaterialFamily.TITANIUM) {
                 warn("Titanium class with non-titanium material", "Class ${pc.label} is defined for Ti-6Al-4V; ${material.name} selected.", "Confirm the procurement spec, or select a titanium alloy.")
             }
-            if (material.postForgingTargetUtsMpa < cs.rmMinMpa * 0.98 || material.postForgingTargetUtsMpa < pc.utsMpa * 0.98) {
-                critical("Material cannot reach the class strength", "${material.name} reaches about ${material.postForgingTargetUtsMpa.toInt()} MPa, but ${pc.label.substringBefore(" (")} needs at least ${maxOf(cs.rmMinMpa, pc.utsMpa).toInt()} MPa.", "Select a stronger, hardenable material (e.g. 4140/42CrMo4 for 12.9, 10B21 or 4135 for 10.9).")
+            val requiredRm = requiredRmMpa(pc, d, material)
+            if (material.postForgingTargetUtsMpa < requiredRm * 0.98) {
+                critical("Material cannot reach the class strength", "${material.name} reaches about ${material.postForgingTargetUtsMpa.toInt()} MPa, but ${pc.label.substringBefore(" (")} needs at least ${requiredRm.toInt()} MPa.", "Select a stronger, hardenable material (e.g. 4140/42CrMo4 for 12.9, 10B21 or 4135 for 10.9).")
             }
             if (pc == PropertyClass.CLASS_9_8 && d > 16.0) {
                 critical("Class 9.8 is limited to M16", "ISO 898-1 defines class 9.8 only for d ≤ 16 mm; M$d selected.", "Use class 8.8 or 10.9 for this size.")

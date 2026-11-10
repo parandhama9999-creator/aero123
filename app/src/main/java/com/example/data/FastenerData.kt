@@ -127,6 +127,7 @@ enum class ProductStandard(val code: String, val label: String, val category: St
     NAS1398("NAS 1398", "NAS 1398 (Structural Blind Rivet)", "Aerospace/Defense")
 }
 
+/** utsMpa is the minimum tensile strength of the class; for the aerospace ranges it is the bottom of the range. */
 enum class PropertyClass(val label: String, val defaultMatKey: String, val utsMpa: Double) {
     CLASS_4_6("Class 4.6 (400 MPa • Low Carbon)", "1008", 400.0),
     CLASS_4_8("Class 4.8 (420 MPa • Cold Formed)", "1008", 420.0),
@@ -145,10 +146,10 @@ enum class PropertyClass(val label: String, val defaultMatKey: String, val utsMp
     SAE_GRADE_8("SAE J429 Grade 8 (150 ksi / 1034 MPa)", "4140", 1034.0),
     ASTM_A574("ASTM A574 Socket Head (180 / 170 ksi)", "4140", 1172.0),
     ASTM_A193_B7("ASTM A193 B7 (125 ksi / 862 MPa)", "4140", 862.0),
-    AERO_1100("Aero Titanium (1050-1120 MPa • STA)", "TI_GR5", 1120.0),
+    AERO_1100("Aero Titanium (1050-1120 MPa • STA)", "TI_GR5", 1050.0),
     AERO_1380("Aero Superalloy (1380-1420 MPa • Aged)", "INCONEL718", 1380.0),
-    AERO_1750("Aero Ultra-High (1720–1950 MPa • 300M/MP35N)", "300M", 1950.0),
-    AERO_AL("Aerospace Aluminum (450–570 MPa • T6/T73)", "AL7075", 570.0),
+    AERO_1750("Aero Ultra-High (1720–1950 MPa • 300M/MP35N)", "300M", 1720.0),
+    AERO_AL("Aerospace Aluminum (450–570 MPa • T6/T73)", "AL7075", 450.0),
     // Strength comes from the alloy's own procurement spec (classStrength falls back to the material values)
     MATERIAL_SPEC("Per material spec (AMS / ASTM / MIL) • alloy's own strength", "A286", 0.0)
 }

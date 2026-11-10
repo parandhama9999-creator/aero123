@@ -113,4 +113,25 @@ class SelectionFilterTest {
         assertTrue(PropertyClass.MATERIAL_SPEC in classes)
         assertTrue("4340" in SelectionFilter.materials(FastenerType.NAS_CLOSE_TOL_BOLT, PropertyClass.MATERIAL_SPEC, 6.35, cat.values).map { it.key })
     }
+
+    @Test fun aerospaceRangesOfferEveryAlloyInTheLabelledRange() {
+        fun keys(pc: PropertyClass) = SelectionFilter.materials(FastenerType.NAS_CLOSE_TOL_BOLT, pc, 6.35, cat.values).map { it.key }
+        assertTrue(keys(PropertyClass.AERO_AL).containsAll(listOf("AL2024", "AL2219", "AL7075")))   // 450–570 MPa
+        assertFalse("AL6061" in keys(PropertyClass.AERO_AL))
+        assertTrue(keys(PropertyClass.AERO_1100).containsAll(listOf("TI_GR5", "TI_6242")))           // 1050–1120 MPa
+        assertTrue(keys(PropertyClass.AERO_1750).containsAll(listOf("300M", "MP35N", "H11_H13", "CUSTOM_455"))) // 1720–1950 MPa
+    }
+
+    @Test fun inchGradeUsesTheStrengthOfItsSizeBand() {
+        // SAE J429 Grade 2 is 74 ksi up to 3/4" and 60 ksi (414 MPa) above it
+        assertFalse(SelectionFilter.materialFitsClass(cat["1008"]!!, PropertyClass.SAE_GRADE_2, 12.7))
+        assertTrue(SelectionFilter.materialFitsClass(cat["1008"]!!, PropertyClass.SAE_GRADE_2, 25.4))
+    }
+
+    @Test fun standardsOwnThreadClassIsListedFirst() {
+        assertEquals("3A", SelectionFilter.threadClasses(UnitSystem.INCH, FastenerType.SHCS, ProductStandard.ASME_B18_3).first())
+        assertEquals("2A", SelectionFilter.threadClasses(UnitSystem.INCH, FastenerType.HEX_BOLT, ProductStandard.ASME_B18_2_1).first())
+        assertEquals("6g", SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.HEX_BOLT, ProductStandard.ISO_4014).first())
+        assertEquals("6H", SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.HEX_NUT, ProductStandard.ISO_4032).first())
+    }
 }

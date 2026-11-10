@@ -797,11 +797,11 @@ object CalculationEngine {
                     temperingOrAgingTimeHours = "60–90 mins if stress relieved",
                     // ISO 898-1 Table 3 hardness ranges
                     targetHardnessHrc = when (propertyClass) {
-                        PropertyClass.CLASS_4_6 -> "120–220 HV"
-                        PropertyClass.CLASS_4_8 -> "130–220 HV (≈ 71–95 HRB)"
-                        PropertyClass.CLASS_5_6 -> "155–220 HV"
-                        PropertyClass.CLASS_6_8 -> "190–250 HV"
-                        else -> "160–220 HV (≈ 82–95 HRB)"
+                        PropertyClass.CLASS_4_6 -> "67–95 HRB (120–220 HV)"
+                        PropertyClass.CLASS_4_8 -> "71–95 HRB (130–220 HV)"
+                        PropertyClass.CLASS_5_6 -> "79–95 HRB (155–220 HV)"
+                        PropertyClass.CLASS_6_8 -> "89–99.5 HRB (190–250 HV)"
+                        else -> "82–95 HRB (160–220 HV)"
                     },
                     standardReference = "ISO 898-1",
                     isDoubleTemper = false,
@@ -1005,13 +1005,17 @@ object CalculationEngine {
                     else -> base.quenchMedium.ifBlank { "Accelerated Quench Oil @ 50–70°C" }
                 }
 
-                // ISO 898-1 Table 3 core hardness for the selected class
+                // Core hardness of the selected grade: ISO 898-1 Table 3, SAE J429 Table 1, ASTM A574, ASTM A193
                 val hardness = when {
                     key == "SS410" -> "36–42 HRC"
                     propertyClass == PropertyClass.CLASS_8_8 -> if (d <= 16.0) "22–32 HRC (Class 8.8, d ≤ 16)" else "23–34 HRC (Class 8.8, d > 16)"
-                    propertyClass == PropertyClass.CLASS_9_8 -> "290–360 HV (Class 9.8, d ≤ 16)"
+                    propertyClass == PropertyClass.CLASS_9_8 -> "28–37 HRC (Class 9.8, d ≤ 16)"
                     propertyClass == PropertyClass.CLASS_10_9 -> "32–39 HRC (Class 10.9)"
                     propertyClass == PropertyClass.CLASS_12_9 -> "39–44 HRC (Class 12.9)"
+                    propertyClass == PropertyClass.SAE_GRADE_5 -> if (d <= 25.4) "25–34 HRC (SAE Grade 5, ≤ 1\")" else "19–30 HRC (SAE Grade 5, > 1\")"
+                    propertyClass == PropertyClass.SAE_GRADE_8 -> "33–39 HRC (SAE Grade 8)"
+                    propertyClass == PropertyClass.ASTM_A574 -> if (d <= 12.7) "39–45 HRC (ASTM A574, ≤ 1/2\")" else "37–45 HRC (ASTM A574, > 1/2\")"
+                    propertyClass == PropertyClass.ASTM_A193_B7 -> "35 HRC max (ASTM A193 B7)"
                     else -> base.targetHardnessHrc.ifBlank { "32–39 HRC" }
                 }
                 // Neutral hardening: furnace carbon potential matched to the steel's own carbon (ISO 898-1 forbids carburizing)

@@ -118,8 +118,7 @@ object SelectionFilter {
         }
         if (!familyOk) return false
         if (material.isAero && PokaYokeEngine.isCommercialClass(pc)) return false
-        val uts = material.postForgingTargetUtsMpa
-        if (uts < cs.rmMinMpa * 0.98 || uts < pc.utsMpa * 0.98) return false
+        if (material.postForgingTargetUtsMpa < PokaYokeEngine.requiredRmMpa(pc, dMm, material) * 0.98) return false
         if (pc in PokaYokeEngine.QT_CLASSES && family == MaterialFamily.CARBON_ALLOY_STEEL && !material.hasHighHardness) return false
         return true
     }
@@ -130,7 +129,8 @@ object SelectionFilter {
     fun threadClasses(unit: UnitSystem, type: FastenerType, standard: ProductStandard): List<String> {
         val all = ThreadClassCatalog.getOptions(unit, type.isNut)
         val allowed = PokaYokeEngine.standardThreadClasses(standard, type.isNut) ?: return all
-        return all.filter { it in allowed }.ifEmpty { all }
+        // The standard's own class first (e.g. 3A for ASME B18.3), then its classes for coated parts
+        return allowed.filter { it in all }.ifEmpty { all }
     }
 
     fun coatingFits(coating: CoatingType, type: FastenerType, material: MaterialInfo, pc: PropertyClass, dMm: Double, threadClass: String): Boolean {

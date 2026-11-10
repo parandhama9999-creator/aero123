@@ -353,13 +353,9 @@ fun FastenerSizingScreen(
                                 "$tpi TPI ($series)"
                             }
                         }
-                        val currentPitchText = if (!threaded) {
-                            NOT_APPLICABLE_THREAD
-                        } else if (selectedUnitSystem == UnitSystem.METRIC) {
-                            "$selectedPitchValue mm"
-                        } else {
-                            "${selectedPitchValue.toInt()} TPI"
-                        }
+                        val pitchPrefix = if (selectedUnitSystem == UnitSystem.METRIC) "$selectedPitchValue mm" else "${selectedPitchValue.toInt()} TPI"
+                        val currentPitchText = if (!threaded) NOT_APPLICABLE_THREAD
+                            else pitchList.firstOrNull { it.startsWith("$pitchPrefix ") } ?: pitchPrefix
 
                         SelectorDropdown(
                             label = if (selectedUnitSystem == UnitSystem.METRIC) "5. Pitch (mm)" else "5. Pitch (TPI)",
@@ -379,15 +375,17 @@ fun FastenerSizingScreen(
                             modifier = Modifier.weight(1f)
                         )
 
-                        val lengthOptions = if (selectedUnitSystem == UnitSystem.METRIC) {
-                            FastenerCatalog.METRIC_LENGTHS.map { "${it.toInt()} mm" }
-                        } else {
-                            FastenerCatalog.INCH_LENGTHS.map { "${(it / 25.4 * 10).toInt() / 10.0}\" (${it.toInt()}mm)" }
+                        fun lengthLabel(mm: Double): String {
+                            val mmText = if (mm % 1.0 == 0.0) "${mm.toInt()}" else "%.1f".format(java.util.Locale.US, mm)
+                            return if (selectedUnitSystem == UnitSystem.METRIC) "$mmText mm"
+                                else "${"%.2f".format(java.util.Locale.US, mm / 25.4).trimEnd('0').trimEnd('.')}\" ($mmText mm)"
                         }
+                        val lengthOptions = (if (selectedUnitSystem == UnitSystem.METRIC) FastenerCatalog.METRIC_LENGTHS else FastenerCatalog.INCH_LENGTHS)
+                            .map { lengthLabel(it) }
 
                         SelectorDropdown(
                             label = "6. Length (L)",
-                            selectedText = "${selectedLength.toInt()} mm",
+                            selectedText = lengthLabel(selectedLength),
                             items = lengthOptions,
                             onItemSelected = { idx ->
                                 if (selectedUnitSystem == UnitSystem.METRIC) {
@@ -449,7 +447,7 @@ fun FastenerSizingScreen(
                             Spacer(modifier = Modifier.height(2.dp))
                             SelectorDropdown(
                                 label = "",
-                                selectedText = "${currentMat.name} (km=${currentMat.km})",
+                                selectedText = "${currentMat.name} (k_m=${currentMat.km})",
                                 items = filteredMaterials.map { "${it.name} (k_m=${it.km})" },
                                 onItemSelected = { idx ->
                                     onMaterialSelected(filteredMaterials[idx].key)
@@ -1245,6 +1243,45 @@ fun FastenerSizingScreen(
                                 fontFamily = FontFamily.Monospace,
                                 color = customColors.accentSecondary
                             )
+                        }
+                        // Finished-part targets next to the wire the buyer orders. Washers are not graded by bolt class,
+                        // and a nut's hardness comes from its own nut grade, not from the mating bolt class.
+                        val part = result.fastenerType
+                        val pcSel = result.propertyClass
+                        val targetUtsText = if (part.isWasher) "${result.material.postForgingTargetUtsMpa.toInt()} MPa (Min)"
+                            else "${result.postForgingTargetUtsMpa.toInt()} MPa (Min)  •  Yield: ${result.yieldStrengthMpa.toInt()} MPa"
+                        val targetHardnessText = when {
+                            part.isWasher -> result.material.heatTreatmentSpec.targetHardnessHrc
+                            part.isNut && pcSel != null && com.example.data.PokaYokeEngine.isCommercialClass(pcSel) -> {
+                                val nutGrade = com.example.data.PokaYokeEngine.nutClassFor(pcSel)
+                                if (nutGrade.firstOrNull()?.isDigit() == true) "Per nut class $nutGrade (ISO 898-2)" else "Per nut grade: $nutGrade"
+                            }
+                            else -> result.heatTreatmentSpec.targetHardnessHrc
+                        }
+                        listOf(
+                            (if (part.isNut) "Mating Bolt Min UTS:" else "Finished Fastener Target UTS:") to targetUtsText,
+                            "Target Hardness (HRC / HRB):" to targetHardnessText
+                        ).forEach { (rowLabel, rowValue) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = rowLabel,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = customColors.textMuted
+                                )
+                                Text(
+                                    text = rowValue,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = SuccessGreen,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                                    modifier = Modifier.weight(1f).padding(start = 8.dp)
+                                )
+                            }
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 2.dp),

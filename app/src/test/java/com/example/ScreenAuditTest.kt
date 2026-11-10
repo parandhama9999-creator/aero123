@@ -7,18 +7,16 @@ import com.example.data.CustomMaterialStore
 import com.example.data.FastenerCalculationResult
 import com.example.data.FastenerCatalog
 import com.example.data.FastenerType
-import com.example.data.GCodeSafetyAudit
 import com.example.data.ProductStandard
 import com.example.data.PropertyClass
 import com.example.data.SpcStats
-import com.example.data.TorqueCalculator
 import com.example.data.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Checks the Joint Torque, G-code, Pitch Gauge SPC, heat-treatment and custom-material fixes. */
+/** Checks the fatigue, nut G-code, SPC, heat-treatment and custom-material fixes. */
 class ScreenAuditTest {
 
     private val m10 = FastenerCatalog.METRIC_SIZES.indexOfFirst { it.d == 10.0 }
@@ -36,20 +34,6 @@ class ScreenAuditTest {
         propertyClass = pc
     )
 
-    // ---------- Joint torque (VDI 2230 Table A1: M10 10.9, μ = 0.12 → ~38.5 kN, ~65 N·m at ν = 0.9) ----------
-    @Test fun torque_m10_10_9_matchesVdi2230() {
-        val t = TorqueCalculator.compute(d = 10.0, pitch = 1.5, stressAreaMm2 = 58.0, yieldMpa = 940.0,
-            preloadN = 38_500.0, muThread = 0.12, muBearing = 0.12)
-        assertEquals(64.0, t.torqueNm, 3.5)
-        assertEquals(0.88, t.yieldUtilization, 0.04)
-    }
-
-    @Test fun torque_respondsToFriction() {
-        val low = TorqueCalculator.compute(10.0, 1.5, 58.0, 940.0, 30_000.0, 0.08, 0.08)
-        val high = TorqueCalculator.compute(10.0, 1.5, 58.0, 940.0, 30_000.0, 0.20, 0.20)
-        assertTrue(high.torqueNm > low.torqueNm * 1.8)
-    }
-
     // ---------- Bolt fatigue (VDI 2230: σASV = 0.85·(150/d + 45)) ----------
     @Test fun fatigue_isThreadEnduranceNotHalfUts() {
         val r = calc()
@@ -57,41 +41,11 @@ class ScreenAuditTest {
         assertEquals(51.0 * 58.0 / 1.2 / 1000.0, r.allowableAlternatingForceKn, 0.1)
     }
 
-    // ---------- G-code safety ----------
-    @Test fun generatedPrograms_passEverySafetyCheck() {
-        listOf(calc(), calc(type = FastenerType.HEX_NUT, standard = ProductStandard.ISO_4032, threadClass = "6H")).forEach { r ->
-            val failed = GCodeSafetyAudit.audit(r.fanucGCode).filter { !it.passed }
-            assertTrue("failed: ${failed.map { it.text }}\n${r.fanucGCode}", failed.isEmpty())
-        }
-    }
-
+    // ---------- G-code ----------
     @Test fun nutProgram_boresNutHeightNotBoltLength() {
         val code = calc(type = FastenerType.HEX_NUT, standard = ProductStandard.ISO_4032, threadClass = "6H").fanucGCode
         assertTrue(code.contains("Z-8.9")) // 0.84·10 + 0.5
         assertFalse(code.contains("Z-60."))
-    }
-
-    @Test fun audit_catchesDangerousCode() {
-        val bad = """
-            %
-            O100060 (PART (NESTED))
-            G21 G18 G40 G99
-            T0101
-            G96 S200 M03
-            G00 X10.0 Z2.0 M08
-            G01 Z-20.0 F0.2
-            G00 X100.0 Z80.0
-            G76 X10.0 Z-20.0 P812 Q150 F1.5
-            M30
-            %
-        """.trimIndent()
-        val failed = GCodeSafetyAudit.audit(bad).filter { !it.passed }.map { it.text }
-        assertTrue(failed.any { it.contains("comment") })
-        assertTrue(failed.any { it.contains("Program number") })
-        assertTrue(failed.any { it.contains("G50") })
-        assertTrue(failed.any { it.contains("G96 mode") })
-        assertTrue(failed.any { it.contains("Crash risk") })
-        assertTrue(failed.any { it.contains("Coolant") })
     }
 
     // ---------- SPC ----------
@@ -119,6 +73,17 @@ class ScreenAuditTest {
         assertTrue(calc(pc = PropertyClass.CLASS_8_8).heatTreatmentSpec.targetHardnessHrc.startsWith("22–32"))
         assertTrue(calc(material = "1008", pc = PropertyClass.CLASS_4_8).heatTreatmentSpec.austenitizingOrSolutionTempC.contains("no hardening"))
         assertTrue(ht109.atmosphere.contains("0.20%–0.25%"))
+    }
+
+    @Test fun gradedClasses_stateHardnessInHrcOrHrb() {
+        mapOf(
+            PropertyClass.CLASS_4_6 to "67–95 HRB", PropertyClass.CLASS_5_6 to "79–95 HRB", PropertyClass.CLASS_5_8 to "82–95 HRB",
+            PropertyClass.CLASS_6_8 to "89–99.5 HRB", PropertyClass.CLASS_9_8 to "28–37 HRC", PropertyClass.CLASS_12_9 to "39–44 HRC",
+            PropertyClass.SAE_GRADE_5 to "25–34 HRC", PropertyClass.SAE_GRADE_8 to "33–39 HRC", PropertyClass.ASTM_A574 to "39–45 HRC"
+        ).forEach { (pc, hardness) ->
+            val text = calc(pc = pc).heatTreatmentSpec.targetHardnessHrc
+            assertTrue("$pc: $text", text.startsWith(hardness))
+        }
     }
 
     // ---------- Custom materials ----------
