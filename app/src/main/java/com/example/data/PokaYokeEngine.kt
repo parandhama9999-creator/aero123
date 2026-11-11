@@ -215,7 +215,8 @@ object PokaYokeEngine {
             FastenerType.SOCKET_BUTTON -> ProductStandard.ISO_7380
             FastenerType.SOCKET_SET -> ProductStandard.ISO_4026
             FastenerType.FLANGE_BOLT -> ProductStandard.ISO_1665
-            FastenerType.TWELVE_POINT -> ProductStandard.NAS624
+            // Metric aerospace bolts: the EN (MJ-thread) standard; NAS 624 / NAS 6203 are inch
+            FastenerType.TWELVE_POINT -> ProductStandard.EN2882
             FastenerType.CARRIAGE_BOLT -> ProductStandard.DIN_603
             FastenerType.T_BOLT -> ProductStandard.DIN_186
             FastenerType.HEAVY_HEX_BOLT -> ProductStandard.ASTM_A325
@@ -237,7 +238,7 @@ object PokaYokeEngine {
             FastenerType.WHEEL_BOLT -> ProductStandard.DIN_74361
             FastenerType.WHEEL_NUT -> ProductStandard.DIN_74361_NUT
             FastenerType.BANJO_BOLT -> ProductStandard.DIN_7623
-            FastenerType.NAS_CLOSE_TOL_BOLT -> ProductStandard.NAS6203
+            FastenerType.NAS_CLOSE_TOL_BOLT -> ProductStandard.EN2882
             FastenerType.HI_LOK_PIN -> ProductStandard.HI_LOK
             FastenerType.HI_LOK_COLLAR -> ProductStandard.HI_LOK_COLLAR_STD
             FastenerType.TAPER_LOK -> ProductStandard.TAPER_LOK_STD
@@ -248,6 +249,16 @@ object PokaYokeEngine {
             FastenerType.SOLID_RIVET -> ProductStandard.MS20470
             FastenerType.BLIND_RIVET -> ProductStandard.NAS1398
         }
+    }
+
+    /**
+     * The length rules of [check]: a bolt or screw needs L ≥ 2d (set screws excepted), and a partially threaded
+     * hex bolt needs L ≥ b + d so a plain shank remains. Nuts, washers and rivets (sized by grip) are not limited.
+     */
+    fun isLengthTooShort(type: FastenerType, unit: UnitSystem, d: Double, lengthMm: Double): Boolean {
+        if (type.isNut || type.isWasher || type.isUnthreaded) return false
+        if (type != FastenerType.SOCKET_SET && lengthMm < 2.0 * d) return true
+        return type == FastenerType.HEX_BOLT && lengthMm < threadLengthB(type, unit, d, lengthMm) + d
     }
 
     /** Thread length b for partially threaded bolts (ISO 4014 / ISO 4762 / ASME B18.2.1). */
@@ -495,13 +506,15 @@ object PokaYokeEngine {
         } else if (!isWasher && headDims != null && !headDims.isTable) {
             warn("Head/nut size estimated", "M$d is outside the ISO/ASME dimension tables, so head and nut dimensions are proportional estimates.", "Take head dimensions from the drawing before releasing weights, tooling or G-code.")
         }
-        if (!isNut && !isWasher && type == FastenerType.HEX_BOLT && unit == UnitSystem.METRIC) {
+        if (!isNut && !isWasher && type == FastenerType.HEX_BOLT) {
             val b = threadLengthB(type, unit, d, lengthMm)
             if (lengthMm < b + d) {
-                warn("Too short for a partially threaded bolt", "ISO 4014 needs L ≥ b + plain shank; at L = ${lengthMm.toInt()} mm the thread length b = ${b.toInt()} mm leaves almost no shank.", "Use ISO 4017 (fully threaded) for this length.")
+                val std = if (unit == UnitSystem.METRIC) "ISO 4014" else "ASME B18.2.1"
+                val full = if (unit == UnitSystem.METRIC) "ISO 4017 (fully threaded)" else "a fully threaded hex tap bolt"
+                warn("Too short for a partially threaded bolt", "$std needs L ≥ b + plain shank; at L = ${lengthMm.toInt()} mm the thread length b = ${b.toInt()} mm leaves almost no shank.", "Use $full for this length.")
             }
         }
-        if (!isNut && !isWasher && lengthMm > 0 && lengthMm < 2.0 * d && type != FastenerType.SOCKET_SET) {
+        if (!isNut && !isWasher && !type.isUnthreaded && lengthMm > 0 && lengthMm < 2.0 * d && type != FastenerType.SOCKET_SET) {
             warn("Very short length for diameter", "L = ${lengthMm} mm is less than 2 × d (${(2 * d)} mm).", "Check the head can be formed and the thread fully engaged.")
         }
         if (!material.isAero && d < 1.6 && !isWasher) {

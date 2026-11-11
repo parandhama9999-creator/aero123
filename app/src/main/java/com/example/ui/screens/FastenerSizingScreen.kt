@@ -375,25 +375,12 @@ fun FastenerSizingScreen(
                             modifier = Modifier.weight(1f)
                         )
 
-                        fun lengthLabel(mm: Double): String {
-                            val mmText = if (mm % 1.0 == 0.0) "${mm.toInt()}" else "%.1f".format(java.util.Locale.US, mm)
-                            return if (selectedUnitSystem == UnitSystem.METRIC) "$mmText mm"
-                                else "${"%.2f".format(java.util.Locale.US, mm / 25.4).trimEnd('0').trimEnd('.')}\" ($mmText mm)"
-                        }
-                        val lengthOptions = (if (selectedUnitSystem == UnitSystem.METRIC) FastenerCatalog.METRIC_LENGTHS else FastenerCatalog.INCH_LENGTHS)
-                            .map { lengthLabel(it) }
-
+                        val validLengths = SelectionFilter.lengths(selectedFastenerType, selectedUnitSystem, result.nominalDiaMm)
                         SelectorDropdown(
                             label = "6. Length (L)",
-                            selectedText = lengthLabel(selectedLength),
-                            items = lengthOptions,
-                            onItemSelected = { idx ->
-                                if (selectedUnitSystem == UnitSystem.METRIC) {
-                                    onLengthSelected(FastenerCatalog.METRIC_LENGTHS[idx])
-                                } else {
-                                    onLengthSelected(FastenerCatalog.INCH_LENGTHS[idx])
-                                }
-                            },
+                            selectedText = lengthLabel(selectedUnitSystem, selectedLength),
+                            items = validLengths.map { lengthLabel(selectedUnitSystem, it) },
+                            onItemSelected = { idx -> onLengthSelected(validLengths[idx]) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1372,6 +1359,23 @@ fun FastenerSizingScreen(
             }
         }
     }
+}
+
+/** "60 mm", or for inch parts the fraction the standard uses: "1-1/4\" (31.8 mm)". */
+internal fun lengthLabel(unit: UnitSystem, mm: Double): String {
+    val mmText = if (mm % 1.0 == 0.0) "${mm.toInt()}" else "%.1f".format(java.util.Locale.US, mm)
+    if (unit == UnitSystem.METRIC) return "$mmText mm"
+    val sixteenths = Math.round(mm / 25.4 * 16).toInt()
+    val whole = sixteenths / 16
+    var num = sixteenths % 16
+    var den = 16
+    while (num > 0 && num % 2 == 0) { num /= 2; den /= 2 }
+    val inch = when {
+        num == 0 -> "$whole"
+        whole == 0 -> "$num/$den"
+        else -> "$whole-$num/$den"
+    }
+    return "$inch\" ($mmText mm)"
 }
 
 private const val NOT_APPLICABLE_THREAD = "N/A — no thread"

@@ -263,7 +263,7 @@ fun AeroFastApp() {
     // Keep every Sizing selector consistent with the ones above it, whichever path changed them
     // (dropdowns, alloy catalogue, drawing scan or a restored session)
     LaunchedEffect(
-        selectedFastenerType, selectedUnitSystem, selectedStandard, selectedSizeIndex, selectedPropClass,
+        selectedFastenerType, selectedUnitSystem, selectedStandard, selectedSizeIndex, selectedLength, selectedPropClass,
         selectedMaterialKey, selectedThreadClass, selectedCoating, appliedExtractedSpec, FastenerCatalog.MATERIALS.size
     ) {
         val current = SelectionFilter.Selection(
@@ -277,12 +277,17 @@ fun AeroFastApp() {
             coating = selectedCoating
         )
         val fixed = SelectionFilter.normalize(current, FastenerCatalog.MATERIALS)
-        if (fixed != current) {
+        // A drawing's length is kept as scanned; otherwise the length snaps to the catalogue for this diameter
+        val length = if (appliedExtractedSpec != null) selectedLength
+            else SelectionFilter.nearestLength(selectedFastenerType, selectedUnitSystem, current.dMm, selectedLength)
+        val lengthChanged = kotlin.math.abs(length - selectedLength) > 1e-6
+        if (fixed != current || lengthChanged) {
             selectedStandard = fixed.standard
             selectedPropClass = fixed.propertyClass
             selectedMaterialKey = fixed.materialKey
             selectedThreadClass = fixed.threadClass
             selectedCoating = fixed.coating
+            if (lengthChanged) selectedLength = length
             triggerFirebaseSync()
         }
     }

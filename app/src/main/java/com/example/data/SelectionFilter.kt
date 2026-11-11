@@ -126,6 +126,19 @@ object SelectionFilter {
     fun materials(type: FastenerType, pc: PropertyClass, dMm: Double, all: Collection<MaterialInfo>): List<MaterialInfo> =
         if (!usesPropertyClass(type)) all.toList() else all.filter { materialFitsClass(it, pc, dMm) }
 
+    /**
+     * Catalogue lengths a product of this diameter is made in, by the gate's own length rules
+     * ([PokaYokeEngine.isLengthTooShort]). The longest length is kept when nothing fits, so the gate can say why.
+     */
+    fun lengths(type: FastenerType, unit: UnitSystem, dMm: Double): List<Double> {
+        val all = if (unit == UnitSystem.METRIC) FastenerCatalog.METRIC_LENGTHS else FastenerCatalog.INCH_LENGTHS
+        return all.filter { !PokaYokeEngine.isLengthTooShort(type, unit, dMm, it) }.ifEmpty { listOf(all.last()) }
+    }
+
+    /** The offered length closest to a value (a saved session or a cleared drawing scan). */
+    fun nearestLength(type: FastenerType, unit: UnitSystem, dMm: Double, lengthMm: Double): Double =
+        lengths(type, unit, dMm).minByOrNull { kotlin.math.abs(it - lengthMm) }!!
+
     fun threadClasses(unit: UnitSystem, type: FastenerType, standard: ProductStandard): List<String> {
         val all = ThreadClassCatalog.getOptions(unit, type.isNut)
         val allowed = PokaYokeEngine.standardThreadClasses(standard, type.isNut)

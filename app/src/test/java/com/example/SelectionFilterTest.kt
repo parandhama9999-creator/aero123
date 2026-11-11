@@ -176,4 +176,54 @@ class SelectionFilterTest {
         // DIN 7500 also sets no class, but it is not aerospace: it keeps the commercial order
         assertEquals("6g", SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.THREAD_FORMING_SCREW, ProductStandard.DIN_7500).first())
     }
+
+    @Test fun everyOfferedLengthPassesTheGateLengthRules() {
+        for (type in FastenerType.values()) for (unit in UnitSystem.values()) {
+            val count = if (unit == UnitSystem.METRIC) FastenerCatalog.METRIC_SIZES.size else FastenerCatalog.INCH_SIZES.size
+            for (i in 0 until count) {
+                val d = FastenerCatalog.diameterMm(unit, i)
+                val lengths = SelectionFilter.lengths(type, unit, d)
+                assertTrue("$type $unit d=$d: no length offered", lengths.isNotEmpty())
+                for (l in lengths) assertFalse("$type $unit d=$d L=$l is too short", PokaYokeEngine.isLengthTooShort(type, unit, d, l))
+                // the gate agrees with the helper on every offered length
+                val std = PokaYokeEngine.defaultStandard(type, unit)
+                val pitch = if (unit == UnitSystem.METRIC) FastenerCatalog.METRIC_SIZES[i].pitches.first() else FastenerCatalog.INCH_SIZES[i].tpis.first().toDouble()
+                val tc = SelectionFilter.threadClasses(unit, type, std).first()
+                for (l in listOf(lengths.first(), lengths.last())) {
+                    val issues = PokaYokeEngine.check(type, unit, std, i, pitch, d, l, tc, PropertyClass.MATERIAL_SPEC, cat["A286"]!!, CoatingType.AERO_IVD, 100,
+                        0.0, 0.0, 100.0, false, 50.0, null)
+                    assertFalse("$type $unit d=$d L=$l: ${issues.map { it.title }}", issues.any { it.title == "Very short length for diameter" || it.title == "Too short for a partially threaded bolt" })
+                }
+            }
+        }
+    }
+
+    @Test fun lengthListFollowsTheStandardsLengthRules() {
+        // ISO 4014 M64: b = 2d + 25 above 200 mm, so the shortest partially threaded bolt is 220 mm; M64 × 6 is gone
+        val m64 = SelectionFilter.lengths(FastenerType.HEX_BOLT, UnitSystem.METRIC, 64.0)
+        assertEquals(220.0, m64.first(), 0.0)
+        assertFalse(6.0 in m64)
+        // fully threaded M64 (ISO 4017) only needs 2d
+        assertEquals(130.0, SelectionFilter.lengths(FastenerType.HEX_BOLT_FULL, UnitSystem.METRIC, 64.0).first(), 0.0)
+        // M10 hex bolt: b + d = 36, so 40 mm is the first ISO 4014 length
+        assertEquals(40.0, SelectionFilter.lengths(FastenerType.HEX_BOLT, UnitSystem.METRIC, 10.0).first(), 0.0)
+        // set screws may be shorter than 2d; nuts, washers and rivets keep the whole list
+        assertTrue(SelectionFilter.lengths(FastenerType.SOCKET_SET, UnitSystem.METRIC, 10.0).first() < 20.0)
+        assertEquals(FastenerCatalog.METRIC_LENGTHS, SelectionFilter.lengths(FastenerType.HEX_NUT, UnitSystem.METRIC, 10.0))
+        assertEquals(FastenerCatalog.INCH_LENGTHS, SelectionFilter.lengths(FastenerType.SOLID_RIVET, UnitSystem.INCH, 3.175))
+        // a saved 75 mm (not an ISO length) snaps to the nearest offered length
+        assertEquals(70.0, SelectionFilter.nearestLength(FastenerType.HEX_BOLT, UnitSystem.METRIC, 10.0, 75.0), 0.0)
+        // the app's own defaults are standard lengths
+        assertTrue(60.0 in SelectionFilter.lengths(FastenerType.HEX_BOLT, UnitSystem.METRIC, 10.0))
+        assertTrue(SelectionFilter.lengths(FastenerType.HEX_BOLT, UnitSystem.INCH, 9.525).any { kotlin.math.abs(it - 50.8) < 1e-6 })
+    }
+
+    @Test fun metricAerospaceBoltsDefaultToTheMetricStandard() {
+        assertEquals(ProductStandard.EN2882, PokaYokeEngine.defaultStandard(FastenerType.TWELVE_POINT, UnitSystem.METRIC))
+        assertEquals(ProductStandard.EN2882, PokaYokeEngine.defaultStandard(FastenerType.NAS_CLOSE_TOL_BOLT, UnitSystem.METRIC))
+        assertEquals(ProductStandard.NAS624, PokaYokeEngine.defaultStandard(FastenerType.TWELVE_POINT, UnitSystem.INCH))
+        assertEquals(ProductStandard.NAS6203, PokaYokeEngine.defaultStandard(FastenerType.NAS_CLOSE_TOL_BOLT, UnitSystem.INCH))
+        // the inch NAS number is no longer offered on a metric thread
+        assertFalse(ProductStandard.NAS624 in SelectionFilter.standards(FastenerType.TWELVE_POINT, UnitSystem.METRIC))
+    }
 }

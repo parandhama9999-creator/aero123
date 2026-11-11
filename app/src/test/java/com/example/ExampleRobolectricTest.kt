@@ -26,7 +26,7 @@ class ExampleRobolectricTest {
       fastenerType = com.example.data.FastenerType.HEX_BOLT,
       unitSystem = com.example.data.UnitSystem.METRIC,
       standard = com.example.data.ProductStandard.ISO_4014,
-      nominalSizeIndex = 11, // M10
+      nominalSizeIndex = com.example.data.FastenerCatalog.METRIC_SIZES.indexOfFirst { it.d == 10.0 },
       pitchValue = 1.5,
       lengthMm = 60.0,
       threadClass = "6g",
