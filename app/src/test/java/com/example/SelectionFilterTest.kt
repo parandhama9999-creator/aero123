@@ -33,7 +33,7 @@ class SelectionFilterTest {
                         combos++
                         val issues = PokaYokeEngine.check(type, unit, std, idx, pitch, dd, 4 * dd + 20, tc, pc, m, c, 100,
                             0.0, 0.0, 100.0, false, 50.0, null)
-                        val bad = issues.filter { it.severity == PokaYokeSeverity.CRITICAL || it.title.startsWith("Thread class not per") || it.severity == PokaYokeSeverity.WARNING && it.title in filteredWarnings && !(it.title == "Inch standard with metric thread" && std == PokaYokeEngine.defaultStandard(type, unit)) }
+                        val bad = issues.filter { it.severity == PokaYokeSeverity.CRITICAL || it.title.startsWith("Thread class not per") || it.severity == PokaYokeSeverity.WARNING && it.title in filteredWarnings && !(it.title == "Inch standard with metric thread" && (std == PokaYokeEngine.defaultStandard(type, unit) || PokaYokeEngine.hasMetricEdition(std))) }
                         if (bad.isNotEmpty()) failures += "$type $unit d=$dd ${std.code} $pc ${m.key} $tc ${c.name}: ${bad.map { it.title }.distinct()}"
                     }
                 }
@@ -133,5 +133,47 @@ class SelectionFilterTest {
         assertEquals("2A", SelectionFilter.threadClasses(UnitSystem.INCH, FastenerType.HEX_BOLT, ProductStandard.ASME_B18_2_1).first())
         assertEquals("6g", SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.HEX_BOLT, ProductStandard.ISO_4014).first())
         assertEquals("6H", SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.HEX_NUT, ProductStandard.ISO_4032).first())
+    }
+
+    @Test fun everyClassDefaultMaterialSatisfiesThatClass() {
+        for (pc in PropertyClass.values()) {
+            val m = cat[pc.defaultMatKey]
+            assertNotNull("${pc.name}: default material ${pc.defaultMatKey} is not in the catalogue", m)
+            assertTrue("${pc.name}: default ${pc.defaultMatKey} does not fit its own class", SelectionFilter.materialFitsClass(m!!, pc, 10.0))
+        }
+    }
+
+    @Test fun phosphateAndBlackOxideNeedTheRightSubstrate() {
+        fun coats(key: String, pc: PropertyClass) =
+            SelectionFilter.coatings(FastenerType.HEX_BOLT, cat[key]!!, pc, 10.0, "6g").toSet()
+        for ((key, pc) in listOf("SS304" to PropertyClass.A2_70, "TI_GR5" to PropertyClass.AERO_1100,
+            "AL7075" to PropertyClass.AERO_AL, "INCONEL718" to PropertyClass.AERO_1380)) {
+            val c = coats(key, pc)
+            assertFalse("$key offers zinc phosphate", CoatingType.PHOSPHATE in c)
+            assertFalse("$key offers manganese phosphate", CoatingType.PHOSPHATE_MN in c)
+            assertTrue("$key has no coating left", c.isNotEmpty())
+        }
+        assertFalse(CoatingType.BLACK_OXIDE in coats("AL7075", PropertyClass.AERO_AL))
+        assertFalse(CoatingType.BLACK_OXIDE in coats("TI_GR5", PropertyClass.AERO_1100))
+        // steel keeps both
+        val steel = coats("10B21", PropertyClass.CLASS_10_9)
+        assertTrue(CoatingType.PHOSPHATE in steel && CoatingType.BLACK_OXIDE in steel)
+    }
+
+    @Test fun astmSpecsWithAMetricEditionAreOfferedInBothUnits() {
+        val metric = SelectionFilter.standards(FastenerType.HEAVY_HEX_BOLT, UnitSystem.METRIC)
+        assertTrue("A325M missing: $metric", ProductStandard.ASTM_A325 in metric)
+        assertTrue("A490M missing: $metric", ProductStandard.ASTM_A490 in metric)
+        assertTrue(ProductStandard.ASTM_F436 in SelectionFilter.standards(FastenerType.FLAT_WASHER, UnitSystem.METRIC))
+        // a spec with no metric edition stays out of the metric list
+        assertFalse(ProductStandard.ASME_B18_2_1 in SelectionFilter.standards(FastenerType.HEX_BOLT, UnitSystem.METRIC))
+    }
+
+    @Test fun aerospaceStandardsLeadWithTheUnjOrMjThread() {
+        assertEquals("3A-UNJ", SelectionFilter.threadClasses(UnitSystem.INCH, FastenerType.NAS_CLOSE_TOL_BOLT, ProductStandard.NAS6203).first())
+        assertEquals("3B-UNJ", SelectionFilter.threadClasses(UnitSystem.INCH, FastenerType.AERO_LOCK_NUT, ProductStandard.MS21042).first())
+        assertTrue(SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.NAS_CLOSE_TOL_BOLT, ProductStandard.EN2882).first().endsWith("-MJ"))
+        // DIN 7500 also sets no class, but it is not aerospace: it keeps the commercial order
+        assertEquals("6g", SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.THREAD_FORMING_SCREW, ProductStandard.DIN_7500).first())
     }
 }

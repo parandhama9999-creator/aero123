@@ -128,7 +128,11 @@ object SelectionFilter {
 
     fun threadClasses(unit: UnitSystem, type: FastenerType, standard: ProductStandard): List<String> {
         val all = ThreadClassCatalog.getOptions(unit, type.isNut)
-        val allowed = PokaYokeEngine.standardThreadClasses(standard, type.isNut) ?: return all
+        val allowed = PokaYokeEngine.standardThreadClasses(standard, type.isNut)
+            // Aerospace standards set no class, but are written for the controlled-root UNJ (ASME B1.15)
+            // and MJ (ISO 5855) profiles, so those come first
+            ?: return if (standard.category == "Aerospace/Defense")
+                all.sortedByDescending { it.contains("UNJ") || it.endsWith("-MJ") } else all
         // The standard's own class first (e.g. 3A for ASME B18.3), then its classes for coated parts
         return allowed.filter { it in all }.ifEmpty { all }
     }
@@ -142,6 +146,8 @@ object SelectionFilter {
         val is129 = usesPropertyClass(type) && pc == PropertyClass.CLASS_12_9
         return when {
             coating.name.startsWith("PASSIVATION") && family != MaterialFamily.STAINLESS -> false
+            coating in PokaYokeEngine.PHOSPHATE_COATINGS && family != MaterialFamily.CARBON_ALLOY_STEEL -> false
+            coating == CoatingType.BLACK_OXIDE && (family == MaterialFamily.ALUMINUM || family == MaterialFamily.TITANIUM) -> false
             family == MaterialFamily.TITANIUM && (isCadmium || coating.isElectroplating) -> false
             coating in PokaYokeEngine.ALUMINIUM_ONLY_COATINGS && family != MaterialFamily.ALUMINUM -> false
             coating == CoatingType.TI_ANODIZE && family != MaterialFamily.TITANIUM -> false

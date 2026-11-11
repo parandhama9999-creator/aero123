@@ -133,7 +133,7 @@ enum class PropertyClass(val label: String, val defaultMatKey: String, val utsMp
     CLASS_4_8("Class 4.8 (420 MPa • Cold Formed)", "1008", 420.0),
     CLASS_5_6("Class 5.6 (500 MPa • Low / Medium Carbon)", "1018", 500.0),
     CLASS_5_8("Class 5.8 (520 MPa • Stress Relieved)", "1018", 520.0),
-    CLASS_6_8("Class 6.8 (600 MPa • Cold Formed)", "1018", 600.0),
+    CLASS_6_8("Class 6.8 (600 MPa • Cold Formed)", "20MNB4", 600.0),
     CLASS_8_8("Class 8.8 (830 MPa • Q&T Medium C)", "10B21", 830.0),
     CLASS_9_8("Class 9.8 (900 MPa • Q&T, d ≤ 16)", "10B21", 900.0),
     CLASS_10_9("Class 10.9 (1040 MPa • Q&T Alloy)", "10B21", 1040.0),

@@ -46,7 +46,17 @@ object PokaYokeEngine {
     }
 
     /** NAS / MS aerospace standards are written for inch threads; EN aerospace standards for metric. */
-    fun isInchOnlyStandard(s: ProductStandard) = s.category == "ASME/Imperial" || s.code.startsWith("NAS") || s.code.startsWith("MS")
+    fun isInchStandard(s: ProductStandard) = s.category == "ASME/Imperial" || s.code.startsWith("NAS") || s.code.startsWith("MS")
+
+    /** ASTM specs issued in both unit systems (A325M / A490M / A193M / A194M / F436M), so they also fit a metric thread. */
+    fun hasMetricEdition(s: ProductStandard) = s in METRIC_EDITION_ASTM
+
+    private val METRIC_EDITION_ASTM = setOf(
+        ProductStandard.ASTM_A325, ProductStandard.ASTM_A490, ProductStandard.ASTM_A193,
+        ProductStandard.ASTM_A194, ProductStandard.ASTM_F436
+    )
+
+    fun isInchOnlyStandard(s: ProductStandard) = isInchStandard(s) && !hasMetricEdition(s)
     fun isMetricOnlyStandard(s: ProductStandard) = s.category == "ISO/DIN Metric" || s.code.startsWith("EN ")
 
     /**
@@ -128,6 +138,7 @@ object PokaYokeEngine {
         PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574, PropertyClass.ASTM_A193_B7
     )
     internal val ALUMINIUM_ONLY_COATINGS = setOf(CoatingType.ANODIZE_II, CoatingType.HARD_ANODIZE, CoatingType.CHEM_FILM)
+    internal val PHOSPHATE_COATINGS = setOf(CoatingType.PHOSPHATE, CoatingType.PHOSPHATE_MN)
 
     /** ISO 898-2 nut property class that mates with a bolt class (ISO 3506-2 / aerospace spec for others). */
     fun nutClassFor(pc: PropertyClass): String = when (pc) {
@@ -301,7 +312,7 @@ object PokaYokeEngine {
         if (unit == UnitSystem.INCH && isMetricOnlyStandard(standard)) {
             critical("Metric standard with inch thread", "${standard.code} defines metric fasteners only.", "Use an ASME/ASTM standard for UNC/UNF threads, or switch to Metric.")
         }
-        if (unit == UnitSystem.METRIC && isInchOnlyStandard(standard)) {
+        if (unit == UnitSystem.METRIC && isInchStandard(standard)) {
             warn("Inch standard with metric thread", "${standard.code} is an inch standard; the metric version has its own number (e.g. ASTM A325M / F3125M).", "Confirm the metric edition of the standard on the drawing.")
         }
 
@@ -427,6 +438,15 @@ object PokaYokeEngine {
         }
         if (coating == CoatingType.TI_ANODIZE && family != MaterialFamily.TITANIUM) {
             critical("Titanium anodize needs a titanium alloy", "${material.name} is not titanium.", "Select a titanium alloy or a coating made for this material.")
+        }
+        // Phosphating (ISO 9717 / DIN 50942) grows a zinc- or manganese-phosphate crystal on free iron: there is none
+        // in stainless, titanium, aluminium, nickel or copper alloys, so no coating forms.
+        if (coating in PHOSPHATE_COATINGS && family != MaterialFamily.CARBON_ALLOY_STEEL) {
+            critical("Phosphating needs carbon or alloy steel", "${coating.label.substringBefore(" (")} converts free iron in the surface; ${material.name} is ${family.name.lowercase().replace('_', ' ')} and will not take the coating.", "Use passivation (stainless), anodize (titanium / aluminium) or a zinc-flake / dry-film coating.")
+        }
+        // Black oxide is the magnetite conversion of a ferrous surface (and a sulphide finish on copper alloys)
+        if (coating == CoatingType.BLACK_OXIDE && (family == MaterialFamily.ALUMINUM || family == MaterialFamily.TITANIUM)) {
+            critical("Black oxide needs a ferrous or copper alloy", "${material.name} forms no black oxide: there is no iron to convert to magnetite.", "Use black anodize (MIL-PRF-8625 Type II, dyed) for aluminium, or a dry-film lubricant for titanium.")
         }
 
         // ---- 8. Coating thickness vs thread allowance (ISO 4042: coating adds 4 × t to the pitch diameter) ----
