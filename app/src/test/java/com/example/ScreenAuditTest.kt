@@ -86,6 +86,30 @@ class ScreenAuditTest {
         }
     }
 
+    @Test fun nonSteelAlloys_getNoSteelFurnaceValues() {
+        // aluminium must never see the steel pre-heat (600 °C is above 7075's melting range) or endothermic gas
+        for ((m, pc) in listOf("AL7075" to PropertyClass.AERO_AL, "AL2024" to PropertyClass.AERO_AL, "TI_GR1" to PropertyClass.MATERIAL_SPEC, "BRASS_C360" to PropertyClass.MATERIAL_SPEC)) {
+            val ht = calc(material = m, pc = pc).heatTreatmentSpec
+            assertFalse("$m pre-heat ${ht.preheatTempC}", ht.preheatTempC.contains("600") || ht.preheatTempC.contains("650"))
+            assertFalse("$m atmosphere ${ht.atmosphere}", ht.atmosphere.contains("Endothermic", ignoreCase = true))
+            assertFalse("$m quench ${ht.quenchDetails}", ht.quenchDetails.contains("Oil", ignoreCase = true))
+        }
+        // Q&T steel keeps its explicit furnace values
+        val steel = calc().heatTreatmentSpec
+        assertTrue(steel.preheatTempC.startsWith("600"))
+        assertTrue(steel.atmosphere.contains("Endothermic"))
+    }
+
+    @Test fun feasibility_usesTheAlloysOwnCatalogueHardness() {
+        val cat = FastenerCatalog.MATERIALS
+        assertEquals(56.0, com.example.ui.screens.maxCatalogueHrc(cat["300M"]!!)!!, 0.0)
+        assertEquals(44.0, com.example.ui.screens.maxCatalogueHrc(cat["17_4PH"]!!)!!, 0.0)      // was capped at 32 as "stainless"
+        assertEquals(28.0, com.example.ui.screens.maxCatalogueHrc(cat["SS304"]!!)!!, 0.0)
+        assertEquals(null, com.example.ui.screens.maxCatalogueHrc(cat["BRASS_C360"]!!))        // "Brass" contains "ss": was treated as stainless
+        assertEquals(null, com.example.ui.screens.maxCatalogueHrc(cat["AL7075"]!!))            // HRB only: below the HRC scale
+        assertEquals(null, com.example.ui.screens.maxCatalogueHrc(cat["1008"]!!))
+    }
+
     // ---------- Custom materials ----------
     @Test fun customMaterial_validation() {
         val ok = CustomMaterialInput("MY_ALLOY", "My alloy", 1100.0, 950.0, 7.85, 0.02, 100.0, false, "", "AMS 1234")

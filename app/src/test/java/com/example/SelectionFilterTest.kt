@@ -4,218 +4,99 @@ import com.example.data.*
 import org.junit.Assert.*
 import org.junit.Test
 
+/** The Sizing selectors list every option, so the release gate is what must catch a wrong combination. */
 class SelectionFilterTest {
     private val cat = FastenerCatalog.MATERIALS
 
-    private fun sizes(unit: UnitSystem) = if (unit == UnitSystem.METRIC) listOf(3.0, 6.0, 10.0, 20.0, 36.0) else listOf(6.35, 9.525, 19.05, 25.4)
-
-    private val filteredWarnings = listOf("Zinc coating on corrosion-resistant alloy", "Zinc/cadmium on aluminium fastener", "Cadmium is restricted",
-        "Hot-dip galvanizing below M8", "Commercial class on an aerospace fastener", "Aerospace alloy on a commercial class", "Titanium class with non-titanium material", "SAE J429 grade on a metric thread", "Inch standard with metric thread")
-
-    @Test fun everyOfferedCombinationPassesTheGate() {
-        var combos = 0
-        val failures = mutableListOf<String>()
-        for (type in FastenerType.values()) for (unit in UnitSystem.values()) for (d in sizes(unit)) {
-            val idx = FastenerCatalog.sizeIndexFor(unit, d)
-            val dd = FastenerCatalog.diameterMm(unit, idx)
-            val pitch = if (unit == UnitSystem.METRIC) FastenerCatalog.METRIC_SIZES[idx].pitches.first() else FastenerCatalog.INCH_SIZES[idx].tpis.first().toDouble()
-            val stds = SelectionFilter.standards(type, unit)
-            assertTrue("$type $unit no standard", stds.isNotEmpty())
-            val pcs = SelectionFilter.propertyClasses(type, unit, dd)
-            assertTrue("$type $unit no class", pcs.isNotEmpty())
-            for (std in stds) for (pc in pcs) {
-                val mats = SelectionFilter.materials(type, pc, dd, cat.values)
-                if (mats.isEmpty()) { failures += "EMPTY materials: $type $unit d=$dd $pc"; continue }
-                for (m in mats) for (tc in SelectionFilter.threadClasses(unit, type, std)) {
-                    val coats = SelectionFilter.coatings(type, m, pc, dd, tc)
-                    if (coats.isEmpty()) { failures += "EMPTY coatings: $type $pc ${m.key} $tc"; continue }
-                    for (c in coats) {
-                        combos++
-                        val issues = PokaYokeEngine.check(type, unit, std, idx, pitch, dd, 4 * dd + 20, tc, pc, m, c, 100,
-                            0.0, 0.0, 100.0, false, 50.0, null)
-                        val bad = issues.filter { it.severity == PokaYokeSeverity.CRITICAL || it.title.startsWith("Thread class not per") || it.severity == PokaYokeSeverity.WARNING && it.title in filteredWarnings && !(it.title == "Inch standard with metric thread" && (std == PokaYokeEngine.defaultStandard(type, unit) || PokaYokeEngine.hasMetricEdition(std))) }
-                        if (bad.isNotEmpty()) failures += "$type $unit d=$dd ${std.code} $pc ${m.key} $tc ${c.name}: ${bad.map { it.title }.distinct()}"
-                    }
-                }
-            }
-        }
-        println("combos checked: $combos")
-        val grouped = failures.groupBy { it.substringAfter(": ", it).take(120) }
-        grouped.entries.take(40).forEach { println("${it.value.size}x ${it.key}\n    e.g. ${it.value.first()}") }
-        assertTrue("${failures.size} failures", failures.isEmpty())
+    private fun gate(
+        type: FastenerType = FastenerType.HEX_BOLT, unit: UnitSystem = UnitSystem.METRIC,
+        std: ProductStandard = PokaYokeEngine.defaultStandard(type, unit), d: Double = 10.0, length: Double = 60.0,
+        pc: PropertyClass? = PropertyClass.CLASS_10_9, material: String = "10B21", coating: CoatingType = CoatingType.GEOMET,
+        threadClass: String = SelectionFilter.threadClasses(unit, type, std).first()
+    ): List<PokaYokeIssue> {
+        val idx = FastenerCatalog.sizeIndexFor(unit, d)
+        val pitch = if (unit == UnitSystem.METRIC) FastenerCatalog.METRIC_SIZES[idx].pitches.first() else FastenerCatalog.INCH_SIZES[idx].tpis.first().toDouble()
+        return PokaYokeEngine.check(type, unit, std, idx, pitch, FastenerCatalog.diameterMm(unit, idx), length, threadClass, pc, cat[material]!!, coating, 100,
+            0.0, 0.0, 100.0, false, 50.0, null)
     }
+    private fun List<PokaYokeIssue>.critical() = filter { it.severity == PokaYokeSeverity.CRITICAL }.map { it.title }
+    private fun List<PokaYokeIssue>.titles() = map { it.title }
 
-    @Test fun normalizeFixesInvalidAndIsStable() {
-        val start = SelectionFilter.Selection(FastenerType.HEX_BOLT, UnitSystem.METRIC, ProductStandard.ISO_4014, 10.0, PropertyClass.CLASS_10_9, "10B21", "6g", CoatingType.ZN_NI)
-        assertEquals(start, SelectionFilter.normalize(start, cat))
-        // Type → hex nut: standard must become a nut standard
-        val nut = SelectionFilter.normalize(start.copy(type = FastenerType.HEX_NUT), cat)
-        assertEquals(ProductStandard.ISO_4032, nut.standard)
-        assertTrue(nut.threadClass in ThreadClassCatalog.getOptions(UnitSystem.METRIC, true))
-        // Stainless material from the catalogue/scan: class follows the material, material is kept
-        val ss = SelectionFilter.normalize(start.copy(materialKey = "SS304"), cat)
-        assertEquals("SS304", ss.materialKey)
-        assertTrue(ss.propertyClass.name.startsWith("A"))
-        assertEquals(CoatingType.PASSIVATION, ss.coating)
-        // Rivet: aerospace class
-        val rivet = SelectionFilter.normalize(start.copy(type = FastenerType.SOLID_RIVET, unit = UnitSystem.INCH, dMm = 4.826), cat)
-        assertTrue(rivet.propertyClass in SelectionFilter.propertyClasses(FastenerType.SOLID_RIVET, UnitSystem.INCH, 4.826))
-        assertEquals(ProductStandard.MS20470, rivet.standard)
-        // 12.9 can never keep an electroplated coating
-        val c129 = SelectionFilter.normalize(start.copy(propertyClass = PropertyClass.CLASS_12_9, materialKey = "4140"), cat)
-        assertFalse(c129.coating.isElectroplating)
-        // Inch unit drops metric standards and ISO classes
-        val inch = SelectionFilter.normalize(start.copy(unit = UnitSystem.INCH, dMm = 9.525), cat)
-        assertNotEquals("ISO/DIN Metric", inch.standard.category)
-        assertTrue(inch.propertyClass.name.startsWith("SAE") || inch.propertyClass.name.startsWith("ASTM"))
-        // every result is a fixed point
-        for (type in FastenerType.values()) for (unit in UnitSystem.values()) for (m in cat.keys) {
-            val n = SelectionFilter.normalize(start.copy(type = type, unit = unit, materialKey = m, dMm = if (unit == UnitSystem.METRIC) 10.0 else 9.525), cat)
-            assertEquals("$type $unit $m", n, SelectionFilter.normalize(n, cat))
+    @Test fun everyClassDefaultMaterialSatisfiesThatClass() {
+        for (pc in PropertyClass.values()) {
+            val unit = if (pc.name.startsWith("SAE") || pc.name.startsWith("ASTM")) UnitSystem.INCH else UnitSystem.METRIC
+            val type = if (pc.name.startsWith("AERO") || pc == PropertyClass.MATERIAL_SPEC) FastenerType.NAS_CLOSE_TOL_BOLT else FastenerType.HEX_BOLT
+            val issues = gate(type = type, unit = unit, d = if (unit == UnitSystem.METRIC) 10.0 else 9.525, pc = pc, material = pc.defaultMatKey, coating = CoatingType.AERO_IVD)
+            assertTrue("$pc default ${pc.defaultMatKey}: ${issues.critical()}", issues.critical().none { it.contains("Material") || it.contains("needs") || it.contains("grade") })
         }
     }
 
-    @Test fun defaultsAreOffered() {
-        for (type in FastenerType.values()) for (unit in UnitSystem.values())
-            assertEquals(PokaYokeEngine.defaultStandard(type, unit), SelectionFilter.standards(type, unit).first())
-    }
-
-    @Test fun everyCatalogueAlloyCanBeSelected() {
-        val types = listOf(FastenerType.HEX_BOLT, FastenerType.NAS_CLOSE_TOL_BOLT, FastenerType.SOLID_RIVET)
-        for (m in cat.values) {
-            val reachable = types.any { t -> UnitSystem.values().any { u ->
-                SelectionFilter.propertyClasses(t, u, 6.35).any { SelectionFilter.materialFitsClass(m, it, 6.35) } } }
-            assertTrue("${m.key} fits no property class", reachable)
-        }
-    }
-
-    @Test fun a2a4ClassesOfferOnly304And316() {
-        for (pc in listOf(PropertyClass.A2_50, PropertyClass.A2_70, PropertyClass.A4_80)) {
-            val keys = SelectionFilter.materials(FastenerType.METAL_LOCK_NUT, pc, 6.0, cat.values).map { it.key }.toSet()
-            assertTrue("$pc: $keys", keys.isNotEmpty() && keys.all { it in setOf("SS304", "SS316", "SS316L") })
-        }
-        for (k in listOf("SS410", "17_4PH", "15_5PH", "13_8PH", "CUSTOM_455", "AM350", "NITRONIC60", "14KH17N2", "20X13", "30X13"))
-            assertFalse(k, SelectionFilter.materialFitsClass(cat[k]!!, PropertyClass.A2_70, 6.0))
-    }
-
-    @Test fun screenshotComboIsCorrected() {
-        val s = SelectionFilter.Selection(FastenerType.HEX_BOLT, UnitSystem.METRIC, ProductStandard.ISO_4014, 10.0, PropertyClass.CLASS_8_8, "35NCD16", "4g6g", CoatingType.ZN_NI)
-        val n = SelectionFilter.normalize(s, cat)
-        assertEquals("6g", n.threadClass)
-        assertEquals("35NCD16", n.materialKey)
-        assertEquals(PropertyClass.MATERIAL_SPEC, n.propertyClass)
-        assertFalse("35NCD16" in SelectionFilter.materials(FastenerType.HEX_BOLT, PropertyClass.CLASS_8_8, 10.0, cat.values).map { it.key })
-    }
-
-    @Test fun aerospaceTypesOfferNoCommercialClasses() {
-        val classes = SelectionFilter.propertyClasses(FastenerType.TWELVE_POINT, UnitSystem.METRIC, 6.0)
-        assertFalse(PropertyClass.CLASS_4_6 in classes)
-        assertTrue(PropertyClass.MATERIAL_SPEC in classes)
-        assertTrue("4340" in SelectionFilter.materials(FastenerType.NAS_CLOSE_TOL_BOLT, PropertyClass.MATERIAL_SPEC, 6.35, cat.values).map { it.key })
-    }
-
-    @Test fun aerospaceRangesOfferEveryAlloyInTheLabelledRange() {
-        fun keys(pc: PropertyClass) = SelectionFilter.materials(FastenerType.NAS_CLOSE_TOL_BOLT, pc, 6.35, cat.values).map { it.key }
-        assertTrue(keys(PropertyClass.AERO_AL).containsAll(listOf("AL2024", "AL2219", "AL7075")))   // 450–570 MPa
-        assertFalse("AL6061" in keys(PropertyClass.AERO_AL))
-        assertTrue(keys(PropertyClass.AERO_1100).containsAll(listOf("TI_GR5", "TI_6242")))           // 1050–1120 MPa
-        assertTrue(keys(PropertyClass.AERO_1750).containsAll(listOf("300M", "MP35N", "H11_H13", "CUSTOM_455"))) // 1720–1950 MPa
+    @Test fun aerospaceRangesAcceptEveryAlloyInTheLabelledRange() {
+        for ((pc, alloys) in mapOf(
+            PropertyClass.AERO_AL to listOf("AL2024", "AL2219", "AL7075"),
+            PropertyClass.AERO_1100 to listOf("TI_GR5", "TI_6242"),
+            PropertyClass.AERO_1750 to listOf("300M", "MP35N", "H11_H13", "CUSTOM_455")
+        )) for (m in alloys)
+            assertFalse("$pc $m", "Material cannot reach the class strength" in gate(FastenerType.NAS_CLOSE_TOL_BOLT, UnitSystem.INCH, d = 6.35, pc = pc, material = m, coating = CoatingType.AERO_IVD).critical())
+        assertTrue("Material cannot reach the class strength" in gate(FastenerType.NAS_CLOSE_TOL_BOLT, UnitSystem.INCH, d = 6.35, pc = PropertyClass.AERO_AL, material = "AL6061", coating = CoatingType.ANODIZE_II).critical())
     }
 
     @Test fun inchGradeUsesTheStrengthOfItsSizeBand() {
         // SAE J429 Grade 2 is 74 ksi up to 3/4" and 60 ksi (414 MPa) above it
-        assertFalse(SelectionFilter.materialFitsClass(cat["1008"]!!, PropertyClass.SAE_GRADE_2, 12.7))
-        assertTrue(SelectionFilter.materialFitsClass(cat["1008"]!!, PropertyClass.SAE_GRADE_2, 25.4))
+        val small = gate(unit = UnitSystem.INCH, d = 12.7, pc = PropertyClass.SAE_GRADE_2, material = "1008").critical()
+        val large = gate(unit = UnitSystem.INCH, d = 25.4, pc = PropertyClass.SAE_GRADE_2, material = "1008").critical()
+        assertTrue("Material cannot reach the class strength" in small)
+        assertFalse("Material cannot reach the class strength" in large)
     }
 
-    @Test fun standardsOwnThreadClassIsListedFirst() {
+    @Test fun wrongMaterialForTheClassIsBlocked() {
+        assertTrue(gate(pc = PropertyClass.CLASS_12_9, material = "1008").critical().isNotEmpty())
+        assertTrue(gate(pc = PropertyClass.A2_70, material = "SS410", coating = CoatingType.PASSIVATION).critical().isNotEmpty())
+        assertTrue(gate(pc = PropertyClass.CLASS_9_8, d = 20.0).critical().contains("Class 9.8 is limited to M16"))
+    }
+
+    @Test fun phosphateAndBlackOxideNeedTheRightSubstrate() {
+        for ((m, pc) in listOf("SS304" to PropertyClass.A2_70, "TI_GR5" to PropertyClass.AERO_1100, "AL7075" to PropertyClass.AERO_AL, "INCONEL718" to PropertyClass.AERO_1380))
+            for (c in listOf(CoatingType.PHOSPHATE, CoatingType.PHOSPHATE_MN))
+                assertTrue("$m $c", "Phosphating needs carbon or alloy steel" in gate(pc = pc, material = m, coating = c).critical())
+        assertTrue("Black oxide needs a ferrous or copper alloy" in gate(pc = PropertyClass.AERO_AL, material = "AL7075", coating = CoatingType.BLACK_OXIDE).critical())
+        assertTrue("Black oxide needs a ferrous or copper alloy" in gate(pc = PropertyClass.AERO_1100, material = "TI_GR5", coating = CoatingType.BLACK_OXIDE).critical())
+        assertTrue(gate(coating = CoatingType.PHOSPHATE).critical().isEmpty())
+        assertTrue(gate(coating = CoatingType.BLACK_OXIDE).critical().isEmpty())
+    }
+
+    @Test fun wrongStandardForThePartIsBlocked() {
+        assertTrue(gate(std = ProductStandard.ISO_4032).critical().contains("Standard does not fit a bolt/screw"))
+        assertTrue(gate(type = FastenerType.HEX_NUT, std = ProductStandard.ISO_4014, threadClass = "6H").critical().contains("Standard does not fit a nut"))
+        assertTrue(gate(unit = UnitSystem.INCH, d = 9.525, std = ProductStandard.ISO_4014, pc = PropertyClass.SAE_GRADE_8, material = "4140").critical().contains("Metric standard with inch thread"))
+        // ASTM A490 on a metric thread is allowed, with a sign-off to confirm the metric edition (A490M)
+        val a490 = gate(type = FastenerType.HEAVY_HEX_BOLT, std = ProductStandard.ASTM_A490, d = 20.0, length = 100.0)
+        assertTrue(a490.critical().isEmpty())
+        assertTrue("Inch standard with metric thread" in a490.titles())
+    }
+
+    @Test fun lengthRulesAreFlaggedByTheGate() {
+        assertTrue("Very short length for diameter" in gate(d = 64.0, length = 6.0).titles())
+        assertTrue("Too short for a partially threaded bolt" in gate(d = 10.0, length = 30.0).titles())
+        assertTrue("Too short for a partially threaded bolt" in gate(unit = UnitSystem.INCH, d = 9.525, length = 25.4, pc = PropertyClass.SAE_GRADE_5).titles())
+        assertFalse("Too short for a partially threaded bolt" in gate(d = 10.0, length = 60.0).titles())
+        // rivets are sized by grip, set screws may be shorter than 2d
+        assertFalse("Very short length for diameter" in gate(FastenerType.SOLID_RIVET, UnitSystem.INCH, d = 4.826, length = 6.35, pc = PropertyClass.AERO_AL, material = "AL2117", coating = CoatingType.ANODIZE_II).titles())
+        assertFalse("Very short length for diameter" in gate(FastenerType.SOCKET_SET, length = 10.0).titles())
+    }
+
+    @Test fun standardsOwnThreadClassIsTheDefault() {
         assertEquals("3A", SelectionFilter.threadClasses(UnitSystem.INCH, FastenerType.SHCS, ProductStandard.ASME_B18_3).first())
         assertEquals("2A", SelectionFilter.threadClasses(UnitSystem.INCH, FastenerType.HEX_BOLT, ProductStandard.ASME_B18_2_1).first())
         assertEquals("6g", SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.HEX_BOLT, ProductStandard.ISO_4014).first())
         assertEquals("6H", SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.HEX_NUT, ProductStandard.ISO_4032).first())
     }
 
-    @Test fun everyClassDefaultMaterialSatisfiesThatClass() {
-        for (pc in PropertyClass.values()) {
-            val m = cat[pc.defaultMatKey]
-            assertNotNull("${pc.name}: default material ${pc.defaultMatKey} is not in the catalogue", m)
-            assertTrue("${pc.name}: default ${pc.defaultMatKey} does not fit its own class", SelectionFilter.materialFitsClass(m!!, pc, 10.0))
-        }
-    }
-
-    @Test fun phosphateAndBlackOxideNeedTheRightSubstrate() {
-        fun coats(key: String, pc: PropertyClass) =
-            SelectionFilter.coatings(FastenerType.HEX_BOLT, cat[key]!!, pc, 10.0, "6g").toSet()
-        for ((key, pc) in listOf("SS304" to PropertyClass.A2_70, "TI_GR5" to PropertyClass.AERO_1100,
-            "AL7075" to PropertyClass.AERO_AL, "INCONEL718" to PropertyClass.AERO_1380)) {
-            val c = coats(key, pc)
-            assertFalse("$key offers zinc phosphate", CoatingType.PHOSPHATE in c)
-            assertFalse("$key offers manganese phosphate", CoatingType.PHOSPHATE_MN in c)
-            assertTrue("$key has no coating left", c.isNotEmpty())
-        }
-        assertFalse(CoatingType.BLACK_OXIDE in coats("AL7075", PropertyClass.AERO_AL))
-        assertFalse(CoatingType.BLACK_OXIDE in coats("TI_GR5", PropertyClass.AERO_1100))
-        // steel keeps both
-        val steel = coats("10B21", PropertyClass.CLASS_10_9)
-        assertTrue(CoatingType.PHOSPHATE in steel && CoatingType.BLACK_OXIDE in steel)
-    }
-
-    @Test fun astmSpecsWithAMetricEditionAreOfferedInBothUnits() {
-        val metric = SelectionFilter.standards(FastenerType.HEAVY_HEX_BOLT, UnitSystem.METRIC)
-        assertTrue("A325M missing: $metric", ProductStandard.ASTM_A325 in metric)
-        assertTrue("A490M missing: $metric", ProductStandard.ASTM_A490 in metric)
-        assertTrue(ProductStandard.ASTM_F436 in SelectionFilter.standards(FastenerType.FLAT_WASHER, UnitSystem.METRIC))
-        // a spec with no metric edition stays out of the metric list
-        assertFalse(ProductStandard.ASME_B18_2_1 in SelectionFilter.standards(FastenerType.HEX_BOLT, UnitSystem.METRIC))
-    }
-
     @Test fun aerospaceStandardsLeadWithTheUnjOrMjThread() {
         assertEquals("3A-UNJ", SelectionFilter.threadClasses(UnitSystem.INCH, FastenerType.NAS_CLOSE_TOL_BOLT, ProductStandard.NAS6203).first())
         assertEquals("3B-UNJ", SelectionFilter.threadClasses(UnitSystem.INCH, FastenerType.AERO_LOCK_NUT, ProductStandard.MS21042).first())
         assertTrue(SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.NAS_CLOSE_TOL_BOLT, ProductStandard.EN2882).first().endsWith("-MJ"))
-        // DIN 7500 also sets no class, but it is not aerospace: it keeps the commercial order
         assertEquals("6g", SelectionFilter.threadClasses(UnitSystem.METRIC, FastenerType.THREAD_FORMING_SCREW, ProductStandard.DIN_7500).first())
-    }
-
-    @Test fun everyOfferedLengthPassesTheGateLengthRules() {
-        for (type in FastenerType.values()) for (unit in UnitSystem.values()) {
-            val count = if (unit == UnitSystem.METRIC) FastenerCatalog.METRIC_SIZES.size else FastenerCatalog.INCH_SIZES.size
-            for (i in 0 until count) {
-                val d = FastenerCatalog.diameterMm(unit, i)
-                val lengths = SelectionFilter.lengths(type, unit, d)
-                assertTrue("$type $unit d=$d: no length offered", lengths.isNotEmpty())
-                for (l in lengths) assertFalse("$type $unit d=$d L=$l is too short", PokaYokeEngine.isLengthTooShort(type, unit, d, l))
-                // the gate agrees with the helper on every offered length
-                val std = PokaYokeEngine.defaultStandard(type, unit)
-                val pitch = if (unit == UnitSystem.METRIC) FastenerCatalog.METRIC_SIZES[i].pitches.first() else FastenerCatalog.INCH_SIZES[i].tpis.first().toDouble()
-                val tc = SelectionFilter.threadClasses(unit, type, std).first()
-                for (l in listOf(lengths.first(), lengths.last())) {
-                    val issues = PokaYokeEngine.check(type, unit, std, i, pitch, d, l, tc, PropertyClass.MATERIAL_SPEC, cat["A286"]!!, CoatingType.AERO_IVD, 100,
-                        0.0, 0.0, 100.0, false, 50.0, null)
-                    assertFalse("$type $unit d=$d L=$l: ${issues.map { it.title }}", issues.any { it.title == "Very short length for diameter" || it.title == "Too short for a partially threaded bolt" })
-                }
-            }
-        }
-    }
-
-    @Test fun lengthListFollowsTheStandardsLengthRules() {
-        // ISO 4014 M64: b = 2d + 25 above 200 mm, so the shortest partially threaded bolt is 220 mm; M64 × 6 is gone
-        val m64 = SelectionFilter.lengths(FastenerType.HEX_BOLT, UnitSystem.METRIC, 64.0)
-        assertEquals(220.0, m64.first(), 0.0)
-        assertFalse(6.0 in m64)
-        // fully threaded M64 (ISO 4017) only needs 2d
-        assertEquals(130.0, SelectionFilter.lengths(FastenerType.HEX_BOLT_FULL, UnitSystem.METRIC, 64.0).first(), 0.0)
-        // M10 hex bolt: b + d = 36, so 40 mm is the first ISO 4014 length
-        assertEquals(40.0, SelectionFilter.lengths(FastenerType.HEX_BOLT, UnitSystem.METRIC, 10.0).first(), 0.0)
-        // set screws may be shorter than 2d; nuts, washers and rivets keep the whole list
-        assertTrue(SelectionFilter.lengths(FastenerType.SOCKET_SET, UnitSystem.METRIC, 10.0).first() < 20.0)
-        assertEquals(FastenerCatalog.METRIC_LENGTHS, SelectionFilter.lengths(FastenerType.HEX_NUT, UnitSystem.METRIC, 10.0))
-        assertEquals(FastenerCatalog.INCH_LENGTHS, SelectionFilter.lengths(FastenerType.SOLID_RIVET, UnitSystem.INCH, 3.175))
-        // a saved 75 mm (not an ISO length) snaps to the nearest offered length
-        assertEquals(70.0, SelectionFilter.nearestLength(FastenerType.HEX_BOLT, UnitSystem.METRIC, 10.0, 75.0), 0.0)
-        // the app's own defaults are standard lengths
-        assertTrue(60.0 in SelectionFilter.lengths(FastenerType.HEX_BOLT, UnitSystem.METRIC, 10.0))
-        assertTrue(SelectionFilter.lengths(FastenerType.HEX_BOLT, UnitSystem.INCH, 9.525).any { kotlin.math.abs(it - 50.8) < 1e-6 })
     }
 
     @Test fun metricAerospaceBoltsDefaultToTheMetricStandard() {
@@ -223,7 +104,13 @@ class SelectionFilterTest {
         assertEquals(ProductStandard.EN2882, PokaYokeEngine.defaultStandard(FastenerType.NAS_CLOSE_TOL_BOLT, UnitSystem.METRIC))
         assertEquals(ProductStandard.NAS624, PokaYokeEngine.defaultStandard(FastenerType.TWELVE_POINT, UnitSystem.INCH))
         assertEquals(ProductStandard.NAS6203, PokaYokeEngine.defaultStandard(FastenerType.NAS_CLOSE_TOL_BOLT, UnitSystem.INCH))
-        // the inch NAS number is no longer offered on a metric thread
-        assertFalse(ProductStandard.NAS624 in SelectionFilter.standards(FastenerType.TWELVE_POINT, UnitSystem.METRIC))
+    }
+
+    @Test fun lengthCataloguesAreTheStandardSeries() {
+        assertEquals(2.0, FastenerCatalog.METRIC_LENGTHS.first(), 0.0)
+        assertEquals(500.0, FastenerCatalog.METRIC_LENGTHS.last(), 0.0)
+        assertFalse(75.0 in FastenerCatalog.METRIC_LENGTHS)
+        assertEquals(3.175, FastenerCatalog.INCH_LENGTHS.first(), 1e-9)
+        assertEquals(203.2, FastenerCatalog.INCH_LENGTHS.last(), 1e-9)
     }
 }

@@ -48,15 +48,6 @@ object PokaYokeEngine {
     /** NAS / MS aerospace standards are written for inch threads; EN aerospace standards for metric. */
     fun isInchStandard(s: ProductStandard) = s.category == "ASME/Imperial" || s.code.startsWith("NAS") || s.code.startsWith("MS")
 
-    /** ASTM specs issued in both unit systems (A325M / A490M / A193M / A194M / F436M), so they also fit a metric thread. */
-    fun hasMetricEdition(s: ProductStandard) = s in METRIC_EDITION_ASTM
-
-    private val METRIC_EDITION_ASTM = setOf(
-        ProductStandard.ASTM_A325, ProductStandard.ASTM_A490, ProductStandard.ASTM_A193,
-        ProductStandard.ASTM_A194, ProductStandard.ASTM_F436
-    )
-
-    fun isInchOnlyStandard(s: ProductStandard) = isInchStandard(s) && !hasMetricEdition(s)
     fun isMetricOnlyStandard(s: ProductStandard) = s.category == "ISO/DIN Metric" || s.code.startsWith("EN ")
 
     /**
@@ -249,16 +240,6 @@ object PokaYokeEngine {
             FastenerType.SOLID_RIVET -> ProductStandard.MS20470
             FastenerType.BLIND_RIVET -> ProductStandard.NAS1398
         }
-    }
-
-    /**
-     * The length rules of [check]: a bolt or screw needs L ≥ 2d (set screws excepted), and a partially threaded
-     * hex bolt needs L ≥ b + d so a plain shank remains. Nuts, washers and rivets (sized by grip) are not limited.
-     */
-    fun isLengthTooShort(type: FastenerType, unit: UnitSystem, d: Double, lengthMm: Double): Boolean {
-        if (type.isNut || type.isWasher || type.isUnthreaded) return false
-        if (type != FastenerType.SOCKET_SET && lengthMm < 2.0 * d) return true
-        return type == FastenerType.HEX_BOLT && lengthMm < threadLengthB(type, unit, d, lengthMm) + d
     }
 
     /** Thread length b for partially threaded bolts (ISO 4014 / ISO 4762 / ASME B18.2.1). */

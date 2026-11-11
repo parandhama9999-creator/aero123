@@ -70,22 +70,25 @@ class ExampleRobolectricTest {
     val teTitle = com.example.util.AppLocalization.getTabTitle(1, com.example.util.AppLanguage.TE)
     assertEquals("1. పరిమాణం", teTitle)
 
-    val esTitle = com.example.util.AppLocalization.getTabTitle(6, com.example.util.AppLanguage.ES)
-    assertEquals("6. Co-Piloto IA", esTitle)
+    val esTitle = com.example.util.AppLocalization.getTabTitle(4, com.example.util.AppLanguage.ES)
+    assertEquals("4. Co-Piloto IA", esTitle)
 
     val deTitle = com.example.util.AppLocalization.getTabTitle(3, com.example.util.AppLanguage.DE)
     assertEquals("3. KI-Scanner", deTitle)
 
     val jaTitle = com.example.util.AppLocalization.getTabTitle(5, com.example.util.AppLanguage.JA)
-    assertEquals("5. 見積もり", jaTitle)
+    assertEquals("5. 8D NPD エンジン", jaTitle)
 
     val zhTitle = com.example.util.AppLocalization.getTabTitle(4, com.example.util.AppLanguage.ZH)
-    assertEquals("4. 发那科G代码", zhTitle)
+    assertEquals("4. AI副驾驶", zhTitle)
 
     val ruTitle = com.example.util.AppLocalization.getTabTitle(2, com.example.util.AppLanguage.RU)
     assertEquals("2. ТО и Ковка", ruTitle)
 
-    val frTitle = com.example.util.AppLocalization.getTabTitle(7, com.example.util.AppLanguage.FR)
-    assertEquals("7. Moteur 8D NPD", frTitle)
+    val frTitle = com.example.util.AppLocalization.getTabTitle(5, com.example.util.AppLanguage.FR)
+    assertEquals("5. Moteur 8D NPD", frTitle)
+
+    // only the five remaining tabs exist
+    assertEquals("Tab 6", com.example.util.AppLocalization.getTabTitle(6, com.example.util.AppLanguage.EN))
   }
 }

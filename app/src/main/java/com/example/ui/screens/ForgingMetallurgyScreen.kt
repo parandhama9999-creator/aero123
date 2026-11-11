@@ -218,13 +218,13 @@ fun ForgingMetallurgyScreen(
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                text = "Finished Fastener Target UTS:",
+                                text = if (result.fastenerType.isNut) "Mating Bolt Min UTS:" else "Finished Fastener Target UTS:",
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = customColors.textMuted
                             )
                             Text(
-                                text = "${result.postForgingTargetUtsMpa.toInt()} MPa (Min)",
+                                text = "${(if (result.fastenerType.isWasher) result.material.postForgingTargetUtsMpa else result.postForgingTargetUtsMpa).toInt()} MPa (Min)",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = FontFamily.Monospace,
@@ -349,59 +349,84 @@ fun ForgingMetallurgyScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Stage 1: Pre-Heating / Stress Relief
-                HtStageCard(
-                    stage = "Stage 1: Pre-Heating / Stress Relief",
-                    temperature = result.heatTreatmentSpec.preheatTempC,
-                    soakTime = result.heatTreatmentSpec.preheatSoakTime,
-                    subDetail = "Thermal Equalization to relieve cold heading stress"
-                )
+                // Only the stages this alloy's cycle actually has: a cold-formed class has no austenitize or quench,
+                // and aluminium / titanium / nickel alloys are solution treated and aged, not austenitized and tempered.
+                val ht = result.heatTreatmentSpec
+                fun given(v: String) = v.isNotBlank() && !v.trim().startsWith("N/A")
+                val hardened = given(ht.austenitizingOrSolutionTempC)
+                val family = com.example.data.PokaYokeEngine.materialFamily(result.material)
+                val quenchAndTemper = family == com.example.data.MaterialFamily.CARBON_ALLOY_STEEL ||
+                    result.material.key in MARTENSITIC_STAINLESS
+                var stageNo = 0
+                fun stage(title: String): String { stageNo++; return "Stage $stageNo: $title" }
 
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Stage 2: Austenitizing / Solution Annealing
-                HtStageCard(
-                    stage = if (result.heatTreatmentSpec.isAging) "Stage 2: Solution Annealing" else "Stage 2: Austenitizing",
-                    temperature = result.heatTreatmentSpec.austenitizingOrSolutionTempC,
-                    soakTime = result.heatTreatmentSpec.soakingTimeMinutes,
-                    subDetail = "Atmosphere: ${result.heatTreatmentSpec.atmosphere}"
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Stage 3: Quenching Protocol
-                HtStageCard(
-                    stage = "Stage 3: Quenching Protocol",
-                    temperature = result.heatTreatmentSpec.quenchMedium,
-                    soakTime = "< 10s Transfer",
-                    subDetail = result.heatTreatmentSpec.quenchDetails
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Stage 4: Tempering / Precipitation Aging
-                HtStageCard(
-                    stage = if (result.heatTreatmentSpec.isAging) "Stage 4: Precipitation Aging" else "Stage 4: Tempering Cycle",
-                    temperature = result.heatTreatmentSpec.temperingOrAgingTempC,
-                    soakTime = result.heatTreatmentSpec.temperingOrAgingTimeHours,
-                    subDetail = "Target Hardness: ${result.heatTreatmentSpec.targetHardnessHrc}"
-                )
-
-                if (result.hasHydrogenEmbrittlementRisk) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                if (given(ht.preheatTempC)) {
                     HtStageCard(
-                        stage = "Stage 5: Mandatory Hydrogen De-Embrittlement Baking",
-                        temperature = result.heatTreatmentSpec.bakingTempC,
-                        soakTime = result.heatTreatmentSpec.bakingSoakTime,
-                        subDetail = result.heatTreatmentSpec.hydrogenBakingCycle,
+                        stage = stage("Pre-Heating / Stress Relief"),
+                        temperature = ht.preheatTempC,
+                        soakTime = ht.preheatSoakTime.ifBlank { "—" },
+                        subDetail = "Thermal equalization to relieve cold heading stress"
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                if (hardened) {
+                    HtStageCard(
+                        stage = stage(if (quenchAndTemper && !ht.isAging) "Austenitizing" else "Solution Treatment"),
+                        temperature = ht.austenitizingOrSolutionTempC,
+                        soakTime = ht.soakingTimeMinutes.ifBlank { "—" },
+                        subDetail = "Atmosphere: ${ht.atmosphere.ifBlank { "per ${ht.standardReference}" }}"
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    if (given(ht.quenchMedium)) {
+                        HtStageCard(
+                            stage = stage("Quenching Protocol"),
+                            temperature = ht.quenchMedium,
+                            soakTime = "Quench",
+                            subDetail = ht.quenchDetails
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                } else {
+                    HtStageCard(
+                        stage = stage("Hardening"),
+                        temperature = ht.austenitizingOrSolutionTempC.ifBlank { "Not hardened" },
+                        soakTime = "—",
+                        subDetail = "Strength comes from cold working: no austenitize or quench"
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                if (given(ht.temperingOrAgingTempC)) {
+                    HtStageCard(
+                        stage = stage(when {
+                            !hardened -> "Stress Relief (optional)"
+                            quenchAndTemper && !ht.isAging -> "Tempering Cycle"
+                            ht.isAging -> "Precipitation Aging"
+                            else -> "Aging / Post-Treatment"
+                        }),
+                        temperature = ht.temperingOrAgingTempC,
+                        soakTime = ht.temperingOrAgingTimeHours.ifBlank { "—" },
+                        subDetail = "Target Hardness: ${ht.targetHardnessHrc}"
+                    )
+                } else {
+                    HtStageCard(stage = stage("Target Hardness"), temperature = ht.targetHardnessHrc, soakTime = "—")
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                if (result.hasHydrogenEmbrittlementRisk) {
+                    HtStageCard(
+                        stage = stage("Mandatory Hydrogen De-Embrittlement Baking"),
+                        temperature = ht.bakingTempC,
+                        soakTime = ht.bakingSoakTime,
+                        subDetail = ht.hydrogenBakingCycle,
                         isWarning = true
                     )
                 } else {
-                    Spacer(modifier = Modifier.height(4.dp))
                     HtStageCard(
-                        stage = "Stage 5: Hydrogen De-Embrittlement Baking",
-                        temperature = "190°C – 200°C",
-                        soakTime = "N/A",
+                        stage = stage("Hydrogen De-Embrittlement Baking"),
+                        temperature = "Not required",
+                        soakTime = "—",
                         subDetail = "Exempt for ${result.coating.label} coating on ${result.material.name}"
                     )
                 }
@@ -588,7 +613,7 @@ fun ForgingMetallurgyScreen(
                 )
 
                 Text(
-                    text = "Lubrication: ${result.coating.label} • ${result.material.lubricationCoating}",
+                    text = "Heading lubricant: ${result.material.lubricationCoating}  •  Final coating: ${result.coating.label}",
                     fontSize = 11.sp,
                     color = customColors.textMuted
                 )
@@ -671,30 +696,51 @@ fun ForgingMetallurgyScreen(
         }
 
         // Section 6: Hardness Failure Diagnostics & Troubleshooting
-        HardnessTroubleshootingCard(targetHrcText = result.heatTreatmentSpec.targetHardnessHrc)
+        HardnessTroubleshootingCard(
+            targetHrcText = result.heatTreatmentSpec.targetHardnessHrc,
+            route = when {
+                result.heatTreatmentSpec.austenitizingOrSolutionTempC.let { it.isBlank() || it.trim().startsWith("N/A") } -> HardnessRoute.COLD_WORKED
+                com.example.data.PokaYokeEngine.materialFamily(result.material) == com.example.data.MaterialFamily.CARBON_ALLOY_STEEL ||
+                    result.material.key in MARTENSITIC_STAINLESS -> HardnessRoute.QUENCH_TEMPER
+                else -> HardnessRoute.SOLUTION_AGE
+            },
+            standardReference = result.heatTreatmentSpec.standardReference
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
         // Section 7: Customer Spec Compliance & Feasibility Checker
-        CustomerSpecFeasibilityCard(materialName = result.material.name)
+        CustomerSpecFeasibilityCard(material = result.material)
     }
 }
 
+private val MARTENSITIC_STAINLESS = setOf("SS410", "20X13", "30X13", "14KH17N2")
+
+private val HRC_RANGE = Regex("""(\d+(?:\.\d+)?)\s*(?:[–-]\s*(\d+(?:\.\d+)?))?\s*HRC""")
+
+/** Highest HRC of the alloy's catalogue heat treatment; null when its hardness is only in HRB / HV / HBW (below the HRC scale). */
+internal fun maxCatalogueHrc(m: com.example.data.MaterialInfo): Double? =
+    HRC_RANGE.findAll(m.heatTreatmentSpec.targetHardnessHrc)
+        .map { (it.groupValues[2].ifEmpty { it.groupValues[1] }).toDouble() }
+        .maxOrNull()
+
+private fun hrcText(v: Double) = if (v % 1.0 == 0.0) "${v.toInt()}" else "$v"
+
 @Composable
-fun CustomerSpecFeasibilityCard(materialName: String) {
+fun CustomerSpecFeasibilityCard(material: com.example.data.MaterialInfo) {
     val customColors = LocalCustomColors.current
     var customerTargetHrc by remember { mutableStateOf(45) }
-
-    val isA286 = materialName.contains("A286", ignoreCase = true)
-    val isStainless = materialName.contains("SS", ignoreCase = true) || materialName.contains("Stainless", ignoreCase = true)
-    val maxMaterialLimit = when {
-        isA286 -> 40
-        isStainless -> 32
-        materialName.contains("Inconel 718", ignoreCase = true) -> 45
-        else -> 52
-    }
-
-    val isFeasible = customerTargetHrc <= maxMaterialLimit
+    val materialName = material.name
+    val maxHrc = maxCatalogueHrc(material)
+    val reach = maxHrc?.let { "up to ${hrcText(it)} HRC" } ?: "below the HRC scale (${material.heatTreatmentSpec.targetHardnessHrc})"
+    val alternatives = com.example.data.FastenerCatalog.MATERIALS.values
+        .mapNotNull { m -> maxCatalogueHrc(m)?.let { m to it } }
+        .filter { it.second >= customerTargetHrc }
+        .sortedBy { it.second }
+        .take(3)
+        .joinToString { "${it.first.name} (${hrcText(it.second)} HRC)" }
+        .ifEmpty { "no catalogue alloy reaches it" }
+    val isFeasible = maxHrc != null && customerTargetHrc <= maxHrc
 
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -721,7 +767,7 @@ fun CustomerSpecFeasibilityCard(materialName: String) {
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Test Customer Target Hardness Requirement: $customerTargetHrc HRC (Current Material Max Limit: ~$maxMaterialLimit HRC)",
+                text = "Customer target: $customerTargetHrc HRC  •  $materialName reaches $reach with its catalogue heat treatment (${material.heatTreatmentSpec.standardReference})",
                 fontSize = 10.sp,
                 color = customColors.textMuted
             )
@@ -764,10 +810,10 @@ fun CustomerSpecFeasibilityCard(materialName: String) {
                 Column(modifier = Modifier.padding(10.dp)) {
                     if (isFeasible) {
                         Text(text = "✔ METALLURGICALLY FEASIBLE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = SuccessGreen)
-                        Text(text = "Customer target of $customerTargetHrc HRC is within physical limits of $materialName. Standard hardening/aging cycle applies.", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
+                        Text(text = "$customerTargetHrc HRC is inside the catalogue range of $materialName ($reach). Its standard hardening / aging cycle applies.", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
                     } else {
                         Text(text = "⚠️ METALLURGICAL IMPOSSIBILITY / SPEC VIOLATION", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AlertRed)
-                        Text(text = "• $materialName physically cannot exceed ~$maxMaterialLimit HRC without severe matrix embrittlement & micro-cracking.\n• Recommended Action: Issue a formal Engineering Deviation / Reject or upgrade material to Inconel 718 (for 45 HRC) or Maraging C-300 (for 50+ HRC).", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
+                        Text(text = "• $materialName reaches $reach; forcing it to $customerTargetHrc HRC risks embrittlement and cracking.\n• Raise an engineering deviation or reject, or change to an alloy that reaches it: $alternatives.", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
                     }
                 }
             }
@@ -775,11 +821,43 @@ fun CustomerSpecFeasibilityCard(materialName: String) {
     }
 }
 
-@Composable
-fun HardnessTroubleshootingCard(targetHrcText: String) {
-    val customColors = LocalCustomColors.current
-    var selectedFailureMode by remember { mutableStateOf("LOW_HARDNESS") }
+/** How the part gets its hardness, which decides what a failed hardness test points to. */
+enum class HardnessRoute { QUENCH_TEMPER, SOLUTION_AGE, COLD_WORKED }
 
+private data class HardnessFailure(val label: String, val rootCause: String, val actions: String)
+
+private fun hardnessFailures(route: HardnessRoute, standardReference: String): List<HardnessFailure> = when (route) {
+    HardnessRoute.QUENCH_TEMPER -> listOf(
+        HardnessFailure("Low Hardness", "Slack Quenching / Slow Cooling Rate",
+            "• Check quench oil temperature (must be 40–60°C).\n• Verify oil agitation pump and circulation.\n• Increase austenitizing temp by 10–20°C to ensure full carbide dissolution."),
+        HardnessFailure("Soft Surface", "Surface Decarburization (Soft Skin)",
+            "• Grind 0.2mm off surface and re-test core hardness.\n• If core is hard, raise the furnace C-potential to match the steel carbon content (see atmosphere spec above) — never above it (carburizing is forbidden by ISO 898-1).\n• Check endothermic generator gas dew point."),
+        HardnessFailure("Over-Tempered", "Over-Tempering (Temp Set Too High)",
+            "• Recalibrate tempering furnace thermocouple.\n• Over-tempered parts must be re-austenitized, re-quenched, and re-tempered at lower temperature.")
+    )
+    HardnessRoute.SOLUTION_AGE -> listOf(
+        HardnessFailure("Low Hardness", "Incomplete Solution Treatment or Under-Aging",
+            "• Verify solution temperature and soak against $standardReference.\n• Check quench delay and quench rate (aluminium is very sensitive to quench delay).\n• Verify aging temperature and time; under-aged parts can be given the remaining aging time."),
+        HardnessFailure("Surface Defect", "Surface Reaction During Heat Treatment",
+            "• Check furnace vacuum level or argon purity and dew point.\n• Titanium picks up oxygen as a hard, brittle alpha case; nickel alloys oxidise. Remove the affected layer by an approved process and re-test.\n• Never heat titanium or nickel alloys in endothermic gas."),
+        HardnessFailure("Over-Aged", "Aging Temperature or Time Too High",
+            "• Recalibrate the aging furnace thermocouple.\n• Over-aged parts cannot be corrected by more aging: re-solution treat, quench and re-age per $standardReference.")
+    )
+    HardnessRoute.COLD_WORKED -> listOf(
+        HardnessFailure("Low Hardness", "Too Little Cold Work or Soft Wire",
+            "• Check the incoming wire UTS against the raw wire sourcing spec.\n• Check the drawing reduction and heading strain of the process.\n• A stress relief run too hot softens cold-formed parts: keep it within the stated range."),
+        HardnessFailure("Soft Surface", "Decarburized Wire From the Mill",
+            "• Take a micro-section and measure the decarburized depth.\n• Check the mill certificate; reject coils outside the decarburization limit of the product standard."),
+        HardnessFailure("Too Hard", "Excess Cold Work, Stress Relief Skipped",
+            "• Confirm the stress relief was run when the drawing requires it.\n• Check the wire was supplied in the specified (annealed) condition.")
+    )
+}
+
+@Composable
+fun HardnessTroubleshootingCard(targetHrcText: String, route: HardnessRoute, standardReference: String) {
+    val customColors = LocalCustomColors.current
+    val failures = hardnessFailures(route, standardReference)
+    var selectedIndex by remember(route) { mutableStateOf(0) }
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = customColors.bgCard,
@@ -816,21 +894,17 @@ fun HardnessTroubleshootingCard(targetHrcText: String) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                listOf(
-                    "LOW_HARDNESS" to "Low Hardness",
-                    "DECARB" to "Soft Surface",
-                    "OVER_TEMPER" to "Over-Tempered"
-                ).forEach { (mode, label) ->
-                    val isSelected = selectedFailureMode == mode
+                failures.forEachIndexed { index, failure ->
+                    val isSelected = selectedIndex == index
                     Surface(
                         shape = RoundedCornerShape(4.dp),
                         color = if (isSelected) AlertRed else customColors.bgElevated,
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { selectedFailureMode = mode }
+                            .clickable { selectedIndex = index }
                     ) {
                         Text(
-                            text = label,
+                            text = failure.label,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isSelected) Color.White else customColors.textMain,
@@ -850,20 +924,9 @@ fun HardnessTroubleshootingCard(targetHrcText: String) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(10.dp)) {
-                    when (selectedFailureMode) {
-                        "LOW_HARDNESS" -> {
-                            Text(text = "Root Cause: Slack Quenching / Slow Cooling Rate", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AlertRed)
-                            Text(text = "• Check quench oil temperature (must be 40–60°C).\n• Verify oil agitation pump and circulation.\n• Increase austenitizing temp by 10–20°C to ensure full carbide dissolution.", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
-                        }
-                        "DECARB" -> {
-                            Text(text = "Root Cause: Surface Decarburization (Soft Skin)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AlertRed)
-                            Text(text = "• Grind 0.2mm off surface and re-test core hardness.\n• If core is hard, raise the furnace C-potential to match the steel carbon content (see atmosphere spec above) — never above it (carburizing is forbidden by ISO 898-1).\n• Check endothermic generator gas dew point.", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
-                        }
-                        else -> {
-                            Text(text = "Root Cause: Over-Tempering (Temp Set Too High)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AlertRed)
-                            Text(text = "• Recalibrate tempering furnace thermocouple.\n• Over-tempered parts must be re-austenitized, re-quenched, and re-tempered at lower temperature.", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
-                        }
-                    }
+                    val f = failures[selectedIndex]
+                    Text(text = "Root Cause: ${f.rootCause}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AlertRed)
+                    Text(text = f.actions, fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
                 }
             }
         }

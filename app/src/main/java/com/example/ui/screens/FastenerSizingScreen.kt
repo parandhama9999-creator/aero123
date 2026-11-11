@@ -271,7 +271,7 @@ fun FastenerSizingScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val validStandards = SelectionFilter.standards(selectedFastenerType, selectedUnitSystem)
+                        val validStandards = ProductStandard.values().toList()
                         SelectorDropdown(
                             label = "3. Product Standard",
                             selectedText = selectedStandard.label,
@@ -375,7 +375,7 @@ fun FastenerSizingScreen(
                             modifier = Modifier.weight(1f)
                         )
 
-                        val validLengths = SelectionFilter.lengths(selectedFastenerType, selectedUnitSystem, result.nominalDiaMm)
+                        val validLengths = if (selectedUnitSystem == UnitSystem.METRIC) FastenerCatalog.METRIC_LENGTHS else FastenerCatalog.INCH_LENGTHS
                         SelectorDropdown(
                             label = "6. Length (L)",
                             selectedText = lengthLabel(selectedUnitSystem, selectedLength),
@@ -393,23 +393,19 @@ fun FastenerSizingScreen(
                         val materialsList = FastenerCatalog.MATERIALS.values.toList()
                         val currentMat = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: materialsList[2]
                         val graded = SelectionFilter.usesPropertyClass(selectedFastenerType)
-                        val validPropClasses = SelectionFilter.propertyClasses(selectedFastenerType, selectedUnitSystem, result.nominalDiaMm)
+                        val validPropClasses = PropertyClass.values().toList()
                         SelectorDropdown(
                             label = "7. Property Class",
                             selectedText = if (graded) selectedPropClass.label else NOT_APPLICABLE_WASHER,
                             items = if (graded) validPropClasses.map { it.label } else listOf(NOT_APPLICABLE_WASHER),
                             onItemSelected = {
-                                if (graded) {
-                                    val pc = validPropClasses[it]
-                                    onPropClassSelected(pc)
-                                    onMaterialSelected(SelectionFilter.materialForClass(selectedFastenerType, pc, result.nominalDiaMm, selectedMaterialKey, FastenerCatalog.MATERIALS))
-                                }
+                                if (graded) onPropClassSelected(validPropClasses[it])
                             },
                             modifier = Modifier.weight(1.1f)
                         )
 
                         Column(modifier = Modifier.weight(1.2f)) {
-                            val filteredMaterials = SelectionFilter.materials(selectedFastenerType, selectedPropClass, result.nominalDiaMm, FastenerCatalog.MATERIALS.values)
+                            val filteredMaterials = FastenerCatalog.MATERIALS.values.toList()
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -459,10 +455,9 @@ fun FastenerSizingScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val threadedPart = SelectionFilter.hasThread(selectedFastenerType)
-                        val threadClasses = SelectionFilter.threadClasses(selectedUnitSystem, selectedFastenerType, selectedStandard)
+                        val threadClasses = ThreadClassCatalog.getOptions(selectedUnitSystem, selectedFastenerType.isNut)
                         val threadClassLabels = if (threadedPart) threadClasses.map { ThreadClassCatalog.getLabel(it) } else listOf(NOT_APPLICABLE_THREAD)
-                        val materialForCoating = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: FastenerCatalog.MATERIALS.values.toList()[2]
-                        val validCoatings = SelectionFilter.coatings(selectedFastenerType, materialForCoating, selectedPropClass, result.nominalDiaMm, selectedThreadClass)
+                        val validCoatings = CoatingType.values().toList()
 
                         SelectorDropdown(
                             label = "9. Thread Class",

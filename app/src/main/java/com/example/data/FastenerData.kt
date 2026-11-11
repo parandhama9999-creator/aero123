@@ -327,13 +327,14 @@ data class HeatTreatmentSpec(
     val hydrogenBakingRequired: Boolean,
     val hydrogenBakingCycle: String,
     val standardReference: String,
-    // Stage-by-Stage Dynamic & Soaking Schedule Fields (AMS 2759 / ISO 898-1)
-    val preheatTempC: String = "600°C – 650°C",
-    val preheatSoakTime: String = "30 mins",
-    val atmosphere: String = "Endothermic Gas (C-potential 0.38%–0.42%) / Protective N2",
-    val quenchDetails: String = "Accelerated Quench Oil @ 50–70°C with 0.8 m/s agitation",
-    val coolingMethod: String = "Still Air Cooling to Room Temperature",
-    val targetUtsMpa: String = "1040 MPa",
+    // Stage-by-Stage Dynamic & Soaking Schedule Fields (AMS 2759 / ISO 898-1).
+    // Blank = not stated for this alloy: steel furnace values must never default onto aluminium, titanium or nickel.
+    val preheatTempC: String = "",
+    val preheatSoakTime: String = "",
+    val atmosphere: String = "",
+    val quenchDetails: String = "",
+    val coolingMethod: String = "",
+    val targetUtsMpa: String = "",
     val bakingTempC: String = "190°C – 200°C",
     val bakingSoakTime: String = "8 to 24 Hours mandatory soak",
     val isDoubleTemper: Boolean = false,

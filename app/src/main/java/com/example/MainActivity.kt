@@ -260,38 +260,6 @@ fun AeroFastApp() {
         }
     }
 
-    // Keep every Sizing selector consistent with the ones above it, whichever path changed them
-    // (dropdowns, alloy catalogue, drawing scan or a restored session)
-    LaunchedEffect(
-        selectedFastenerType, selectedUnitSystem, selectedStandard, selectedSizeIndex, selectedLength, selectedPropClass,
-        selectedMaterialKey, selectedThreadClass, selectedCoating, appliedExtractedSpec, FastenerCatalog.MATERIALS.size
-    ) {
-        val current = SelectionFilter.Selection(
-            type = selectedFastenerType,
-            unit = selectedUnitSystem,
-            standard = selectedStandard,
-            dMm = appliedExtractedSpec?.nominalDiaMm ?: FastenerCatalog.diameterMm(selectedUnitSystem, selectedSizeIndex),
-            propertyClass = selectedPropClass,
-            materialKey = selectedMaterialKey,
-            threadClass = selectedThreadClass,
-            coating = selectedCoating
-        )
-        val fixed = SelectionFilter.normalize(current, FastenerCatalog.MATERIALS)
-        // A drawing's length is kept as scanned; otherwise the length snaps to the catalogue for this diameter
-        val length = if (appliedExtractedSpec != null) selectedLength
-            else SelectionFilter.nearestLength(selectedFastenerType, selectedUnitSystem, current.dMm, selectedLength)
-        val lengthChanged = kotlin.math.abs(length - selectedLength) > 1e-6
-        if (fixed != current || lengthChanged) {
-            selectedStandard = fixed.standard
-            selectedPropClass = fixed.propertyClass
-            selectedMaterialKey = fixed.materialKey
-            selectedThreadClass = fixed.threadClass
-            selectedCoating = fixed.coating
-            if (lengthChanged) selectedLength = length
-            triggerFirebaseSync()
-        }
-    }
-
     // Active Fastener Calculation
     val currentCalculation = remember(
         selectedFastenerType,
@@ -480,10 +448,7 @@ fun AeroFastApp() {
                                     selectedFastenerType = newType
                                     appliedExtractedSpec = null
                                     selectedStandard = com.example.data.PokaYokeEngine.defaultStandard(newType, selectedUnitSystem)
-                                    val validClasses = ThreadClassCatalog.getOptions(selectedUnitSystem, newType.isNut)
-                                    if (selectedThreadClass !in validClasses) {
-                                        selectedThreadClass = validClasses.first()
-                                    }
+                                    selectedThreadClass = SelectionFilter.threadClasses(selectedUnitSystem, newType, selectedStandard).first()
                                     triggerFirebaseSync()
                                 },
                                 selectedUnitSystem = selectedUnitSystem,
@@ -492,10 +457,9 @@ fun AeroFastApp() {
                                     selectedSizeIndex = FastenerCatalog.defaultSizeIndex(newUnit)
                                     selectedPitchValue = if (newUnit == UnitSystem.METRIC) 1.50 else 16.0
                                     selectedLength = if (newUnit == UnitSystem.METRIC) 60.0 else 50.8
-                                    val validClasses = ThreadClassCatalog.getOptions(newUnit, selectedFastenerType.isNut)
-                                    selectedThreadClass = validClasses.first()
                                     // Metric ↔ inch also changes the governing standard (ISO/DIN ↔ ASME/ASTM)
                                     selectedStandard = com.example.data.PokaYokeEngine.defaultStandard(selectedFastenerType, newUnit)
+                                    selectedThreadClass = SelectionFilter.threadClasses(newUnit, selectedFastenerType, selectedStandard).first()
                                     appliedExtractedSpec = null
                                     triggerFirebaseSync()
                                 },
