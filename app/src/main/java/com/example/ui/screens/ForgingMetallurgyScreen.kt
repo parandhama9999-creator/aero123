@@ -1088,7 +1088,7 @@ fun ColdHeadingProgressionCanvas(
             }
 
             Text(
-                text = "True scale (long shanks broken) · left half in section · shank held in die",
+                text = "True scale (long shanks broken) · left half in section · shank held in die on the knock-out pin · edge radii, shear angle and socket cone shown typical",
                 fontSize = 9.sp,
                 color = customColors.textMuted,
                 modifier = Modifier.padding(top = 2.dp)
@@ -1100,7 +1100,7 @@ fun ColdHeadingProgressionCanvas(
                 // Size the canvas to the parts: a nut needs far less height than a long bolt
                 val partAspect = (plan.stations.maxOf { it.heightMm } / plan.stations.maxOf { it.maxWidthMm }).toFloat()
                 val column = minOf(maxWidth / plan.stations.size, maxWidth / 4)
-                val canvasHeight = (column * 0.8f * partAspect + 44.dp).coerceIn(120.dp, 230.dp)
+                val canvasHeight = (column * 0.8f * partAspect + 58.dp).coerceIn(132.dp, 250.dp)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1222,6 +1222,13 @@ private object DieColors {
     val die = Color(0xFF1E293B)
     val dieHatch = Color(0xFF2E3B52)
     val dieEdge = Color(0xFF64748B)
+    val insert = Color(0xFF2B3A52)
+    val insertHatch = Color(0xFF41526E)
+    val pin = Color(0xFF55657F)
+    // Light from the upper left: centre band, highlight, body, shadow at the silhouette
+    val shade = listOf(Color(0xFFB7C5D8), Color(0xFFE1E9F3), Color(0xFF93A6C1), Color(0xFF55657F))
+    val hexFront = Color(0xFFC5D1E1)
+    val hexSide = Color(0xFF7C8EA9)
     val centerLine = Color(0xFFF59E0B)
     val label = Color(0xFFCBD5E1)
     val peak = Color(0xFFF59E0B)
@@ -1236,11 +1243,13 @@ private fun topFeature(st: HeadingStation): String {
     return if (top.shape == SectionShape.HEX) "s ${fmt(top.dBottomMm, 2)}" else "Ø ${fmt(top.maxWidthMm, 2)}"
 }
 
-private fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float) {
+internal fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float) {
     val stations = plan.stations
     val step = size.width / stations.size
-    val topBand = textPx * 1.8f
-    val baseY = size.height - textPx * 2.2f
+    val topBand = textPx * 2.1f
+    // Space under the parts for the knock-out pin that carries them in the die
+    val koBand = if (stations.any { it.inDieMm > 0.0 }) textPx * 1.4f else 0f
+    val baseY = size.height - textPx * 2.2f - koBand
     val availH = baseY - topBand
     // Few stations (studs, set screws) would otherwise draw parts far wider than a bolt progression
     val scaleW = min(step, size.width / 4f) * 0.8f / stations.maxOf { it.maxWidthMm }
@@ -1270,19 +1279,20 @@ private fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float) {
     stations.forEachIndexed { i, st ->
         val cx = step * i + step / 2f
         val breakIdx = if (breakMm > 0.0) longestStraight(st)?.index else null
-        drawStation(st, cx, baseY, scale, min(step, size.width / 4f), breakIdx, breakMm)
+        drawStation(st, cx, baseY, scale, min(step, size.width / 4f), breakIdx, breakMm, isFinal = i == stations.lastIndex, koBand = koBand)
 
         val topY = baseY - (st.heightMm - if (breakIdx != null) breakMm else 0.0).toFloat() * scale
         drawContext.canvas.nativeCanvas.apply {
             drawText(topFeature(st), cx, topY - textPx * 0.6f, dimPaint)
             labelPaint.color = (if (st.isPeakBlow) DieColors.peak else DieColors.label).toArgb()
-            drawText(stationCode(st).trim(), cx, baseY + textPx * 1.6f, labelPaint)
+            drawText(stationCode(st).trim(), cx, baseY + koBand + textPx * 1.6f, labelPaint)
         }
     }
 }
 
 private fun DrawScope.drawStation(
-    st: HeadingStation, cx: Float, baseY: Float, scale: Float, column: Float, breakIdx: Int?, breakMm: Double
+    st: HeadingStation, cx: Float, baseY: Float, scale: Float, column: Float, breakIdx: Int?, breakMm: Double,
+    isFinal: Boolean, koBand: Float
 ) {
     val segs = st.segments
     val drawnH = segs.mapIndexed { j, s -> ((s.heightMm - if (j == breakIdx) breakMm else 0.0) * scale).toFloat() }
@@ -1304,68 +1314,193 @@ private fun DrawScope.drawStation(
     fun halfWidth(s: ProfileSegment, top: Boolean) =
         (if (s.shape == SectionShape.HEX) s.maxWidthMm else if (top) s.dTopMm else s.dBottomMm).toFloat() * scale / 2f
 
-    // Die block around the part of the shank held in the die bore
-    if (st.inDieMm > 0.0) {
-        val dieTop = yAt(st.inDieMm)
-        val left = cx - column * 0.47f
-        val right = cx + column * 0.47f
-        drawRect(DieColors.die, Offset(left, dieTop), Size(right - left, baseY + 4f - dieTop))
-        clipRect(left, dieTop, right, baseY + 4f) {
-            var x = left - (baseY - dieTop)
+    fun hatch(left: Float, top: Float, right: Float, bottom: Float, color: Color, gap: Float, rising: Boolean) =
+        clipRect(left, top, right, bottom) {
+            val h = bottom - top
+            var x = left - h
             while (x < right) {
-                drawLine(DieColors.dieHatch, Offset(x, baseY + 4f), Offset(x + (baseY + 4f - dieTop), dieTop), 1f)
-                x += 6f
+                if (rising) drawLine(color, Offset(x, bottom), Offset(x + h, top), 1f)
+                else drawLine(color, Offset(x, top), Offset(x + h, bottom), 1f)
+                x += gap
             }
         }
+
+    // Tooling: die case, hard insert around the bore, and the knock-out pin the part stands on
+    if (st.inDieMm > 0.0) {
+        val dieTop = yAt(st.inDieMm)
+        val dieBottom = baseY + koBand
+        val left = cx - column * 0.47f
+        val right = cx + column * 0.47f
+        val boreR = halfWidth(segs.first(), false)
+        val insertR = min(column * 0.47f, boreR + column * 0.13f)
+        drawRect(DieColors.die, Offset(left, dieTop), Size(right - left, dieBottom - dieTop))
+        hatch(left, dieTop, right, dieBottom, DieColors.dieHatch, 6f, rising = true)
+        drawRect(DieColors.insert, Offset(cx - insertR, dieTop), Size(2 * insertR, dieBottom - dieTop))
+        hatch(cx - insertR, dieTop, cx + insertR, dieBottom, DieColors.insertHatch, 5f, rising = false)
+        listOf(cx - insertR, cx + insertR).forEach { x ->
+            drawLine(DieColors.dieEdge.copy(alpha = 0.7f), Offset(x, dieTop), Offset(x, dieBottom), 1f)
+        }
         drawLine(DieColors.dieEdge, Offset(left, dieTop), Offset(right, dieTop), 1.5f)
+        if (koBand > 0f) {
+            val pinR = boreR * 0.72f
+            drawRect(DieColors.background, Offset(cx - boreR, baseY), Size(2 * boreR, koBand))
+            drawRect(
+                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    0f to DieColors.pin, 0.4f to DieColors.dieEdge, 1f to DieColors.die, startX = cx - pinR, endX = cx + pinR
+                ),
+                Offset(cx - pinR, baseY + 1f), Size(2 * pinR, koBand - 1f)
+            )
+            listOf(cx - boreR, cx + boreR).forEach { x ->
+                drawLine(DieColors.dieEdge.copy(alpha = 0.7f), Offset(x, baseY), Offset(x, dieBottom), 1f)
+            }
+            listOf(cx - pinR, cx + pinR).forEach { x ->
+                drawLine(DieColors.outline.copy(alpha = 0.6f), Offset(x, baseY + 1f), Offset(x, dieBottom), 0.8f)
+            }
+        }
     }
 
-    // Outline: right side bottom → top, then mirrored down the left side
     val chamferTop = segs.last().shape == SectionShape.HEX
     val chamferBottom = segs.first().shape == SectionShape.HEX
-    val right = mutableListOf<Offset>()
-    segs.forEachIndexed { j, s ->
-        val y0 = bottoms[j]
-        val y1 = y0 - drawnH[j]
-        val rB = halfWidth(s, false)
-        val rT = halfWidth(s, true)
-        val c = rB * 0.12f
-        if (j == 0 && chamferBottom) {
-            right += Offset(cx + rB - c, y0); right += Offset(cx + rB, y0 - c * 0.6f)
-        } else right += Offset(cx + rB, y0)
-        if (j == segs.lastIndex && chamferTop) {
-            right += Offset(cx + rT, y1 + c * 0.6f); right += Offset(cx + rT - c, y1)
-        } else right += Offset(cx + rT, y1)
-    }
-    val outline = Path().apply {
-        moveTo(cx, baseY)
-        right.forEach { lineTo(it.x, it.y) }
-        lineTo(cx, topY)
-        right.asReversed().forEach { lineTo(2 * cx - it.x, it.y) }
-        close()
+    val outline: Path
+    if (st.isCutOff) {
+        // Sheared slug: both end faces lean with the shear blade; the mean length is the slug length
+        val r = halfWidth(segs.first(), false)
+        val lean = r * 0.16f
+        outline = Path().apply {
+            moveTo(cx - r, baseY + lean / 2f)
+            lineTo(cx + r, baseY - lean / 2f)
+            lineTo(cx + r, topY - lean / 2f)
+            lineTo(cx - r, topY + lean / 2f)
+            close()
+        }
+    } else {
+        // Right-hand profile, bottom → top, as (radius, y, corner radius); corners are then rounded like forged edges
+        val raw = mutableListOf(Triple(0f, baseY, 0f))
+        fun add(r: Float, yy: Float, corner: Float = 0f) { raw += Triple(r, yy, corner) }
+        val topSeg = segs.last()
+        val topR = halfWidth(topSeg, true)
+        val isUpsetHead = segs.size > 1 && topR > 1.25f * halfWidth(segs[segs.size - 2], true)
+        val topCorner = when {
+            topSeg.dBottomMm != topSeg.dTopMm -> topR * 0.15f                     // cone punch nose
+            isFinal -> topR * 0.08f                                               // finished edge
+            isUpsetHead || segs.size == 1 -> min(drawnH.last() * 0.28f, topR * 0.22f) // corners of an upset do not fill
+            else -> topR * 0.10f                                                  // squared slug end
+        }
+        segs.forEachIndexed { j, sg ->
+            val y0 = bottoms[j]
+            val y1 = y0 - drawnH[j]
+            val rB = halfWidth(sg, false)
+            val rT = halfWidth(sg, true)
+            val hex = sg.shape == SectionShape.HEX
+            if (j == 0) {
+                if (hex && chamferBottom) { val c = rB * 0.12f; add(rB - c, y0); add(rB, y0 - c * 0.6f) }
+                else add(rB, y0, if (segs.size == 1 && !isFinal) topCorner else rB * 0.10f)
+            } else {
+                val rP = halfWidth(segs[j - 1], true)
+                if (rB > rP + 0.5f) add(rB, y0, if (hex) 0f else min(rB - rP, drawnH[j]) * (if (isFinal) 0.10f else 0.22f))
+                else if (rB < rP - 0.5f) add(rB, y0, kotlin.math.max(1.5f, rB * 0.10f))
+            }
+            val next = segs.getOrNull(j + 1)
+            if (next == null) {
+                if (hex) { val c = rT * 0.12f; add(rT, y1 + c * 0.6f); add(rT - c, y1) }
+                else add(rT, y1, topCorner)
+            } else {
+                val rN = halfWidth(next, false)
+                when {
+                    kotlin.math.abs(rN - rT) <= 0.5f ->
+                        if (kotlin.math.abs(rB - rT) > 0.5f || next.dBottomMm != next.dTopMm) add(rT, y1)
+                    rN > rT -> {
+                        val extrusion = !hex && next.shape == SectionShape.ROUND && sg.dBottomMm == sg.dTopMm && rN / rT <= 1.25f
+                        // Extrusion shoulder: 15° per side die cone. Head: under-head fillet.
+                        if (extrusion) add(rT, y1 + min((rN - rT) * 3.73f, drawnH[j] * 0.6f))
+                        else add(rT, y1, kotlin.math.max(1.5f, rT * 0.16f))
+                    }
+                    else -> add(rT, y1, if (hex) 0f else min(rT - rN, drawnH[j]) * 0.18f)
+                }
+            }
+        }
+        raw += Triple(0f, topY, 0f)
+
+        val right = mutableListOf<Offset>()
+        raw.forEachIndexed { i, (r, yy, corner) ->
+            val pnt = Offset(cx + r, yy)
+            if (corner <= 0.3f || i == 0 || i == raw.lastIndex) { right += pnt; return@forEachIndexed }
+            val a = Offset(cx + raw[i - 1].first, raw[i - 1].second)
+            val b = Offset(cx + raw[i + 1].first, raw[i + 1].second)
+            val la = (a - pnt).getDistance()
+            val lb = (b - pnt).getDistance()
+            val rr = min(corner, 0.45f * min(la, lb))
+            if (rr <= 0.3f) { right += pnt; return@forEachIndexed }
+            val pa = pnt + (a - pnt) / la * rr
+            val pb = pnt + (b - pnt) / lb * rr
+            for (k in 0..6) {
+                val t = k / 6f
+                val u = 1f - t
+                right += Offset(u * u * pa.x + 2 * u * t * pnt.x + t * t * pb.x, u * u * pa.y + 2 * u * t * pnt.y + t * t * pb.y)
+            }
+        }
+        outline = Path().apply {
+            moveTo(right.first().x, right.first().y)
+            right.drop(1).forEach { lineTo(it.x, it.y) }
+            right.asReversed().forEach { lineTo(2 * cx - it.x, it.y) }
+            close()
+        }
     }
     drawPath(outline, if (st.isCutOff) DieColors.wire else DieColors.metal)
 
-    // Left half in section: cut face with 45° hatching, then the cavities
     val maxR = st.maxWidthMm.toFloat() * scale / 2f
+    val pad = maxR * 0.2f + 4f
     clipPath(outline) {
-        clipRect(cx - maxR - 2f, topY - 2f, cx, baseY + 2f) {
-            drawRect(DieColors.cutFace, Offset(cx - maxR - 2f, topY - 2f), Size(maxR + 2f, baseY - topY + 4f))
-            var x = cx - maxR - (baseY - topY)
+        // Unsectioned right half: turned-surface shading on round sections, flat facets on a hex
+        clipRect(cx, topY - pad, cx + maxR + 2f, baseY + pad) {
+            segs.forEachIndexed { j, sg ->
+                val y0 = bottoms[j] + if (j == 0) pad else 0f
+                val y1 = bottoms[j] - drawnH[j] - if (j == segs.lastIndex) pad else 0f
+                val r = kotlin.math.max(halfWidth(sg, false), halfWidth(sg, true))
+                if (sg.shape == SectionShape.HEX) {
+                    drawRect(DieColors.hexFront, Offset(cx, y1), Size(r / 2f, y0 - y1))
+                    drawRect(DieColors.hexSide, Offset(cx + r / 2f, y1), Size(maxR, y0 - y1))
+                } else {
+                    drawRect(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            0f to DieColors.shade[0], 0.3f to DieColors.shade[1], 0.72f to DieColors.shade[2], 1f to DieColors.shade[3],
+                            startX = cx, endX = cx + r
+                        ),
+                        Offset(cx, y1), Size(maxR + 2f, y0 - y1)
+                    )
+                }
+            }
+        }
+        // Left half in section: cut face with 45° hatching
+        clipRect(cx - maxR - 2f, topY - pad, cx, baseY + pad) {
+            drawRect(DieColors.cutFace, Offset(cx - maxR - 2f, topY - pad), Size(maxR + 2f, baseY - topY + 2 * pad))
+            var x = cx - maxR - (baseY - topY) - 2 * pad
             while (x < cx) {
-                drawLine(DieColors.hatch, Offset(x, baseY), Offset(x + (baseY - topY), topY), 0.8f)
+                drawLine(DieColors.hatch, Offset(x, baseY + pad), Offset(x + (baseY - topY) + 2 * pad, topY - pad), 0.8f)
                 x += 5f
             }
         }
     }
+
     val hidden = PathEffect.dashPathEffect(floatArrayOf(4f, 3f))
-    fun cavity(rMm: Double, yTop: Float, yBottom: Float) {
-        val r = rMm.toFloat() * scale / 2f
-        drawRect(DieColors.background, Offset(cx - r, yTop), Size(r, yBottom - yTop))
-        drawLine(DieColors.outline, Offset(cx - r, yTop), Offset(cx - r, yBottom), 1f)
-        drawLine(DieColors.outline, Offset(cx - r, if (yTop <= topY + 0.5f) yBottom else yTop), Offset(cx, if (yTop <= topY + 0.5f) yBottom else yTop), 1f)
+    // Blind cavity: mouth chamfer, walls, and the shallow cone the punch nose leaves on the floor
+    fun cavity(widthMm: Double, yMouth: Float, yFloor: Float, hex: Boolean) {
+        val r = widthMm.toFloat() * scale / 2f
+        val depth = kotlin.math.abs(yFloor - yMouth)
+        val dir = if (yFloor > yMouth) 1f else -1f
+        val ch = min(r * 0.12f, depth * 0.15f)
+        val cone = min(r * 0.22f, depth * 0.25f)
+        fun side(sign: Float) = Path().apply {
+            moveTo(cx + sign * (r + ch), yMouth)
+            lineTo(cx + sign * r, yMouth + dir * ch)
+            lineTo(cx + sign * r, yFloor)
+            lineTo(cx, yFloor + dir * cone)
+        }
+        drawPath(Path().apply { addPath(side(-1f)); lineTo(cx, yMouth); close() }, DieColors.background)
+        drawPath(side(-1f), DieColors.outline, style = Stroke(1f))
+        if (hex) drawLine(DieColors.outline.copy(alpha = 0.35f), Offset(cx - r / 2f, yMouth + dir * ch), Offset(cx - r / 2f, yFloor + dir * cone / 2f), 0.8f)
         // Hidden edges in the unsectioned right half
-        drawLine(DieColors.outline.copy(alpha = 0.5f), Offset(cx + r, yTop), Offset(cx + r, yBottom), 1f, pathEffect = hidden)
+        drawPath(side(1f), DieColors.outline.copy(alpha = 0.5f), style = Stroke(1f, pathEffect = hidden))
     }
     st.throughHoleMm?.let { h ->
         val r = h.toFloat() * scale / 2f
@@ -1374,9 +1509,10 @@ private fun DrawScope.drawStation(
         drawLine(DieColors.outline.copy(alpha = 0.5f), Offset(cx + r, topY), Offset(cx + r, baseY), 1f, pathEffect = hidden)
     }
     st.recesses.forEach { rc ->
-        val width = if (rc.shape == SectionShape.HEX) rc.sizeMm * 2.0 / kotlin.math.sqrt(3.0) else rc.sizeMm
-        if (rc.fromTop) cavity(width, topY, yAt(st.heightMm - rc.depthMm))
-        else cavity(width, yAt(rc.depthMm), baseY)
+        val hex = rc.shape == SectionShape.HEX
+        val width = if (hex) rc.sizeMm * 2.0 / kotlin.math.sqrt(3.0) else rc.sizeMm
+        if (rc.fromTop) cavity(width, topY, yAt(st.heightMm - rc.depthMm), hex)
+        else cavity(width, baseY, yAt(rc.depthMm), hex)
     }
 
     // Hex faces seen across corners (unsectioned right half): edges at ±e/4 and 30° chamfer arcs
@@ -1412,7 +1548,8 @@ private fun DrawScope.drawStation(
     // Break symbol across the shortened segment
     if (breakIdx != null) {
         val yMid = bottoms[breakIdx] - drawnH[breakIdx] / 2f
-        val half = if (st.inDieMm > 0.0) column * 0.47f else halfWidth(segs[breakIdx], false) + 2f
+        // The break crosses the die only where the broken length is inside it
+        val half = if (st.inDieMm > 0.0 && yMid > yAt(st.inDieMm)) column * 0.47f else halfWidth(segs[breakIdx], false) + 2f
         drawRect(DieColors.background, Offset(cx - half, yMid - 2.5f), Size(2 * half, 5f))
         listOf(yMid - 2.5f, yMid + 2.5f).forEach { yy ->
             drawPath(Path().apply {
