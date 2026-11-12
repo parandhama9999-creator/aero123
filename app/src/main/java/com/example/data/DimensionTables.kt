@@ -68,11 +68,12 @@ object DimensionTables {
         8.0 to doubleArrayOf(14.0, 4.4, 5.0, 2.6), 10.0 to doubleArrayOf(17.5, 5.5, 6.0, 3.12),
         12.0 to doubleArrayOf(21.0, 6.6, 8.0, 4.16), 16.0 to doubleArrayOf(28.0, 8.8, 10.0, 5.2)
     )
-    // DIN 603 carriage bolts: d -> dk max, k max, square neck height f max (neck side v = d)
+    // DIN 603 carriage bolts: d -> dk max, k max. The square neck (side v = d) has no sourced height in the app:
+    // PartGeometry stands in an estimate and labels it, until the drawing gives f.
     private val DIN_603 = mapOf(
-        5.0 to doubleArrayOf(13.55, 3.3, 4.1), 6.0 to doubleArrayOf(16.55, 3.88, 4.6), 8.0 to doubleArrayOf(20.65, 4.88, 5.6),
-        10.0 to doubleArrayOf(24.65, 5.38, 6.6), 12.0 to doubleArrayOf(30.65, 6.95, 8.75),
-        16.0 to doubleArrayOf(38.8, 8.95, 12.9), 20.0 to doubleArrayOf(46.8, 11.05, 15.9)
+        5.0 to doubleArrayOf(13.55, 3.3), 6.0 to doubleArrayOf(16.55, 3.88), 8.0 to doubleArrayOf(20.65, 4.88),
+        10.0 to doubleArrayOf(24.65, 5.38), 12.0 to doubleArrayOf(30.65, 6.95),
+        16.0 to doubleArrayOf(38.8, 8.95), 20.0 to doubleArrayOf(46.8, 11.05)
     )
     // ISO 7089 plain washers, normal series: d -> d1 (bore), d2 (outside), h (thickness)
     private val ISO_7089 = mapOf(
@@ -166,8 +167,8 @@ object DimensionTables {
                 return estimated(1.75 * dMm, 0.55 * dMm, dMm, if (metric) "outside the ISO 7380 table" else "no inch button head table in the app")
             }
             FastenerType.CARRIAGE_BOLT -> {
-                if (metric) lookup(DIN_603, dMm)?.let { return HeadDimensions(it[0], it[1], 0.92 * it[0], nutM, "DIN 603", true, it[2]) }
-                return estimated(2.4 * dMm, 0.55 * dMm, dMm, if (metric) "outside the DIN 603 table" else "no inch carriage bolt table in the app", 0.65 * dMm)
+                if (metric) lookup(DIN_603, dMm)?.let { return HeadDimensions(it[0], it[1], 0.92 * it[0], nutM, "DIN 603 (head only)", true) }
+                return estimated(2.4 * dMm, 0.55 * dMm, dMm, if (metric) "outside the DIN 603 table" else "no inch carriage bolt table in the app")
             }
             // Universal head, MS20470 proportions: A = 2 D, H = 0.425 D
             FastenerType.SOLID_RIVET, FastenerType.BLIND_RIVET ->

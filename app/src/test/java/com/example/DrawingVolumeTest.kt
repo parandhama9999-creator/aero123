@@ -71,10 +71,11 @@ class DrawingVolumeTest {
         val dome = calc(FastenerType.SOCKET_BUTTON).finishedPart!!.segments.last()
         assertEquals(SectionShape.DOME, dome.shape)
         assertEquals(PI * 5.5 / 6 * (3 * 8.75 * 8.75 + 5.5 * 5.5), dome.volumeMm3, 1e-6)
-        // DIN 603 M10: dome Ø24.65 × 5.38 on a 10 × 10 × 6.6 square neck
+        // DIN 603 M10: dome Ø24.65 × 5.38 (table) on a 10 × 10 square neck whose height is an estimate until the drawing gives it
         val carriage = calc(FastenerType.CARRIAGE_BOLT).finishedPart!!
-        assertEquals(660.0, carriage.segments.first { it.shape == SectionShape.SQUARE }.volumeMm3, 1e-6)
+        assertEquals(10.0 * 10.0 * 4.5, carriage.segments.first { it.shape == SectionShape.SQUARE }.volumeMm3, 1e-6)
         assertEquals(24.65, carriage.segments.last().dBottomMm, 1e-9)
+        assertTrue(carriage.notOnDrawing.any { it.contains("square neck height f") && it.contains("estimated") })
         // ASME B18.3 3/8": head Ø 0.562, height = D, key 5/16
         val inch = calc(FastenerType.SHCS, UnitSystem.INCH, 9.525, 50.8).finishedPart!!
         assertEquals(0.562 * 25.4, inch.segments.last().dBottomMm, 1e-6); assertEquals(9.525, inch.segments.last().heightMm, 1e-6)

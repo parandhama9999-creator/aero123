@@ -271,12 +271,14 @@ object PartGeometry {
                 var neckH = 0.0
                 var neckSrc = DimSource.STANDARD
                 if (style == HeadStyle.CARRIAGE) {
-                    val tableNeck = table.neckHeightMm
-                    if (g.neckHeightMm != null || tableNeck != null) {
-                        val (h, c) = pick("square neck height f", g.neckHeightMm, tableNeck ?: 0.0)
-                        neckH = min(h, under)
-                        neckSrc = c
-                    } else cautions += "The square neck height is not given: the neck is counted as round shank."
+                    // No sourced neck height in the app: an estimate stands in, labelled, until the drawing gives f
+                    val (h, c) = pick(
+                        "square neck height f", g.neckHeightMm, table.neckHeightMm ?: 0.45 * dMm,
+                        from = if (table.neckHeightMm != null) table.source else "estimated 0.45 d — take f from the drawing",
+                        fromTable = table.neckHeightMm != null
+                    )
+                    neckH = min(h, under)
+                    neckSrc = c
                 }
                 lt = if (type.isUnthreaded) 0.0 else min(threadLengthMm, under - neckH).coerceAtLeast(0.0)
                 val plain = under - neckH - lt
