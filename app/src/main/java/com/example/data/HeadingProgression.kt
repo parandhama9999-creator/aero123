@@ -253,22 +253,25 @@ object HeadingProgression {
         }
         if (isFlange) {
             val c = flangeC!!
+            val dc = flangeDc!!
             val hexPart = ProfileSegment(k - c, s, shape = SectionShape.HEX)
+            // The preform has to drop inside the flange cavity of the finish die
+            val dPre = 0.95 * dc
             stations += HeadingStation(
                 index = stations.size,
-                title = "Head upset (hex + oversize collar)",
-                operation = "Form hex s=${f(s)} and collar Ø${f(dRound)} (dc + 2×2 mm) × c=${f(c)} mm",
-                segments = shank + ProfileSegment(c, dRound) + hexPart,
-                inDieMm = length,
-                isPeakBlow = true
+                title = "Head upset",
+                operation = "Upset round head Ø${f(dPre)} × ${f(headForged / area(dPre))} mm against die face, to enter the flange cavity",
+                segments = shank + ProfileSegment(headForged / area(dPre), dPre),
+                inDieMm = length
             )
             stations += HeadingStation(
                 index = stations.size,
-                title = "Trim flange collar",
-                operation = "Trim collar Ø${f(dRound)} → Ø${f(flangeDc!!)} mm; trim cheese ${f(cheese, 0)} mm³ removed",
-                segments = shank + ProfileSegment(c, flangeDc) + hexPart,
+                title = "Hex & flange form",
+                operation = "Coin flange Ø${f(dc)} × c=${f(c)} mm in the die cavity and close hex s=${f(s)} × ${f(k - c)} mm " +
+                    "in the punch hex insert; formed to size, no trim",
+                segments = shank + ProfileSegment(c, dc) + hexPart,
                 inDieMm = length,
-                scrapMm3 = cheese
+                isPeakBlow = true
             )
         } else {
             stations += HeadingStation(

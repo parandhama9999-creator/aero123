@@ -85,11 +85,12 @@ object BoltForging {
             if (flangeDiaMm == null) missing += "flange Ø dc"
             if (flangeThicknessMm == null) missing += "flange thickness c"
             if (s != null && k != null && flangeDiaMm != null && flangeThicknessMm != null && k > flangeThicknessMm) {
-                val dCollar = flangeDiaMm + 4.0
-                cheese = PI / 4 * (dCollar * dCollar - flangeDiaMm * flangeDiaMm) * flangeThicknessMm
+                // The flange is coined to size in the die cavity and the hex closed in the punch: a flange bolt
+                // is formed, not trimmed. Shearing the flange OD would destroy its bearing face and underhead fillet.
+                cheese = 0.0
                 headFinished = PI / 4 * flangeDiaMm * flangeDiaMm * flangeThicknessMm + sqrt(3.0) / 2 * s * s * (k - flangeThicknessMm)
-                headForged = headFinished + cheese
-                note = "Collar forged Ø${"%.1f".format(java.util.Locale.US, dCollar)} × c ${flangeThicknessMm}, trimmed to Ø$flangeDiaMm"
+                headForged = headFinished
+                note = "Flange Ø$flangeDiaMm × c $flangeThicknessMm formed in the die cavity, hex s $s closed in the punch; no trim"
             } else {
                 note = "Needs dc and c from the drawing"
             }

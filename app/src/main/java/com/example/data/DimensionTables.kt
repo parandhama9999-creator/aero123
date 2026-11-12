@@ -170,6 +170,14 @@ object DimensionTables {
                 if (metric) lookup(DIN_603, dMm)?.let { return HeadDimensions(it[0], it[1], 0.92 * it[0], nutM, "DIN 603 (head only)", true) }
                 return estimated(2.4 * dMm, 0.55 * dMm, dMm, if (metric) "outside the DIN 603 table" else "no inch carriage bolt table in the app")
             }
+            FastenerType.FLANGE_BOLT -> {
+                if (metric) BoltForging.din6921(dMm)?.let { g ->
+                    val sFlats = g.s
+                    // k is the whole head height, flange included
+                    if (sFlats != null && g.k != null && g.dc != null)
+                        return HeadDimensions(sFlats, g.k, 0.95 * g.dc, nutM, "DIN 6921 (1983 edition, supplier tables)", true)
+                }
+            }
             // Universal head, MS20470 proportions: A = 2 D, H = 0.425 D
             FastenerType.SOLID_RIVET, FastenerType.BLIND_RIVET ->
                 return HeadDimensions(2.0 * dMm, 0.425 * dMm, 2.0 * dMm, 0.84 * dMm, "MS20470 universal head proportions (A = 2 D, H = 0.425 D)", false)
