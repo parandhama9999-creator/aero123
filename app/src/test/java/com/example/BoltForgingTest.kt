@@ -43,7 +43,7 @@ class ProgressionMatchesCardTest {
                 // One die: nothing is extruded, so the card's extrusion figures do not describe it
                 assertEquals(HeaderRoute.ONE_DIE, plan.route)
                 assertEquals("d=$d L=$len scan=$scan", r.cutOffLengthMm, plan.slugLengthMm, 0.01)
-                assertTrue("one-die hex is trimmed off the machine", plan.offHeaderOps.any { it.title == "Trim to hex" })
+                assertTrue("one-die hex is formed, not trimmed", plan.offHeaderOps.none { it.title.contains("Trim") })
             }
             org.junit.Assert.assertTrue("vol err ${plan.maxVolumeError}", plan.maxVolumeError < 0.005)
         }

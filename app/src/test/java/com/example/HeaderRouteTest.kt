@@ -16,21 +16,50 @@ class HeaderRouteTest {
         )
     }
 
-    @Test fun aFullyThreadedBoltRunsInOneDie_andItsHexIsTrimmedOffTheMachine() {
+    @Test fun aFullyThreadedBoltRunsInOneDie_withItsHexFormedNotTrimmed() {
         val r = calc(FastenerType.HEX_BOLT_FULL, 10.0, 40.0)
         val plan = r.headingPlan!!
         assertEquals(HeaderRoute.ONE_DIE, plan.route)
-        // one die: cut-off plus the blows, and no extrusion station
-        assertEquals(listOf("Shear cut-off", "Cone pre-upset", "Head upset (round, for trimming)"), plan.stations.map { it.title })
+        // one die: cut-off plus the blows, no extrusion station and no trim station
+        assertEquals(listOf("Shear cut-off", "Cone pre-upset", "Hex form"), plan.stations.map { it.title })
         assertEquals(2, plan.upsetBlows)
         assertTrue(plan.stations.none { it.operation.contains("extrude") })
+        assertTrue(plan.stations.none { it.title.contains("Trim") })
+        assertTrue(plan.offHeaderOps.none { it.title.contains("Trim") })
         // the wire is already the rolling blank, so the slug is that diameter
         assertEquals(r.blankTargetDia, plan.slugDiaMm, 0.001)
-        // the trim is a separate press, not a die station
-        assertTrue(plan.stations.none { it.title.contains("Trim") })
-        assertEquals("Trim to hex", plan.offHeaderOps.first().title)
-        assertTrue(plan.offHeaderOps.first().operation.contains("separate trimming press"))
+        // formed, so the slug is exactly the finished part: no cheese
+        assertEquals(r.partVolumeMm3, plan.slugVolumeMm3, 1e-9)
+        assertEquals(0.0, plan.stations.sumOf { it.scrapMm3 }, 1e-9)
+        // the finishing blow ends on the ISO 4017 hex
+        val head = plan.stations.last().segments.last()
+        assertEquals(SectionShape.HEX, head.shape)
+        assertEquals(16.0, head.dBottomMm, 1e-9)
         assertTrue("1-die 2-blow header" in r.recommendedMachine)
+        assertTrue(plan.maxVolumeError < 1e-9)
+    }
+
+    @Test fun aFlangeScrewIsFormedInOneDie_flangeInTheDieAndHexInThePunch() {
+        val idx = FastenerCatalog.sizeIndexFor(UnitSystem.METRIC, 10.0)
+        // Fully threaded flange screw: one shank diameter, so nothing is extruded
+        val r = CalculationEngine.calculate(
+            fastenerType = FastenerType.FLANGE_BOLT, unitSystem = UnitSystem.METRIC, standard = ProductStandard.ISO_1665,
+            nominalSizeIndex = idx, pitchValue = 1.5, lengthMm = 20.0, threadClass = "6g",
+            material = FastenerCatalog.MATERIALS["10B21"]!!, coating = CoatingType.GEOMET, batchQty = 100,
+            propertyClass = PropertyClass.CLASS_10_9,
+            drawing = DrawingGeometry(threadLengthMm = 20.0, flangeDiaMm = 22.3, flangeThicknessMm = 2.0, acrossFlatsMm = 15.0, headHeightMm = 9.2)
+        )
+        val plan = r.headingPlan!!
+        assertEquals(HeaderRoute.ONE_DIE, plan.route)
+        assertEquals("Hex & flange form", plan.stations.last().title)
+        assertTrue(plan.stations.last().operation, plan.stations.last().operation.contains("flange"))
+        assertTrue(plan.stations.none { it.title.contains("Trim") } && plan.offHeaderOps.none { it.title.contains("Trim") })
+        assertEquals(0.0, plan.stations.sumOf { it.scrapMm3 }, 1e-9)
+        assertEquals(r.partVolumeMm3, plan.slugVolumeMm3, 1e-9)
+        // flange on the die face, hex above it
+        val segs = plan.stations.last().segments
+        assertEquals(22.3, segs[segs.size - 2].dBottomMm, 1e-9)
+        assertEquals(SectionShape.HEX, segs.last().shape)
         assertTrue(plan.maxVolumeError < 1e-9)
     }
 

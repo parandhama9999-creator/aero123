@@ -149,24 +149,16 @@ object HeadingProgression {
         if (part.style == HeadStyle.NUT || part.style == HeadStyle.WASHER) return "it is not headed from wire in a bolt die"
         if (part.style == HeadStyle.HEADLESS) return "it has no head to upset"
         if (part.recesses.any { it.fromTop }) return "the socket has to be back-extruded in its own station"
-        if (part.headSegments.size > 1) return "the flange and the head need separate die cavities"
         val shank = part.dieSegments
         if (shank.isEmpty()) return "it has no shank held in the die"
         val minD = shank.minOf { minOf(it.dBottomMm, it.dTopMm) }
         val maxD = shank.maxOf { maxOf(it.dBottomMm, it.dTopMm) }
         // More than one shank diameter means the thread section is extruded down from the wire: that needs a station
         if (maxD - minD > 0.02 * maxD) return "the shank is extruded from Ø${f(maxD)} to Ø${f(minD)}, which needs an extrusion station"
-        val top = part.headSegments.last()
-        val prism = top.shape == SectionShape.HEX || top.shape == SectionShape.TWELVE_POINT
-        val headVol = part.headVolumeMm3 + if (prism) trimCheese(top) else 0.0
-        val ld = headVol / area(maxD) / maxD
+        val ld = part.headVolumeMm3 / area(maxD) / maxD
         if (ld > TWO_BLOW_LD) return "head stock L/D ${f(ld)} needs more than two blows (over $TWO_BLOW_LD)"
         return null
     }
-
-    /** Material a trim press takes off a round head to leave the prism: the head is forged at 1.2 × across corners. */
-    private fun trimCheese(top: ProfileSegment): Double =
-        area(1.2 * top.maxWidthMm) * top.heightMm - top.volumeMm3
 
     fun build(
         type: FastenerType,
@@ -208,6 +200,11 @@ object HeadingProgression {
      * One die, one or two blows. The wire is already at the shank diameter, so nothing is extruded. A prism head
      * cannot be closed by a heading punch here: it is upset round and trimmed on a separate press afterwards.
      */
+    /**
+     * One die, one or two blows, forming the head to size: the die carries the flange or washer-face cavity and the
+     * punch carries the hex insert, so a hex or hex flange head is closed in the finishing blow with no trim at all.
+     * The wire is already at the shank diameter, so nothing is extruded on the machine either.
+     */
     private fun oneDie(type: FastenerType, part: FinishedPart, threadLabel: String): HeadingPlan {
         val body = part.dieSegments
         val inDie = body.sumOf { it.heightMm }
@@ -215,21 +212,24 @@ object HeadingProgression {
         val aw = area(wire)
         val top = part.headSegments.last()
         val prism = top.shape == SectionShape.HEX || top.shape == SectionShape.TWELVE_POINT
-        val cheese = if (prism) trimCheese(top) else 0.0
-        val slugVol = part.volumeMm3 + cheese
+        // Formed, not trimmed: the slug is exactly the finished part
+        val slugVol = part.volumeMm3
         val slugLen = slugVol / aw
-        val stock = (part.headVolumeMm3 + cheese) / aw
+        val stock = part.headVolumeMm3 / aw
         val ld = stock / wire
         val blows = if (ld <= SINGLE_BLOW_LD) 1 else 2
-        val dRound = 1.2 * top.maxWidthMm
-        // Trimming only takes the corners off, so the round head is forged at the finished head height
-        val finishSegments = if (prism) body + ProfileSegment(top.heightMm, dRound) else part.segments
+        // The preform has to enter the finishing cavity: its inscribed circle for a prism, its diameter otherwise
+        val dCavity = if (prism) 0.96 * top.dBottomMm else top.maxWidthMm
 
         val stations = mutableListOf(cutOff(wire, slugLen))
         if (blows == 2) {
-            val hc = stock * 0.62
-            var dc = coneLargeEnd(stock * aw, wire, hc)
-            if (dc > 0.9 * dRound) dc = 0.9 * dRound
+            var hc = stock * 0.62
+            var dc = coneLargeEnd(part.headVolumeMm3, wire, hc)
+            // Clamped to enter the cavity, so the cone grows taller to keep the same volume
+            if (dc > 0.9 * dCavity) {
+                dc = 0.9 * dCavity
+                hc = 12.0 * part.headVolumeMm3 / (PI * (dc * dc + dc * wire + wire * wire))
+            }
             stations += HeadingStation(
                 index = 1,
                 title = "Cone pre-upset",
@@ -239,34 +239,28 @@ object HeadingProgression {
                 inDieMm = inDie
             )
         }
-        val (finishTitle, finishOp) = if (prism)
-            "Head upset (round, for trimming)" to
-                "Upset round head Ø${f(dRound)} (1.2 × across corners) × ${f(top.heightMm)} mm against the die face"
-        else finishingBlow(type, part)
+        val (finishTitle, finishOp) = finishingBlow(type, part)
         stations += HeadingStation(
             index = stations.size,
             title = finishTitle,
-            operation = finishOp + if (blows == 1) "; squared and upset in a single blow" else "",
-            segments = finishSegments,
-            recesses = if (prism) emptyList() else part.recesses,
+            operation = finishOp + if (blows == 1) "; squared and formed in a single blow" else "",
+            segments = part.segments,
+            recesses = part.recesses,
             inDieMm = inDie,
             isPeakBlow = true
         )
 
-        val trimOp = if (!prism) emptyList() else listOf(
-            OffHeaderOp(
-                if (top.shape == SectionShape.TWELVE_POINT) "Trim to 12-point" else "Trim to hex",
-                "Trim the round head Ø${f(dRound)} to s=${f(top.dBottomMm)} × ${f(top.heightMm)} mm on a separate trimming press; " +
-                    "${f(cheese, 0)} mm³ of trim cheese per piece"
-            )
-        )
         val notes = buildList {
             add("One die: the wire is drawn to the shank Ø${f(wire)} mm, so nothing is extruded on the machine.")
-            if (prism) add("A heading punch cannot close a prism head in one die: the head is upset round here and trimmed off the machine.")
+            if (prism) add(
+                "Formed head, no trim: the hex is closed in the punch insert, so there is no trim station and no trim " +
+                    "cheese. Corners are slightly fuller than a trimmed head; take the trimmed route where the drawing " +
+                    "calls for sharp corners."
+            )
             addAll(part.cautions)
         }
         return HeadingPlan(
-            wire, slugLen, slugVol, stations, trimOp + offHeaderOps(type, threadLabel), blows, notes,
+            wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), blows, notes,
             route = HeaderRoute.ONE_DIE,
             reasonForOneDie(part, wire)
         )
