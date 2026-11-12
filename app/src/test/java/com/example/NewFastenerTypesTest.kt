@@ -105,6 +105,7 @@ class NewFastenerTypesTest {
         val plan = r.headingPlan!!
         assertTrue(plan.offHeaderOps.isEmpty())
         assertEquals("Head upset (universal head)", plan.stations.last().title)
+        assertEquals(com.example.data.HeaderRoute.ONE_DIE, plan.route)
         assertEquals(com.example.data.SectionShape.DOME, plan.stations.last().segments.last().shape)
         assertTrue(plan.maxVolumeError < 1e-9)
         assertTrue(r.forgingStages.none { it.title.contains("Thread rolling") })

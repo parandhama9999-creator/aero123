@@ -161,7 +161,9 @@ object CalculationEngine {
         extractedRadius: Double? = null,
         propertyClass: PropertyClass? = null,
         /** Geometry read from a scanned drawing; a null field means the standard / table value is used. */
-        drawing: DrawingGeometry = DrawingGeometry()
+        drawing: DrawingGeometry = DrawingGeometry(),
+        /** Heading route asked for on screen; null picks the one that suits the part. */
+        headerRoute: HeaderRoute? = null
     ): FastenerCalculationResult {
         val d: Double = customNominalDiaMm ?: if (unitSystem == UnitSystem.METRIC) {
             val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
@@ -424,7 +426,8 @@ object CalculationEngine {
         val headingPlan = HeadingProgression.build(
             type = fastenerType, wireDiaMm = dw, part = part, lengthMm = lengthMm, threadLabel = threadLabel,
             forging = boltForging, forgedHeadDiaMm = forgedHeadDia, trimmedHexS = trimS, trimmedHexK = trimK,
-            flangeDiaMm = flange?.dc?.takeIf { boltForging != null }, flangeThicknessMm = flange?.c?.takeIf { boltForging != null }
+            flangeDiaMm = flange?.dc?.takeIf { boltForging != null }, flangeThicknessMm = flange?.c?.takeIf { boltForging != null },
+            preferredRoute = headerRoute
         )
         // Slug also carries material removed during heading (pierced nut web)
         val cutOffLenMm = headingPlan?.slugLengthMm ?: (totalVolMm3 / wireAreaMm2)
@@ -451,12 +454,12 @@ object CalculationEngine {
         val areaRedPct = max(0.0, ((wireAreaMm2 - blankAreaMm2) / wireAreaMm2) * 100.0)
         val forgingTonnage = ((headArea * flowStressMpa * 1.55) / 9806.65) * 1.20
         val machineCapacity = (ceil(forgingTonnage / 25.0) * 25).toInt()
-        val dieCount = headingPlan?.dieStations ?: 0
         val recommendedMachine = when {
             headingPlan == null -> "Progressive blank & pierce press"
-            isNut -> "$dieCount-Die Nut Former (${machineCapacity}T @ ${material.headingSpm} SPM)"
-            material.isAero -> "$dieCount-Die Warm Former (${machineCapacity}T @ ${material.headingSpm} SPM)"
-            else -> "$dieCount-Die $dieCount-Blow ${if (fastenerType.isStud) "Header" else "Bolt Former"} (${machineCapacity}T @ ${material.headingSpm} SPM)"
+            else -> {
+                val warm = if (material.isAero) "warm " else ""
+                "${headingPlan.machineDescription.replaceFirstChar { it.uppercase() }} ($warm${machineCapacity}T @ ${material.headingSpm} SPM)"
+            }
         }
 
         val numberedStages = if (headingPlan == null) {

@@ -54,7 +54,7 @@ class HeadingProgressionTest {
         assertEquals(16.0, last.segments.last().dBottomMm, 1e-9)
         assertEquals(60.0 + 6.4, last.heightMm, 1e-9)
         assertEquals(r.cutOffLengthMm, plan.slugLengthMm, 0.05)
-        assertTrue(r.recommendedMachine.startsWith("4-Die"))
+        assertTrue(r.recommendedMachine, r.recommendedMachine.startsWith("4-die progressive former"))
         assertTrue(r.forgingStages.last().title.contains("Thread rolling"))
     }
 

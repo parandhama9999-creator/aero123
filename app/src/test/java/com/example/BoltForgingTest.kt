@@ -36,8 +36,15 @@ class ProgressionMatchesCardTest {
                 r.blankTargetDia, r.wireDiaMm, r.headDimensions,  m.density,
                 if (scan) 2 * d + 10 else PokaYokeEngine.threadLengthB(FastenerType.HEX_BOLT, UnitSystem.METRIC, d, len),
                 if (scan) d - 0.1 else null, if (scan) d * 1.5 else null, if (scan) d * 0.65 else null, null, null)
-            assertEquals("d=$d L=$len scan=$scan", card.cutOffLengthMm!!, plan.slugLengthMm, 0.01)
-            assertEquals("Trim to hex", plan.stations.last().title)
+            if (plan.route == HeaderRoute.MULTI_STATION) {
+                assertEquals("d=$d L=$len scan=$scan", card.cutOffLengthMm!!, plan.slugLengthMm, 0.01)
+                assertEquals("Trim to hex", plan.stations.last().title)
+            } else {
+                // One die: nothing is extruded, so the card's extrusion figures do not describe it
+                assertEquals(HeaderRoute.ONE_DIE, plan.route)
+                assertEquals("d=$d L=$len scan=$scan", r.cutOffLengthMm, plan.slugLengthMm, 0.01)
+                assertTrue("one-die hex is trimmed off the machine", plan.offHeaderOps.any { it.title == "Trim to hex" })
+            }
             org.junit.Assert.assertTrue("vol err ${plan.maxVolumeError}", plan.maxVolumeError < 0.005)
         }
     }
