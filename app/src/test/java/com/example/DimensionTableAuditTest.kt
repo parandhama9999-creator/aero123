@@ -150,3 +150,26 @@ class DimensionTableAuditTest {
         assertEquals(10.0 * 10.0 * 4.0, drawn.segments.first { it.shape == SectionShape.SQUARE }.volumeMm3, 1e-6)
     }
 }
+
+/** The station label must not reduce a tapered section to one diameter. */
+class StationLabelTest {
+    @Test fun taperedStationsShowBothEnds() {
+        val idx = FastenerCatalog.sizeIndexFor(UnitSystem.METRIC, 4.0)
+        val r = CalculationEngine.calculate(
+            fastenerType = FastenerType.SHCS, unitSystem = UnitSystem.METRIC, standard = ProductStandard.ISO_4762,
+            nominalSizeIndex = idx, pitchValue = 0.7, lengthMm = 25.0, threadClass = "6g",
+            material = FastenerCatalog.MATERIALS["10B21"]!!, coating = CoatingType.GEOMET, batchQty = 1,
+            propertyClass = PropertyClass.CLASS_12_9
+        )
+        val cone = r.headingPlan!!.stations.first { it.title.startsWith("Cone") }.segments.last()
+        // The cone gathers against the die face, so its large end is at the bottom and the wire Ø is at the punch
+        assertTrue("cone ${cone.dBottomMm} → ${cone.dTopMm}", cone.dBottomMm > cone.dTopMm)
+        assertEquals(r.wireDiaMm, cone.dTopMm, 1e-9)
+        val label = com.example.ui.screens.stationFeatureLabel(
+            r.headingPlan!!.stations.first { it.title.startsWith("Cone") })
+        assertTrue(label, label.contains("→") && label.contains(String.format(java.util.Locale.US, "%.2f", cone.dTopMm)))
+        // a plain cylinder still reads as one diameter
+        val cut = com.example.ui.screens.stationFeatureLabel(r.headingPlan!!.stations.first())
+        assertFalse(cut, cut.contains("→"))
+    }
+}

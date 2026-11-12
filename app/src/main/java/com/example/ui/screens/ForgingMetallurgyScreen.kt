@@ -1088,7 +1088,7 @@ fun ColdHeadingProgressionCanvas(
             }
 
             Text(
-                text = "True scale (long shanks broken) · left half in section · shank held in die on the knock-out pin · edge radii, shear angle and socket cone shown typical",
+                text = "True scale (long shanks broken) · left half in section · shank held in die on the knock-out pin · a taper is dimensioned die end → punch end · edge radii, shear angle and socket cone shown typical",
                 fontSize = 9.sp,
                 color = customColors.textMuted,
                 modifier = Modifier.padding(top = 2.dp)
@@ -1150,7 +1150,7 @@ fun ColdHeadingProgressionCanvas(
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 plan.stations.forEach { st ->
                     Text(
-                        text = "${stationCode(st)}  ${st.title} — L ${fmt(st.heightMm, 1)} · ${topFeature(st)} · V ${fmt(st.volumeMm3, 0)} mm³",
+                        text = "${stationCode(st)}  ${st.title} — L ${fmt(st.heightMm, 1)} · ${stationFeatureLabel(st)} · V ${fmt(st.volumeMm3, 0)} mm³",
                         fontSize = 9.sp,
                         fontFamily = FontFamily.Monospace,
                         color = if (st.isPeakBlow) Color(0xFFF59E0B) else customColors.textMuted
@@ -1238,11 +1238,14 @@ private fun fmt(v: Double, decimals: Int) = String.format(java.util.Locale.US, "
 
 private fun stationCode(st: HeadingStation) = if (st.isCutOff) "CUT" else "D${st.index} "
 
-private fun topFeature(st: HeadingStation): String {
+internal fun stationFeatureLabel(st: HeadingStation): String {
     val top = st.segments.last()
-    return when (top.shape) {
-        SectionShape.HEX, SectionShape.TWELVE_POINT -> "s ${fmt(top.dBottomMm, 2)}"
-        SectionShape.SQUARE -> "□ ${fmt(top.dBottomMm, 2)}"
+    return when {
+        top.shape == SectionShape.HEX || top.shape == SectionShape.TWELVE_POINT -> "s ${fmt(top.dBottomMm, 2)}"
+        top.shape == SectionShape.SQUARE -> "□ ${fmt(top.dBottomMm, 2)}"
+        // A taper needs both ends, or the single figure reads as the whole section: die end first, as it is drawn
+        top.shape == SectionShape.ROUND && kotlin.math.abs(top.dTopMm - top.dBottomMm) > 0.005 ->
+            "Ø ${fmt(top.dBottomMm, 2)} → ${fmt(top.dTopMm, 2)}"
         else -> "Ø ${fmt(top.maxWidthMm, 2)}"
     }
 }
@@ -1303,7 +1306,7 @@ internal fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float, 
 
         val topY = baseY - (st.heightMm - if (breakIdx != null) breakMm else 0.0).toFloat() * scale
         drawContext.canvas.nativeCanvas.apply {
-            drawText(topFeature(st), cx, topY - textPx * 0.6f, dimPaint)
+            drawText(stationFeatureLabel(st), cx, topY - textPx * 0.6f, dimPaint)
             labelPaint.color = (if (st.isPeakBlow) DieColors.peak else DieColors.label).toArgb()
             if (stationLabels) drawText(stationCode(st).trim(), cx, baseY + koBand + textPx * 1.6f, labelPaint)
         }
