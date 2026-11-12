@@ -5,14 +5,26 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.sqrt
 
-enum class SectionShape { ROUND, HEX }
+enum class SectionShape { ROUND, HEX, SQUARE, TWELVE_POINT, DOME }
 
 private val HEX_AREA_FACTOR = sqrt(3.0) / 2.0
 
-private fun sectionArea(shape: SectionShape, size: Double) =
-    if (shape == SectionShape.HEX) HEX_AREA_FACTOR * size * size else PI / 4.0 * size * size
+/** Two hexagons 30° apart (bi-hex): 2 × hexagon − their common dodecagon = (√3 − 3·tan 15°)·s². */
+private val TWELVE_POINT_AREA_FACTOR = sqrt(3.0) - 3.0 * kotlin.math.tan(Math.toRadians(15.0))
 
-/** One axial slice of the part, listed from the die end (bottom) to the punch end (top). HEX size is across flats. */
+/** Cross-section area; size is the diameter of a round or dome, across flats of a hex / 12-point, the side of a square. */
+internal fun sectionArea(shape: SectionShape, size: Double) = when (shape) {
+    SectionShape.HEX -> HEX_AREA_FACTOR * size * size
+    SectionShape.TWELVE_POINT -> TWELVE_POINT_AREA_FACTOR * size * size
+    SectionShape.SQUARE -> size * size
+    else -> PI / 4.0 * size * size
+}
+
+/**
+ * One axial slice of the part, listed from the die end (bottom) to the punch end (top).
+ * ROUND is a cylinder or cone; HEX / TWELVE_POINT are prisms sized across flats; SQUARE is a prism sized by its side;
+ * DOME is a spherical cap on a base of diameter dBottomMm.
+ */
 data class ProfileSegment(
     val heightMm: Double,
     val dBottomMm: Double,
@@ -20,12 +32,26 @@ data class ProfileSegment(
     val shape: SectionShape = SectionShape.ROUND
 ) {
     val volumeMm3: Double
-        get() = if (shape == SectionShape.HEX) sectionArea(shape, dBottomMm) * heightMm
-        else PI * heightMm / 12.0 * (dBottomMm * dBottomMm + dBottomMm * dTopMm + dTopMm * dTopMm)
+        get() = when (shape) {
+            SectionShape.ROUND -> PI * heightMm / 12.0 * (dBottomMm * dBottomMm + dBottomMm * dTopMm + dTopMm * dTopMm)
+            SectionShape.DOME -> PI * heightMm / 6.0 * (3.0 * (dBottomMm / 2.0) * (dBottomMm / 2.0) + heightMm * heightMm)
+            else -> sectionArea(shape, dBottomMm) * heightMm
+        }
 
-    /** Width seen in side view; a hex is drawn across corners. */
+    /** Width seen in side view; a hex or 12-point is drawn across corners. */
     val maxWidthMm: Double
-        get() = if (shape == SectionShape.HEX) dBottomMm * 2.0 / sqrt(3.0) else max(dBottomMm, dTopMm)
+        get() = when (shape) {
+            SectionShape.HEX, SectionShape.TWELVE_POINT -> dBottomMm * 2.0 / sqrt(3.0)
+            SectionShape.ROUND -> max(dBottomMm, dTopMm)
+            else -> dBottomMm
+        }
+
+    /** Largest cross-section, which the forming load acts on. */
+    val crossSectionMm2: Double
+        get() = when (shape) {
+            SectionShape.ROUND -> sectionArea(shape, max(dBottomMm, dTopMm))
+            else -> sectionArea(shape, dBottomMm)
+        }
 }
 
 /** Blind cavity (indent or socket) entering from the top or bottom face. */
@@ -82,8 +108,9 @@ data class HeadingPlan(
 }
 
 /**
- * Builds a cold-heading station sequence whose every station holds the slug volume (constant-volume
- * plastic flow), so the drawing and the stage list describe a manufacturable progression.
+ * Builds the cold-heading station sequence for a fastener type. Every station holds the slug volume
+ * (constant-volume plastic flow) and the last one is the finished shape of that type, so the drawing
+ * and the stage list describe a manufacturable progression.
  * Upset limits follow the classic heading rules: free stock L/D ≤ 2.3 in one blow,
  * ≤ 4.5 with one cone pre-upset, beyond that two cones.
  */
@@ -95,34 +122,22 @@ object HeadingProgression {
     fun build(
         type: FastenerType,
         wireDiaMm: Double,
-        nominalDiaMm: Double,
+        part: FinishedPart,
         lengthMm: Double,
-        threadLengthMm: Double,
-        blankDiaMm: Double,
-        partVolumeMm3: Double,
-        head: HeadDimensions,
-        socket: Pair<Double, Double>?,
         threadLabel: String,
         forging: BoltForgingResult? = null,
         forgedHeadDiaMm: Double? = null,
-        trimmedHexS: Double = head.acrossFlatsS,
-        trimmedHexK: Double = head.headHeightK,
+        trimmedHexS: Double = 0.0,
+        trimmedHexK: Double = 0.0,
         flangeDiaMm: Double? = null,
         flangeThicknessMm: Double? = null
     ): HeadingPlan? = when {
-        type.isWasher -> null
-        type.isNut -> nut(wireDiaMm, blankDiaMm, partVolumeMm3, head, threadLabel)
+        part.style == HeadStyle.WASHER -> null
+        part.style == HeadStyle.NUT -> nut(type, wireDiaMm, part, threadLabel)
         forging != null && forgedHeadDiaMm != null ->
-            trimmedHex(type, lengthMm, forging, forgedHeadDiaMm, trimmedHexS, trimmedHexK, threadLabel, flangeDiaMm, flangeThicknessMm)
-        else -> {
-            val lt = threadLengthMm.coerceIn(0.0, lengthMm)
-            val headVol = partVolumeMm3 - area(blankDiaMm) * lt - area(nominalDiaMm) * (lengthMm - lt)
-            if (type.isStud || type == FastenerType.SOCKET_SET || headVol <= 0.0) {
-                headless(type, wireDiaMm, nominalDiaMm, lengthMm, lt, blankDiaMm, partVolumeMm3, socket, threadLabel)
-            } else {
-                headed(type, wireDiaMm, nominalDiaMm, lengthMm, lt, blankDiaMm, headVol, partVolumeMm3, head, socket, threadLabel)
-            }
-        }
+            trimmedHex(type, lengthMm, forging, forgedHeadDiaMm, trimmedHexS, trimmedHexK, threadLabel, flangeDiaMm, flangeThicknessMm, part.cautions)
+        part.style == HeadStyle.HEADLESS || part.headVolumeMm3 <= 0.0 -> headless(type, wireDiaMm, part, threadLabel)
+        else -> headed(type, wireDiaMm, part, threadLabel)
     }
 
     private fun area(d: Double) = sectionArea(SectionShape.ROUND, d)
@@ -135,15 +150,55 @@ object HeadingProgression {
         segments = listOf(ProfileSegment(length, wire))
     )
 
-    private fun rollingOps(threadLabel: String) = listOf(
-        OffHeaderOp("Pointing", "Chamfer thread start to minor diameter (45°)"),
-        OffHeaderOp("Thread rolling", "Roll $threadLabel on flat or cylindrical dies")
-    )
+    /** Work done on the blank after it leaves the header: differs by fastener type. */
+    private fun offHeaderOps(type: FastenerType, threadLabel: String): List<OffHeaderOp> {
+        val point = OffHeaderOp("Pointing", "Chamfer thread start to minor diameter (45°)")
+        val roll = OffHeaderOp("Thread rolling", "Roll $threadLabel on flat or cylindrical dies")
+        val rollAfterHt = OffHeaderOp("Thread rolling", "Roll $threadLabel after heat treatment (controlled root radius)")
+        val filletRoll = OffHeaderOp("Fillet rolling", "Cold-roll the head-to-shank fillet after heat treatment")
+        val tap = OffHeaderOp("Tapping", "Tap $threadLabel on bent-shank nut tapper")
+        val deflect = OffHeaderOp("Locking deflection", "Deflect the top threads (oval / tri-lobe) for the prevailing torque")
+        return when (type) {
+            FastenerType.SOLID_RIVET, FastenerType.BLIND_RIVET -> emptyList()
+            FastenerType.SOCKET_SET -> listOf(OffHeaderOp("Point forming", "Form the cup / cone / dog point on the end opposite the socket"), roll)
+            FastenerType.TWELVE_POINT -> listOf(point, rollAfterHt, filletRoll)
+            FastenerType.NAS_CLOSE_TOL_BOLT ->
+                listOf(OffHeaderOp("Shank grinding", "Centreless grind the shank to the close-tolerance diameter"), point, rollAfterHt, filletRoll)
+            FastenerType.HI_LOK_PIN -> listOf(
+                OffHeaderOp("Shank grinding", "Centreless grind the shank to the interference-fit diameter"), rollAfterHt,
+                OffHeaderOp("Key recess", "Broach the hex key recess in the threaded end")
+            )
+            FastenerType.TAPER_LOK -> listOf(OffHeaderOp("Taper grinding", "Grind the tapered shank to the OEM taper"), rollAfterHt)
+            FastenerType.LOCKBOLT_PIN -> listOf(
+                OffHeaderOp("Groove rolling", "Roll the annular lock grooves and the pintail pull grooves"),
+                OffHeaderOp("Breakneck", "Form the breakneck groove between the lock grooves and the pintail")
+            )
+            FastenerType.BLIND_BOLT -> listOf(point, roll, OffHeaderOp("Assembly", "Assemble the core bolt with its sleeve and drive nut"))
+            FastenerType.BANJO_BOLT -> listOf(OffHeaderOp("Drilling", "Drill the axial bore and the cross hole"), point, roll)
+            FastenerType.THREAD_FORMING_SCREW ->
+                listOf(OffHeaderOp("Thread rolling", "Roll the trilobular thread-forming thread $threadLabel with its tapered lead-in"))
+            FastenerType.EYE_BOLT -> listOf(OffHeaderOp("Eye piercing", "Pierce and size the eye bore"), point, roll)
+            FastenerType.T_BOLT -> listOf(OffHeaderOp("Head trimming", "Trim two sides of the head to the T shape"), point, roll)
+            FastenerType.STUD -> listOf(OffHeaderOp("Pointing", "Chamfer both ends to minor diameter (45°)"), OffHeaderOp("Thread rolling", "Roll $threadLabel on both ends"))
+            FastenerType.WHEEL_STUD -> listOf(OffHeaderOp("Knurling", "Roll the press-fit serration on the collar"), point, roll)
+            FastenerType.U_BOLT -> listOf(
+                OffHeaderOp("Pointing", "Chamfer both ends to minor diameter (45°)"), OffHeaderOp("Thread rolling", "Roll $threadLabel on both ends"),
+                OffHeaderOp("Bending", "Bend to the U form")
+            )
+            FastenerType.NYLOC_NUT -> listOf(tap, OffHeaderOp("Insert assembly", "Press the polyamide ring into the collar and crimp it"))
+            FastenerType.METAL_LOCK_NUT, FastenerType.AERO_LOCK_NUT -> listOf(tap, deflect)
+            FastenerType.CASTLE_NUT -> listOf(OffHeaderOp("Slot milling", "Mill the six slots in the crown"), tap)
+            FastenerType.ACORN_NUT -> listOf(OffHeaderOp("Tapping", "Tap $threadLabel blind with a bottoming tap"))
+            FastenerType.HI_LOK_COLLAR -> listOf(tap, OffHeaderOp("Torque-off groove", "Machine the break groove under the wrenching hex"))
+            FastenerType.NUTPLATE -> listOf(tap, OffHeaderOp("Plate assembly", "Stamp the lug plate and swage the nut element into it"))
+            else -> if (type.isNut) listOf(tap) else listOf(point, roll)
+        }
+    }
 
     /** Hex head forged round (1.2 × e), then trimmed: the slug carries the cheese, the trim station removes it. */
     private fun trimmedHex(
         type: FastenerType, length: Double, fg: BoltForgingResult, dRound: Double, s: Double, k: Double, threadLabel: String,
-        flangeDc: Double? = null, flangeC: Double? = null
+        flangeDc: Double? = null, flangeC: Double? = null, cautions: List<String> = emptyList()
     ): HeadingPlan {
         val isFlange = flangeDc != null && flangeC != null
         val wire = fg.shankDiaMm
@@ -237,46 +292,93 @@ object HeadingProgression {
             if (ld > THREE_BLOW_LD) add("Head stock L/D ${f(ld)} exceeds the 3-blow limit ($THREE_BLOW_LD): use larger wire or warm forming.")
             if (reductionPct > 30.0) add("Open-die extrusion ${f(reductionPct, 0)} % exceeds ~30 %: extrude in a closed (trapped) die to avoid upsetting the shank.")
         }
-        return HeadingPlan(wire, slugLen, slugVol, stations, rollingOps(threadLabel), blows, notes)
+        return HeadingPlan(wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), blows, notes + cautions)
     }
 
-    private fun headed(
-        type: FastenerType, wire: Double, d: Double, length: Double, lt: Double, blank: Double,
-        headVol: Double, slugVol: Double, head: HeadDimensions, socket: Pair<Double, Double>?, threadLabel: String
-    ): HeadingPlan {
+    /** Blows the free head stock needs: 1 up to L/D 2.3, 2 up to 4.5, else 3. */
+    private fun blowsFor(ld: Double) = when {
+        ld <= SINGLE_BLOW_LD -> 1
+        ld <= TWO_BLOW_LD -> 2
+        else -> 3
+    }
+
+    /** Title and operation of the blow that finishes the head, by fastener type. */
+    private fun finishingBlow(type: FastenerType, part: FinishedPart): Pair<String, String> {
+        val head = part.headSegments
+        val top = head.last()
+        val size = f(if (top.shape == SectionShape.ROUND) max(top.dBottomMm, top.dTopMm) else top.dBottomMm)
+        val k = f(top.heightMm)
+        val socket = part.recesses.firstOrNull { it.fromTop }?.let { "hex socket s=${f(it.sizeMm, 1)} × t=${f(it.depthMm, 1)} mm" }
+        val flange = head.firstOrNull { it !== top && it.shape == SectionShape.ROUND }
+            ?.let { ", flange Ø${f(it.dBottomMm)} × c=${f(it.heightMm)} mm on the die face" } ?: ""
+        val hex = "Close hex s=$size × k=$k mm in punch hex insert, 30° chamfer, bearing face"
+        return when (part.style) {
+            HeadStyle.SOCKET_CAP -> "Socket back-extrude" to
+                ((if (type == FastenerType.HEXALOBULAR_SCREW) "Back-extrude hexalobular recess (volume modelled as hex s=${f(part.recesses.first().sizeMm, 1)})"
+                else "Back-extrude hex socket s=${f(part.recesses.first().sizeMm, 1)}") +
+                    " × t=${f(part.recesses.first().depthMm, 1)} mm; finish head Ø$size × k=$k mm")
+            HeadStyle.SOCKET_COUNTERSUNK -> {
+                val angle = 2.0 * Math.toDegrees(kotlin.math.atan((top.dTopMm - top.dBottomMm) / 2.0 / top.heightMm))
+                "Countersunk head & socket" to "Form countersunk head Ø$size × k=$k mm (${f(angle, 0)}° included) in the die countersink; back-extrude $socket"
+            }
+            HeadStyle.SOCKET_BUTTON -> "Button head & socket" to "Form dome head Ø$size × k=$k mm in the cupped punch; back-extrude $socket"
+            HeadStyle.TWELVE_POINT -> "12-point form" to "Close 12-point (bi-hex) s=$size × k=$k mm in the punch insert$flange"
+            HeadStyle.CARRIAGE -> "Mushroom head & square neck" to ("Form dome head Ø$size × k=$k mm in the cupped punch" +
+                (head.firstOrNull { it.shape == SectionShape.SQUARE }
+                    ?.let { "; square neck ${f(it.dBottomMm)} × ${f(it.dBottomMm)} × ${f(it.heightMm)} mm fills the square die recess" } ?: ""))
+            HeadStyle.RIVET -> "Head upset (universal head)" to "Form dome head Ø$size × k=$k mm in the cupped punch in one blow"
+            HeadStyle.ROUND_PIN -> when (type) {
+                FastenerType.HI_LOK_PIN -> "Head upset (Hi-Lok head)"
+                FastenerType.TAPER_LOK -> "Head upset (Taper-Lok head)"
+                FastenerType.LOCKBOLT_PIN -> "Head upset (lockbolt head)"
+                else -> "Head upset (core bolt head)"
+            } to "Upset round head Ø$size × k=$k mm against die face"
+            else -> when (type) {
+                FastenerType.T_BOLT -> "T-head form" to "Flatten the upset into the T-head blank (counted as hex s=$size × k=$k mm); two sides are trimmed off the header"
+                FastenerType.EYE_BOLT -> "Eye blank form" to "Flatten the upset into the eye blank (counted as hex s=$size × k=$k mm); the eye is pierced off the header"
+                FastenerType.WHEEL_BOLT -> "Hex & seat form" to "$hex; form the conical / spherical seat in the die"
+                FastenerType.TTY_HEAD_BOLT -> "Hex flange head form" to "$hex$flange"
+                FastenerType.THREAD_FORMING_SCREW -> "Hex washer head form" to "$hex$flange"
+                else -> (if (flange.isNotEmpty()) "Hex & flange form" else "Hex form") to "$hex$flange"
+            }
+        }
+    }
+
+    private fun headed(type: FastenerType, wire: Double, part: FinishedPart, threadLabel: String): HeadingPlan {
         val aw = area(wire)
+        val slugVol = part.volumeMm3
         val slugLen = slugVol / aw
+        val body = part.dieSegments
+        val inDie = body.sumOf { it.heightMm }
+        val headVol = part.headVolumeMm3
         val stock = headVol / aw
         val ld = stock / wire
-        val blows = when {
-            ld <= SINGLE_BLOW_LD -> 1
-            ld <= TWO_BLOW_LD -> 2
-            else -> 3
-        }
-        val isSocket = socket != null
-        val shank = buildList {
-            if (lt > 0.0) add(ProfileSegment(lt, blank))
-            if (length - lt > 0.0) add(ProfileSegment(length - lt, d))
-        }
-        val reductionPct = (1.0 - area(blank) / aw) * 100.0
-        // The round preform must enter the hex punch insert (inscribed circle s) or match the socket head Ø
-        // A rivet head is round: the upset IS the finished head. Hex/socket heads need a preform that fits the tooling.
-        val roundHead = type.isUnthreaded
-        val dRound = when {
-            roundHead -> head.acrossFlatsS
-            isSocket -> 0.97 * head.acrossFlatsS
-            else -> 0.96 * head.acrossFlatsS
+        val blows = blowsFor(ld)
+        val lt = part.threadLengthMm
+        val blank = part.blankDiaMm
+        val reductionPct = if (lt > 0.0) (1.0 - area(blank) / aw) * 100.0 else 0.0
+        val top = part.headSegments.last()
+        val headSize = if (top.shape == SectionShape.ROUND) max(top.dBottomMm, top.dTopMm) else top.dBottomMm
+        val hasSocket = part.recesses.any { it.fromTop }
+        // A rivet or pin head is round: the upset IS the finished head. Other heads need a round preform that fits the tooling.
+        val upsetIsFinal = part.style == HeadStyle.RIVET || part.style == HeadStyle.ROUND_PIN
+        val dRound = when (part.style) {
+            HeadStyle.SOCKET_CAP -> 0.97 * headSize
+            HeadStyle.SOCKET_COUNTERSUNK, HeadStyle.SOCKET_BUTTON, HeadStyle.CARRIAGE -> 0.90 * headSize
+            HeadStyle.RIVET, HeadStyle.ROUND_PIN -> headSize
+            // The round preform must enter the hex / 12-point punch insert (inscribed circle s)
+            else -> 0.96 * headSize
         }
 
         val stations = mutableListOf(cutOff(wire, slugLen))
         stations += HeadingStation(
             index = 1,
-            title = "Square & forward extrude",
+            title = if (lt > 0.0) "Square & forward extrude" else "Square ends",
             operation = if (lt > 0.0) "Square sheared ends; extrude thread section Ø${f(wire)} → Ø${f(blank, 3)} × ${f(lt, 1)} mm " +
                 "(${f(reductionPct, 0)} % area reduction); head stock ${f(stock, 1)} mm, L/D ${f(ld)}"
             else "Square sheared ends; head stock ${f(stock, 1)} mm, L/D ${f(ld)}",
-            segments = shank + ProfileSegment(stock, wire),
-            inDieMm = length
+            segments = body + ProfileSegment(stock, wire),
+            inDieMm = inDie
         )
 
         val coneFractions = when (blows) {
@@ -296,98 +398,85 @@ object HeadingProgression {
                 index = stations.size,
                 title = if (coneFractions.size > 1) "Cone pre-upset ${i + 1}" else "Cone pre-upset",
                 operation = "Gather head stock in cone punch: Ø${f(dc)} → Ø${f(wire)} × ${f(hc, 1)} mm (L/D ${f(ld)} > $SINGLE_BLOW_LD)",
-                segments = shank + ProfileSegment(hc, dc, wire),
-                inDieMm = length
+                segments = body + ProfileSegment(hc, dc, wire),
+                inDieMm = inDie
             )
         }
 
-        val hRound = headVol / area(dRound)
+        if (!upsetIsFinal) {
+            val hRound = headVol / area(dRound)
+            stations += HeadingStation(
+                index = stations.size,
+                title = "Head upset",
+                operation = "Upset round head Ø${f(dRound)} × ${f(hRound)} mm against die face",
+                segments = body + ProfileSegment(hRound, dRound),
+                inDieMm = inDie,
+                isPeakBlow = hasSocket
+            )
+        }
+        val (title, operation) = finishingBlow(type, part)
         stations += HeadingStation(
             index = stations.size,
-            title = if (roundHead) "Head upset (finished round head)" else "Head upset",
-            operation = "Upset round head Ø${f(dRound)} × ${f(hRound)} mm against die face",
-            segments = shank + ProfileSegment(hRound, dRound),
-            inDieMm = length,
-            isPeakBlow = isSocket || roundHead
+            title = title,
+            operation = operation,
+            segments = part.segments,
+            recesses = part.recesses,
+            inDieMm = inDie,
+            isPeakBlow = !hasSocket
         )
-
-        if (!roundHead) stations += if (isSocket) {
-            val (key, depth) = socket!!
-            HeadingStation(
-                index = stations.size,
-                title = "Socket back-extrude",
-                operation = (if (type == FastenerType.HEXALOBULAR_SCREW) "Back-extrude hexalobular recess (volume modelled as hex s=${f(key, 1)})"
-                    else "Back-extrude hex socket s=${f(key, 1)}") +
-                    " × t=${f(depth, 1)} mm; finish head Ø${f(head.acrossFlatsS)} × k=${f(head.headHeightK)} mm",
-                segments = shank + ProfileSegment(head.headHeightK, head.acrossFlatsS),
-                recesses = listOf(Recess(true, key, depth, SectionShape.HEX)),
-                inDieMm = length
-            )
-        } else {
-            HeadingStation(
-                index = stations.size,
-                title = "Hex form",
-                operation = "Close hex s=${f(head.acrossFlatsS)} × k=${f(head.headHeightK)} mm in punch hex insert, 30° chamfer, bearing face",
-                segments = shank + ProfileSegment(head.headHeightK, head.acrossFlatsS, shape = SectionShape.HEX),
-                inDieMm = length,
-                isPeakBlow = true
-            )
-        }
 
         val notes = buildList {
             if (ld > THREE_BLOW_LD) add("Head stock L/D ${f(ld)} exceeds the 3-blow limit ($THREE_BLOW_LD): use larger wire or warm forming.")
             if (reductionPct > 30.0) add("Open-die extrusion ${f(reductionPct, 0)} % exceeds ~30 %: extrude in a closed (trapped) die to avoid upsetting the shank.")
-            if (type == FastenerType.BLIND_RIVET) add("Blind rivet: only the sleeve is modelled, as a solid shank. The sleeve bore and the mandrel are separate parts not covered here.")
+            addAll(part.cautions)
         }
-        return HeadingPlan(wire, slugLen, slugVol, stations, if (roundHead) emptyList() else rollingOps(threadLabel), blows, notes)
+        return HeadingPlan(wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), blows, notes)
     }
 
-    private fun headless(
-        type: FastenerType, wire: Double, d: Double, length: Double, lt: Double, blank: Double,
-        slugVol: Double, socket: Pair<Double, Double>?, threadLabel: String
-    ): HeadingPlan {
+    private fun headless(type: FastenerType, wire: Double, part: FinishedPart, threadLabel: String): HeadingPlan {
+        val slugVol = part.volumeMm3
         val slugLen = slugVol / area(wire)
+        val blank = part.blankDiaMm
         val stations = mutableListOf(cutOff(wire, slugLen))
-        if (type == FastenerType.SOCKET_SET && socket != null) {
-            val (key, depth) = socket
+        val socket = part.recesses.firstOrNull()
+        if (socket != null) {
+            val solidLen = slugVol / area(blank)
             stations += HeadingStation(
                 index = 1,
                 title = "Square & extrude",
                 operation = "Square ends; extrude full length Ø${f(wire)} → Ø${f(blank, 3)} mm",
-                segments = listOf(ProfileSegment(slugVol / area(blank), blank)),
-                inDieMm = slugVol / area(blank)
+                segments = listOf(ProfileSegment(solidLen, blank)),
+                inDieMm = solidLen
             )
             stations += HeadingStation(
                 index = 2,
                 title = "Socket back-extrude",
-                operation = "Back-extrude hex socket s=${f(key, 1)} × t=${f(depth, 1)} mm; part grows to L=${f(length, 1)} mm",
-                segments = listOf(ProfileSegment(length, blank)),
-                recesses = listOf(Recess(true, key, depth, SectionShape.HEX)),
-                inDieMm = length,
+                operation = "Back-extrude hex socket s=${f(socket.sizeMm, 1)} × t=${f(socket.depthMm, 1)} mm; part grows to L=${f(part.heightMm, 1)} mm",
+                segments = part.segments,
+                recesses = part.recesses,
+                inDieMm = part.heightMm,
                 isPeakBlow = true
             )
         } else {
-            // Double-end studs carry half the thread length at each end
-            val segments = when {
-                lt >= length -> listOf(ProfileSegment(length, blank))
-                lt <= 0.0 -> listOf(ProfileSegment(length, d))
-                else -> listOf(ProfileSegment(lt / 2, blank), ProfileSegment(length - lt, d), ProfileSegment(lt / 2, blank))
-            }
+            val threaded = part.threadLengthMm > 0.0
             stations += HeadingStation(
                 index = 1,
-                title = "Square & extrude ends",
-                operation = "Square ends; extrude thread sections Ø${f(wire)} → Ø${f(blank, 3)} mm",
-                segments = segments,
-                inDieMm = length,
+                title = if (threaded) "Square & extrude ends" else "Square ends",
+                operation = if (threaded) "Square ends; extrude thread sections Ø${f(wire)} → Ø${f(blank, 3)} mm" else "Square both sheared ends",
+                segments = part.segments,
+                inDieMm = part.heightMm,
                 isPeakBlow = true
             )
         }
-        return HeadingPlan(wire, slugLen, slugVol, stations, rollingOps(threadLabel), 0, emptyList())
+        return HeadingPlan(wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), 0, part.cautions)
     }
 
-    private fun nut(wire: Double, hole: Double, nutVol: Double, head: HeadDimensions, threadLabel: String): HeadingPlan {
-        val s = head.acrossFlatsS
-        val m = head.nutHeightM
+    private fun nut(type: FastenerType, wire: Double, part: FinishedPart, threadLabel: String): HeadingPlan {
+        val hexSeg = part.segments.last()
+        val s = hexSeg.dBottomMm
+        val m = part.heightMm
+        val hole = part.throughHoleMm!!
+        val nutVol = part.volumeMm3
         // Web left between the two indents and punched out at the last station
         val web = max(0.8, 0.25 * hole).coerceAtMost(0.4 * m)
         val webVol = area(hole) * web
@@ -399,6 +488,30 @@ object HeadingProgression {
         val h1 = slugVol / area(d1)
         val indent2 = 0.4 * indentFinal
         val h2 = (slugVol + 2.0 * area(hole) * indent2) / area(dRound)
+        val flange = part.segments.firstOrNull { it !== hexSeg && it.shape == SectionShape.ROUND }
+            ?.let { ", flange Ø${f(it.dBottomMm)} × c=${f(it.heightMm)} mm" } ?: ""
+        // The same forming blow, named for what this nut type adds to the plain hex
+        val formTitle = when (type) {
+            FastenerType.FLANGE_NUT -> "Hex & flange form"
+            FastenerType.NYLOC_NUT -> "Hex & collar form"
+            FastenerType.CASTLE_NUT -> "Hex & crown form"
+            FastenerType.ACORN_NUT -> "Hex & dome form"
+            FastenerType.WELD_NUT -> "Hex & weld projection form"
+            FastenerType.WHEEL_NUT -> "Hex & seat form"
+            FastenerType.AERO_LOCK_NUT -> "Reduced hex form"
+            FastenerType.HI_LOK_COLLAR -> "Collar form"
+            FastenerType.NUTPLATE -> "Nut element form"
+            else -> "Hex form"
+        }
+        val formExtra = when (type) {
+            FastenerType.NYLOC_NUT -> "; raise the collar that holds the insert"
+            FastenerType.CASTLE_NUT -> "; raise the round crown for the slots"
+            FastenerType.ACORN_NUT -> "; raise the dome cap"
+            FastenerType.WELD_NUT -> "; coin the weld projections"
+            FastenerType.WHEEL_NUT -> "; form the conical / spherical seat"
+            FastenerType.HI_LOK_COLLAR -> "; form the wrenching hex above the collar"
+            else -> ""
+        }
 
         val stations = listOf(
             cutOff(wire, slugLen),
@@ -417,9 +530,9 @@ object HeadingProgression {
             ),
             HeadingStation(
                 index = 3,
-                title = "Hex form",
-                operation = "Close hex s=${f(s)} × m=${f(m)} mm, deepen indents to ${f(indentFinal)} mm, leave web ${f(web)} mm",
-                segments = listOf(ProfileSegment(m, s, shape = SectionShape.HEX)),
+                title = formTitle,
+                operation = "Close hex s=${f(s)} × m=${f(m)} mm$flange, deepen indents to ${f(indentFinal)} mm, leave web ${f(web)} mm$formExtra",
+                segments = part.segments,
                 recesses = listOf(Recess(true, hole, indentFinal, SectionShape.ROUND), Recess(false, hole, indentFinal, SectionShape.ROUND)),
                 isPeakBlow = true
             ),
@@ -427,16 +540,12 @@ object HeadingProgression {
                 index = 4,
                 title = "Pierce",
                 operation = "Punch out web Ø${f(hole)} × ${f(web)} mm (${f(webVol / 1000.0, 3)} cm³ scrap); bore = tap drill",
-                segments = listOf(ProfileSegment(m, s, shape = SectionShape.HEX)),
+                segments = part.segments,
                 throughHoleMm = hole,
                 scrapMm3 = webVol
             )
         )
-        return HeadingPlan(
-            wire, slugLen, slugVol, stations,
-            listOf(OffHeaderOp("Tapping", "Tap $threadLabel on bent-shank nut tapper")),
-            0, emptyList()
-        )
+        return HeadingPlan(wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), 0, part.cautions)
     }
 
     /** Large-end diameter D of a frustum of height h with small end d holding volume v. */

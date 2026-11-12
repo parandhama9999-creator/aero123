@@ -47,8 +47,36 @@ data class ExtractedFastenerSpec(
     val headHeightMm: Double? = null,
     val flangeDiaMm: Double? = null,
     val flangeThicknessMm: Double? = null,
-    val shankDiaMm: Double? = null
-)
+    val shankDiaMm: Double? = null,
+    val headDiaMm: Double? = null,
+    val socketSizeMm: Double? = null,
+    val socketDepthMm: Double? = null,
+    val neckHeightMm: Double? = null,
+    val nutHeightMm: Double? = null,
+    val washerOuterDiaMm: Double? = null,
+    val washerInnerDiaMm: Double? = null,
+    val washerThicknessMm: Double? = null,
+    /** Values the drawing did not show, so a default stands in: each entry starts with the value's name. */
+    val assumed: List<String> = emptyList(),
+    /** The part as a stack of solids from the head end to the point end, as the AI read it (empty when it gave none). */
+    val solids: List<DrawnSolid> = emptyList(),
+    val cutouts: List<DrawnCutout> = emptyList()
+) {
+    /** Every drawing dimension the volume model can use. */
+    fun geometry(): DrawingGeometry {
+        val roundHead = PartGeometry.styleOf(fastenerType) in setOf(
+            HeadStyle.SOCKET_CAP, HeadStyle.SOCKET_COUNTERSUNK, HeadStyle.SOCKET_BUTTON, HeadStyle.CARRIAGE, HeadStyle.ROUND_PIN, HeadStyle.RIVET
+        )
+        return DrawingGeometry(
+            threadLengthMm = threadLengthMm, shankDiaMm = shankDiaMm, acrossFlatsMm = headAcrossFlatsMm,
+            // A round head's diameter is sometimes reported in the across-flats field
+            headDiaMm = headDiaMm ?: headAcrossFlatsMm.takeIf { roundHead },
+            headHeightMm = headHeightMm, flangeDiaMm = flangeDiaMm, flangeThicknessMm = flangeThicknessMm,
+            socketSizeMm = socketSizeMm, socketDepthMm = socketDepthMm, neckHeightMm = neckHeightMm, nutHeightMm = nutHeightMm,
+            washerOuterDiaMm = washerOuterDiaMm, washerInnerDiaMm = washerInnerDiaMm, washerThicknessMm = washerThicknessMm
+        )
+    }
+}
 
 object GeminiAiService {
     // Users MUST provide their own Gemini API key via Settings dialog
@@ -183,16 +211,6 @@ object GeminiAiService {
         }
     }
 
-    private fun optCleanDouble(json: JSONObject, key: String, default: Double): Double {
-        if (!json.has(key)) return default
-        val num = json.optDouble(key, Double.NaN)
-        // 0 means "not shown on the drawing", so keep the default instead of a zero-size fastener
-        if (!num.isNaN()) return if (num > 0) num else default
-        val str = json.optString(key, "")
-        val match = Regex("""([0-9]+(?:\.[0-9]+)?)""").find(str)
-        return match?.value?.toDoubleOrNull() ?: default
-    }
-
     /** The Sizing screen's forging results and die stations, so the Co-Pilot explains the same numbers the user sees. */
     fun forgingContext(r: FastenerCalculationResult): String = buildString {
         val f = r.boltForging
@@ -211,6 +229,42 @@ object GeminiAiService {
             plan.stations.forEach { append("- ${it.index}. ${it.title}: ${it.operation}\n") }
         }
     }
+
+    /** What the vision model is asked for: every dimension, and the part as a stack of solids so its whole volume can be computed. */
+    fun buildExtractionPrompt(): String = """
+        Fastener drawing inspection. Read every callout, title block and note. Return ONLY this JSON:
+        {"nominalDiameterMm":number,"pitch":number,"lengthMm":number,"fastenerType":"","unitSystem":"METRIC|INCH",
+         "materialKey":"","propertyClass":"","threadClass":"","coating":"",
+         "threadLengthMm":number,"shankDiaMm":number,"headAcrossFlatsMm":number,"headDiaMm":number,"headHeightMm":number,
+         "flangeDiaMm":number,"flangeThicknessMm":number,"socketSizeMm":number,"socketDepthMm":number,"neckHeightMm":number,
+         "nutHeightMm":number,"washerOuterDiaMm":number,"washerInnerDiaMm":number,"washerThicknessMm":number,"radius":number,
+         "solids":[{"feature":"","shape":"CYLINDER|CONE|HEX|SQUARE|TWELVE_POINT|DOME","d1":number,"d2":number,"lengthMm":number,"threaded":false}],
+         "cutouts":[{"feature":"","shape":"CYLINDER|CONE|HEX|SQUARE|TWELVE_POINT","d1":number,"d2":number,"lengthMm":number,"count":1,"from":"HEAD_END|POINT_END|THROUGH|CROSS","threaded":false}],
+         "detectedDimensions":[{"feature":"","nominal":"","tolerance":""}],"summary":""}
+        Rules:
+        - fastenerType one of: ${FastenerType.values().joinToString(",") { it.name }}
+        - coating one of: ${CoatingType.values().joinToString(",") { it.name }}
+        - materialKey e.g. 10B21, 4140, SS316, A286, Ti-6Al-4V; propertyClass e.g. 8.8, 10.9, A2-70; threadClass e.g. 6g, 6H, 2A, 3A.
+        - Inch drawings: give every diameter and length in mm and pitch in mm (25.4/TPI).
+        - threadLengthMm = thread length b; shankDiaMm = plain shank / body diameter; headAcrossFlatsMm = across flats s of a hex or 12-point head, or of a nut;
+          headDiaMm = diameter of a round head (socket cap, countersunk, button, carriage, pin, rivet); headHeightMm = head height k (incl. flange);
+          flangeDiaMm / flangeThicknessMm = flange or washer-face dc and c; socketSizeMm / socketDepthMm = drive socket key size and depth;
+          neckHeightMm = square neck height; nutHeightMm = nut height m; washerOuterDiaMm / washerInnerDiaMm / washerThicknessMm = washer outside Ø, bore Ø, thickness;
+          radius = under-head fillet radius. All in mm, 0 if not shown.
+        - solids: the finished part as a stack of solids along its axis, in order from the head (drive) end to the point end. They must cover the whole
+          part once, with no gaps and no overlaps, so their lengthMm add up to the overall length including the head. One entry for each section that
+          has its own diameter or shape: head, flange / collar / washer face, neck, plain shank, shoulder, groove or undercut, thread, dog point.
+          CYLINDER: d1 = diameter. CONE (countersunk head, taper, chamfer): d1 = diameter at its head-side end, d2 = at its point-side end.
+          HEX / TWELVE_POINT: d1 = across flats. SQUARE: d1 = side. DOME (button, mushroom or rivet head): d1 = base diameter, lengthMm = dome height.
+          threaded = true for a threaded length (d1 = nominal thread diameter). A nut or a washer is one solid; its hole goes in cutouts.
+        - cutouts: material removed from those solids: drive socket, nut bore, washer hole, drilled or cross holes, slots. d1 = diameter (across flats of a
+          hex socket), lengthMm = depth (the full length for a through hole), count = how many, from = where it enters, threaded = true for a tapped hole.
+        - solids and cutouts use only dimensions shown on the drawing. If a section's size is not dimensioned, return "solids":[] instead of guessing.
+        - detectedDimensions: EVERY dimension on the drawing, one entry each, nominal with unit, tolerance exactly as written ("" if none):
+          diameters, lengths, thread length, head height, across flats/corners, flange/socket sizes, chamfers, radii, angles, GD&T callouts.
+        - Only values actually shown; never invent. Use "" (or 0 for numbers) when not shown.
+        - summary: one sentence.
+    """.trimIndent()
 
     suspend fun extractBlueprintSpecFromImage(
         imageBitmap: Bitmap,
@@ -234,25 +288,7 @@ object GeminiAiService {
         }
 
         val base64Image = bitmapToBase64(imageBitmap)
-        val extractionPrompt = """
-            Fastener drawing inspection. Read every callout, title block and note. Return ONLY this JSON:
-            {"nominalDiameterMm":number,"pitch":number,"lengthMm":number,"fastenerType":"","unitSystem":"METRIC|INCH",
-             "materialKey":"","propertyClass":"","threadClass":"","coating":"",
-             "threadLengthMm":number,"headAcrossFlatsMm":number,"headHeightMm":number,
-             "flangeDiaMm":number,"flangeThicknessMm":number,"shankDiaMm":number,
-             "detectedDimensions":[{"feature":"","nominal":"","tolerance":""}],"summary":""}
-            Rules:
-            - fastenerType one of: ${FastenerType.values().joinToString(",") { it.name }}
-            - coating one of: ${CoatingType.values().joinToString(",") { it.name }}
-            - materialKey e.g. 10B21, 4140, SS316, A286, Ti-6Al-4V; propertyClass e.g. 8.8, 10.9, A2-70; threadClass e.g. 6g, 6H, 2A, 3A.
-            - Inch drawings: give nominalDiameterMm and lengthMm in mm and pitch in mm (25.4/TPI).
-            - threadLengthMm = thread length b; headAcrossFlatsMm = across flats s; headHeightMm = head height k (incl. flange);
-              flangeDiaMm = flange dc; flangeThicknessMm = flange thickness c; shankDiaMm = plain shank / body diameter. All in mm, 0 if not shown.
-            - detectedDimensions: EVERY dimension on the drawing, one entry each, nominal with unit, tolerance exactly as written ("" if none):
-              diameters, lengths, thread length, head height, across flats/corners, flange/socket sizes, chamfers, radii, angles, GD&T callouts.
-            - Only values actually shown; never invent. Use "" (or 0 for numbers) when not shown.
-            - summary: one sentence.
-        """.trimIndent()
+        val extractionPrompt = buildExtractionPrompt()
 
         fun buildJsonBody(): JSONObject {
             return JSONObject().apply {
@@ -370,18 +406,57 @@ object GeminiAiService {
         }
     }
 
-    private fun parseSpecFromJson(parsedJson: JSONObject, modelName: String): ExtractedFastenerSpec {
+    /** A number the drawing actually showed (above zero), from a JSON number or a string such as "12.5 mm". */
+    private fun shown(json: JSONObject, key: String): Double? {
+        if (!json.has(key) || json.isNull(key)) return null
+        val num = json.optDouble(key, Double.NaN)
+        if (!num.isNaN()) return num.takeIf { it > 0.0 }
+        return Regex("""([0-9]+(?:\.[0-9]+)?)""").find(json.optString(key, ""))?.value?.toDoubleOrNull()?.takeIf { it > 0.0 }
+    }
+
+    private fun parseSolids(json: JSONObject): Pair<List<DrawnSolid>, List<DrawnCutout>> {
+        fun shape(o: JSONObject) = runCatching { SolidShape.valueOf(o.optString("shape", "").trim().uppercase().replace(Regex("[^A-Z0-9]+"), "_").trim('_')) }.getOrNull()
+        val solids = mutableListOf<DrawnSolid>()
+        val arr = json.optJSONArray("solids") ?: return emptyList<DrawnSolid>() to emptyList()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: return emptyList<DrawnSolid>() to emptyList()
+            // One unreadable section means the stack no longer covers the part: use none of it
+            val sh = shape(o) ?: return emptyList<DrawnSolid>() to emptyList()
+            val d1 = shown(o, "d1") ?: return emptyList<DrawnSolid>() to emptyList()
+            val len = shown(o, "lengthMm") ?: return emptyList<DrawnSolid>() to emptyList()
+            solids += DrawnSolid(o.optString("feature", "").trim(), sh, d1, shown(o, "d2") ?: 0.0, len, o.optBoolean("threaded", false))
+        }
+        val cutouts = mutableListOf<DrawnCutout>()
+        val cuts = json.optJSONArray("cutouts")
+        if (cuts != null) for (i in 0 until cuts.length()) {
+            val o = cuts.optJSONObject(i) ?: continue
+            val sh = shape(o)?.takeIf { it != SolidShape.DOME } ?: return emptyList<DrawnSolid>() to emptyList()
+            val d1 = shown(o, "d1") ?: return emptyList<DrawnSolid>() to emptyList()
+            val len = shown(o, "lengthMm") ?: return emptyList<DrawnSolid>() to emptyList()
+            val from = runCatching { CutoutFrom.valueOf(o.optString("from", "HEAD_END").trim().uppercase().replace(Regex("[^A-Z]+"), "_").trim('_')) }
+                .getOrDefault(CutoutFrom.HEAD_END)
+            cutouts += DrawnCutout(o.optString("feature", "").trim(), sh, d1, shown(o, "d2") ?: 0.0, len, o.optInt("count", 1).coerceAtLeast(1), from, o.optBoolean("threaded", false))
+        }
+        return solids to cutouts
+    }
+
+    fun parseSpecFromJson(parsedJson: JSONObject, modelName: String): ExtractedFastenerSpec {
+        val assumed = mutableListOf<String>()
         // Normalise "Hex Bolt" / "hex-bolt" to HEX_BOLT so any of the app's fastener types can be recognised
         fun normEnum(s: String) = s.trim().uppercase().replace(Regex("[^A-Z0-9]+"), "_").trim('_')
-        val rawType = normEnum(parsedJson.optString("fastenerType", "HEX_BOLT"))
+        val rawType = normEnum(parsedJson.optString("fastenerType", ""))
         val fastenerType = FastenerType.values().find { it.name == rawType }
             ?: FastenerType.values().find { normEnum(it.label) == rawType }
-            ?: if (rawType.contains("NUT")) FastenerType.HEX_NUT else FastenerType.HEX_BOLT
+            ?: (if (rawType.contains("NUT")) FastenerType.HEX_NUT else FastenerType.HEX_BOLT).also {
+                assumed += "fastener type (${if (rawType.isBlank()) "not on the drawing" else "'$rawType' not recognised"}: ${it.label.substringBefore(" (")} used)"
+            }
         val rawUnit = parsedJson.optString("unitSystem", "METRIC")
         val unitSystem = if (rawUnit.uppercase().contains("INCH")) UnitSystem.INCH else UnitSystem.METRIC
-        val extractedDia = optCleanDouble(parsedJson, "nominalDiameterMm", 10.0)
-        val extractedPitch = optCleanDouble(parsedJson, "pitch", 1.5)
-        val extractedLength = optCleanDouble(parsedJson, "lengthMm", 50.0)
+        // A value the drawing does not show keeps a default so the app can still calculate, but it is reported, never passed off as read
+        val extractedDia = shown(parsedJson, "nominalDiameterMm") ?: 10.0.also { assumed += "nominal diameter (not on the drawing: 10 mm used)" }
+        val extractedLength = shown(parsedJson, "lengthMm") ?: 50.0.also {
+            if (!fastenerType.isNut && !fastenerType.isWasher) assumed += "length (not on the drawing: 50 mm used)"
+        }
 
         val sizeIndex: Int = if (unitSystem == UnitSystem.METRIC) {
             var closestIdx = 0
@@ -406,15 +481,24 @@ object GeminiAiService {
             }
             closestIdx
         }
+        // No pitch on the drawing: the coarse pitch of that size, not one fixed value for every diameter
+        val coarsePitchMm = if (unitSystem == UnitSystem.METRIC) FastenerCatalog.METRIC_SIZES[sizeIndex].pitches.first()
+            else 25.4 / FastenerCatalog.INCH_SIZES[sizeIndex].tpis.first()
+        val extractedPitch = shown(parsedJson, "pitch") ?: coarsePitchMm.also {
+            if (!fastenerType.isUnthreaded && !fastenerType.isWasher) assumed += "pitch (not on the drawing: coarse pitch ${it.round(3)} mm used)"
+        }
 
-        val rawMat = parsedJson.optString("materialKey", "10B21").uppercase()
+        val rawMat = parsedJson.optString("materialKey", "").uppercase()
         val matchedMaterialKey = if (FastenerCatalog.MATERIALS.containsKey(rawMat)) {
             rawMat
         } else {
-            FastenerCatalog.MATERIALS.keys.find { rawMat.contains(it) } ?: "10B21"
+            FastenerCatalog.MATERIALS.keys.find { rawMat.isNotBlank() && rawMat.contains(it) }
+                ?: "10B21".also { assumed += if (rawMat.isBlank()) "material (not on the drawing: 10B21 used)" else "material ('$rawMat' is not in the catalogue: 10B21 used)" }
         }
 
-        val rawProp = parsedJson.optString("propertyClass", "10.9").uppercase()
+        val rawPropText = parsedJson.optString("propertyClass", "")
+        if (rawPropText.isBlank() && !fastenerType.isWasher) assumed += "property class (not on the drawing: 10.9 used)"
+        val rawProp = rawPropText.ifBlank { "10.9" }.uppercase()
         val matchedPropClass = when {
             // Longest / most specific patterns first: "9.8" must not fall into "8.8", "A4-80" not into "A2-70"
             rawProp.contains("B7") -> PropertyClass.ASTM_A193_B7
@@ -439,11 +523,14 @@ object GeminiAiService {
             else -> PropertyClass.CLASS_10_9
         }
 
-        val rawThreadClass = parsedJson.optString("threadClass", "6g")
-        val rawCoating = normEnum(parsedJson.optString("coating", "ZN_NI"))
-        val matchedCoating = CoatingType.values().find { it.name == rawCoating }
-            ?: CoatingType.values().find { normEnum(it.label).contains(rawCoating) || rawCoating.contains(it.name) }
-            ?: CoatingType.ZN_NI
+        // No class on the drawing: the governing standard's own class for this part, not 6g on everything
+        val rawThreadClass = parsedJson.optString("threadClass", "").ifBlank {
+            SelectionFilter.threadClasses(unitSystem, fastenerType, PokaYokeEngine.defaultStandard(fastenerType, unitSystem)).first()
+        }
+        val rawCoating = normEnum(parsedJson.optString("coating", ""))
+        val matchedCoating = (if (rawCoating.isBlank()) null else CoatingType.values().find { it.name == rawCoating }
+            ?: CoatingType.values().find { normEnum(it.label).contains(rawCoating) || rawCoating.contains(it.name) })
+            ?: CoatingType.ZN_NI.also { assumed += "coating (not on the drawing: Zn-Ni used)" }
         val summary = parsedJson.optString("summary", "Successfully extracted blueprint features.")
 
         val dimensionsList = mutableListOf<DetectedDimension>()
@@ -469,8 +556,20 @@ object GeminiAiService {
 
         val extractedRadius = parsedJson.optDouble("radius", Double.NaN).let { if (it.isNaN()) null else it }
 
-        fun geom(key: String) = parsedJson.optDouble(key, Double.NaN).takeIf { !it.isNaN() && it > 0.0 }
+        fun geom(key: String) = shown(parsedJson, key)
+        val (solids, cutouts) = parseSolids(parsedJson)
         return ExtractedFastenerSpec(
+            headDiaMm = geom("headDiaMm"),
+            socketSizeMm = geom("socketSizeMm"),
+            socketDepthMm = geom("socketDepthMm"),
+            neckHeightMm = geom("neckHeightMm"),
+            nutHeightMm = geom("nutHeightMm"),
+            washerOuterDiaMm = geom("washerOuterDiaMm"),
+            washerInnerDiaMm = geom("washerInnerDiaMm"),
+            washerThicknessMm = geom("washerThicknessMm"),
+            assumed = assumed,
+            solids = solids,
+            cutouts = cutouts,
             threadLengthMm = geom("threadLengthMm"),
             headAcrossFlatsMm = geom("headAcrossFlatsMm"),
             headHeightMm = geom("headHeightMm"),
@@ -496,8 +595,33 @@ object GeminiAiService {
     }
 
     // 3. Local Zero-Quota Engine for Standard Fastener & Conversational Queries
-    fun tryAnswerLocally(prompt: String, currentResult: FastenerCalculationResult?): String? {
+    /** The scanned drawing as text: what was read, every dimension, and the total volume with its breakdown. */
+    fun drawingContext(spec: ExtractedFastenerSpec, result: FastenerCalculationResult): String = buildString {
+        fun n(v: Double, dp: Int = 2) = String.format(java.util.Locale.US, "%.${dp}f", v)
+        val vol = DrawingScan.volume(spec, result)
+        append("${spec.fastenerType.label}, ${result.threadLabel}, L ${n(spec.lengthMm)} mm, material ${result.material.name}, class ${spec.propertyClass.label.substringBefore(" (")}, coating ${spec.coating.label}.\n")
+        append("Summary: ${spec.technicalSummary}\n")
+        append("TOTAL VOLUME AS PER DRAWING: ${n(vol.totalMm3, 0)} mm³ = ${n(vol.massG)} g; cut-off slug Ø${n(vol.wireDiaMm)} × ${n(vol.cutOffLengthMm)} mm")
+        append(if (vol.isComplete) " (complete: every dimension from the drawing).\n" else " (NOT complete, see below).\n")
+        append("Volume basis: ${vol.basis.label}.\n")
+        vol.items.forEach { append("- ${it.feature}: ${it.detail} = ${n(it.volumeMm3, 0)} mm³ [${it.source.label}]\n") }
+        if (vol.notOnDrawing.isNotEmpty()) append("Not on the drawing, value used instead: ${vol.notOnDrawing.joinToString("; ")}.\n")
+        if (vol.cautions.isNotEmpty()) append("Not in the volume / to check: ${vol.cautions.joinToString(" ")}\n")
+        if (spec.assumed.isNotEmpty()) append("Defaults used because the drawing did not show them: ${spec.assumed.joinToString("; ")}.\n")
+        if (spec.detectedDimensions.isNotEmpty()) {
+            append("All dimensions read from the drawing:\n")
+            spec.detectedDimensions.take(60).forEach { append("- ${it.feature}: ${it.nominal} ${it.tolerance}".trimEnd() + "\n") }
+        }
+    }
+
+    fun tryAnswerLocally(prompt: String, currentResult: FastenerCalculationResult?, drawing: ExtractedFastenerSpec? = null): String? {
         val q = prompt.trim().lowercase()
+
+        // 0. The scanned drawing is the first input: volume, weight and cut-off questions are answered from it
+        if (drawing != null && currentResult != null && listOf("volume", "weight", "mass", "cut-off", "cutoff", "cut off", "slug", "drawing", "blueprint", "scan").any { q.contains(it) } &&
+            !q.contains("analyze attached") && !q.contains("attached")) {
+            return "📐 **From the scanned drawing:**\n" + drawingContext(drawing, currentResult)
+        }
 
         // 1. Conversational: Greetings & Check-ins (Supports EN, HI, TE, ES, DE, FR, RU, ZH, JA)
         if (q in listOf("hi", "hello", "hey", "hola", "greetings", "good morning", "good afternoon", "good evening", "howdy", "namaste", "नमस्ते", "నమస్కారం", "హలో", "hallo", "bonjour", "привет", "здравствуйте", "你好", "您好", "こんにちは", "sup", "yo", "hi there", "hello there", "hey aerofast", "hello co-pilot", "test", "testing", "ping", "check", "are you there", "can you hear me")) {
@@ -705,7 +829,9 @@ object GeminiAiService {
         extractedSpec: ExtractedFastenerSpec?,
         imageBitmap: Bitmap?,
         context: Context,
-        history: List<ChatMessageData> = emptyList()
+        history: List<ChatMessageData> = emptyList(),
+        /** The Sizing selection, secondary to a scanned drawing (currentResult is then the drawing's calculation). */
+        sizingResult: FastenerCalculationResult? = null
     ): String = withContext(Dispatchers.IO) {
         val trimmedPrompt = prompt.trim()
 
@@ -722,7 +848,7 @@ object GeminiAiService {
 
         // Offline zero-API fallback
         if (!hasLiveKey && imageBitmap == null) {
-            val localAnswer = tryAnswerLocally(trimmedPrompt, currentResult)
+            val localAnswer = tryAnswerLocally(trimmedPrompt, currentResult, extractedSpec)
             if (localAnswer != null) return@withContext localAnswer
 
             val setupDesc = if (currentResult != null) {
@@ -746,6 +872,13 @@ object GeminiAiService {
         // Cloud Gemini Prompt with Complete Materials Catalog and Engineering Instructions
         val promptText = buildString {
             append("AeroFast AI Co-Pilot expert in aerospace fastener engineering, metallurgy, cold/warm heading, and CNC tooling.\n")
+            if (extractedSpec != null && currentResult != null) {
+                append("PRIMARY INPUT — SCANNED DRAWING. Answer from this first; every calculation below is for this drawn part:\n")
+                append(drawingContext(extractedSpec, currentResult))
+                if (sizingResult != null) append("SECONDARY INPUT — Sizing tab selection (use only if the user asks about it): ${sizingResult.fastenerType.label} ${sizingResult.threadLabel}, ${sizingResult.material.name}.\n")
+            } else {
+                append("No drawing has been scanned. Input is the Sizing tab selection:\n")
+            }
             append("Active Setup: ${currentResult?.fastenerType?.label ?: "Fastener"} ${currentResult?.threadLabel ?: ""}, Material: ${currentResult?.material?.name ?: ""} (UTS: ${currentResult?.material?.uts ?: 0} MPa).\n")
             if (currentResult != null) {
                 val ht = currentResult.heatTreatmentSpec
@@ -759,12 +892,6 @@ object GeminiAiService {
                 }
             }
             if (currentResult != null) append(forgingContext(currentResult))
-            if (extractedSpec != null) {
-                append("Active Drawing Summary: ${extractedSpec.technicalSummary}\n")
-                extractedSpec.detectedDimensions.take(4).forEach { dim ->
-                    append("- ${dim.feature}: ${dim.nominal} (${dim.tolerance})\n")
-                }
-            }
 
             // The 50+ alloy catalog costs ~2,000 tokens, so only send it when the question is about materials
             val qMat = trimmedPrompt.lowercase()
@@ -898,7 +1025,7 @@ object GeminiAiService {
 
         // Final fallback: return deterministic local calculation, flagged so the user knows the AI was not reached
         val offlineNote = "\n\n_⚠️ Offline answer — Gemini AI unavailable (${lastError ?: "no response"})._"
-        val localFallback = tryAnswerLocally(trimmedPrompt, currentResult)
+        val localFallback = tryAnswerLocally(trimmedPrompt, currentResult, extractedSpec)
         if (localFallback != null) {
             return@withContext localFallback + offlineNote
         }

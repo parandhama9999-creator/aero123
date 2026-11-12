@@ -175,6 +175,11 @@ fun AeroFastApp() {
     var batchQty by remember { mutableIntStateOf(10000) }
 
     var appliedExtractedSpec by remember { mutableStateOf<com.example.data.ExtractedFastenerSpec?>(null) }
+    // The last scanned drawing: kept across tabs, and the Co-Pilot's primary input
+    var scannedSpec by remember { mutableStateOf<com.example.data.ExtractedFastenerSpec?>(null) }
+    val scanCalculation = remember(scannedSpec, FastenerCatalog.MATERIALS.size) {
+        scannedSpec?.let { runCatching { com.example.data.DrawingScan.calculate(it) }.getOrNull() }
+    }
 
     // Quotation Parameters
     var currencyIsUsd by remember { mutableStateOf(false) }
@@ -302,12 +307,13 @@ fun AeroFastApp() {
             customNominalDiaMm = appliedExtractedSpec?.nominalDiaMm,
             extractedRadius = appliedExtractedSpec?.radius,
             propertyClass = selectedPropClass,
-            drawingThreadLengthMm = appliedExtractedSpec?.threadLengthMm,
-            drawingShankDiaMm = appliedExtractedSpec?.shankDiaMm,
-            drawingAcrossFlatsMm = appliedExtractedSpec?.headAcrossFlatsMm ?: if (flange) mf.sFor(sizingD) else null,
-            drawingHeadHeightMm = appliedExtractedSpec?.headHeightMm ?: if (flange) mf.kFor(sizingD) else null,
-            drawingFlangeDiaMm = appliedExtractedSpec?.flangeDiaMm ?: if (flange) mf.dcFor(sizingD) else null,
-            drawingFlangeThicknessMm = appliedExtractedSpec?.flangeThicknessMm ?: if (flange) mf.cFor(sizingD) else null
+            // Dimensions from the applied drawing; a flange bolt can also take its head sizes typed on the Sizing card
+            drawing = (appliedExtractedSpec?.geometry() ?: com.example.data.DrawingGeometry()).let { g ->
+                if (!flange) g else g.copy(
+                    acrossFlatsMm = g.acrossFlatsMm ?: mf.sFor(sizingD), headHeightMm = g.headHeightMm ?: mf.kFor(sizingD),
+                    flangeDiaMm = g.flangeDiaMm ?: mf.dcFor(sizingD), flangeThicknessMm = g.flangeThicknessMm ?: mf.cFor(sizingD)
+                )
+            }
         )
     }
 
@@ -536,6 +542,9 @@ fun AeroFastApp() {
                         NavigationTab.SCANNER -> {
                             AiScannerScreen(
                                 currentResult = currentCalculation,
+                                scannedSpec = scannedSpec,
+                                onScanned = { scannedSpec = it },
+                                onAskCoPilot = { currentTab = NavigationTab.COPILOT },
                                 onApplyExtractedSpec = { spec ->
                                     appliedExtractedSpec = spec
                                     selectedFastenerType = spec.fastenerType
@@ -564,9 +573,12 @@ fun AeroFastApp() {
                         }
 
                         NavigationTab.COPILOT -> {
+                            // The scanned drawing comes first; the Sizing selection is only the secondary input
                             AiCoPilotScreen(
-                                currentResult = currentCalculation,
-                                extractedSpec = appliedExtractedSpec,
+                                currentResult = scanCalculation ?: currentCalculation,
+                                extractedSpec = scannedSpec.takeIf { scanCalculation != null },
+                                sizingResult = currentCalculation.takeIf { scanCalculation != null },
+                                onOpenScanner = { currentTab = NavigationTab.SCANNER },
                                 initialMessages = savedChatMessages,
                                 onChatMessageSent = { updatedMsgs ->
                                     savedChatMessages = updatedMsgs

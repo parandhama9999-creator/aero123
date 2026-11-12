@@ -28,8 +28,8 @@ class ProgressionMatchesCardTest {
             val r = CalculationEngine.calculate(FastenerType.HEX_BOLT, UnitSystem.METRIC, ProductStandard.ISO_4014, idx,
                 FastenerCatalog.METRIC_SIZES[idx].pitches.first(), len, "6g", m, CoatingType.ZN_NI, 100,
                 propertyClass = PropertyClass.CLASS_8_8,
-                drawingThreadLengthMm = if (scan) 2 * d + 10 else null, drawingShankDiaMm = if (scan) d - 0.1 else null,
-                drawingAcrossFlatsMm = if (scan) d * 1.5 else null, drawingHeadHeightMm = if (scan) d * 0.65 else null)
+                drawing = if (scan) DrawingGeometry(threadLengthMm = 2 * d + 10, shankDiaMm = d - 0.1, acrossFlatsMm = d * 1.5, headHeightMm = d * 0.65)
+                    else DrawingGeometry())
             val plan = r.headingPlan!!
             val card = BoltForging.compute(FastenerType.HEX_BOLT, UnitSystem.METRIC, d, FastenerCatalog.METRIC_SIZES[idx].pitches.first(), len,
                 r.blankTargetDia, r.wireDiaMm, r.headDimensions,  m.density,
@@ -47,7 +47,7 @@ class FlangeProgressionTest {
         val m = FastenerCatalog.MATERIALS["10B21"]!!
         val idx = FastenerCatalog.sizeIndexFor(UnitSystem.METRIC, 10.0)
         val r = CalculationEngine.calculate(FastenerType.FLANGE_BOLT, UnitSystem.METRIC, ProductStandard.ISO_1665, idx, 1.5, 60.0, "6g", m,
-            CoatingType.ZN_NI, 100, propertyClass = PropertyClass.CLASS_8_8, drawingFlangeThicknessMm = 2.0)
+            CoatingType.ZN_NI, 100, propertyClass = PropertyClass.CLASS_8_8, drawing = DrawingGeometry(flangeThicknessMm = 2.0))
         val plan = r.headingPlan!!
         assertEquals("Trim flange collar", plan.stations.last().title)
         val f = r.boltForging!!

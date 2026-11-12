@@ -1240,10 +1240,30 @@ private fun stationCode(st: HeadingStation) = if (st.isCutOff) "CUT" else "D${st
 
 private fun topFeature(st: HeadingStation): String {
     val top = st.segments.last()
-    return if (top.shape == SectionShape.HEX) "s ${fmt(top.dBottomMm, 2)}" else "Ø ${fmt(top.maxWidthMm, 2)}"
+    return when (top.shape) {
+        SectionShape.HEX, SectionShape.TWELVE_POINT -> "s ${fmt(top.dBottomMm, 2)}"
+        SectionShape.SQUARE -> "□ ${fmt(top.dBottomMm, 2)}"
+        else -> "Ø ${fmt(top.maxWidthMm, 2)}"
+    }
 }
 
-internal fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float) {
+/** A finished part drawn on its own, with the same renderer as the die stations (long shanks broken). */
+@Composable
+fun PartOutlineCanvas(outline: HeadingStation, modifier: Modifier = Modifier) {
+    val plan = remember(outline) {
+        HeadingPlan(
+            slugDiaMm = outline.maxWidthMm, slugLengthMm = outline.heightMm, slugVolumeMm3 = outline.volumeMm3,
+            stations = listOf(outline), offHeaderOps = emptyList(), upsetBlows = 1, notes = emptyList()
+        )
+    }
+    Surface(shape = RoundedCornerShape(8.dp), color = DieColors.background, modifier = modifier.fillMaxWidth()) {
+        Canvas(modifier = Modifier.fillMaxWidth().height(190.dp).padding(6.dp)) {
+            drawHeadingProgression(plan, textPx = 9.sp.toPx(), stationLabels = false)
+        }
+    }
+}
+
+internal fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float, stationLabels: Boolean = true) {
     val stations = plan.stations
     val step = size.width / stations.size
     val topBand = textPx * 2.1f
@@ -1252,7 +1272,7 @@ internal fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float) 
     val baseY = size.height - textPx * 2.2f - koBand
     val availH = baseY - topBand
     // Few stations (studs, set screws) would otherwise draw parts far wider than a bolt progression
-    val scaleW = min(step, size.width / 4f) * 0.8f / stations.maxOf { it.maxWidthMm }
+    val scaleW = (if (stationLabels) min(step, size.width / 4f) else size.width * 0.42f) * 0.8f / stations.maxOf { it.maxWidthMm }
     val maxH = stations.maxOf { it.heightMm }
 
     // Long headed parts: shorten every station's longest straight round segment by the same length (drafting break)
@@ -1285,7 +1305,7 @@ internal fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float) 
         drawContext.canvas.nativeCanvas.apply {
             drawText(topFeature(st), cx, topY - textPx * 0.6f, dimPaint)
             labelPaint.color = (if (st.isPeakBlow) DieColors.peak else DieColors.label).toArgb()
-            drawText(stationCode(st).trim(), cx, baseY + koBand + textPx * 1.6f, labelPaint)
+            if (stationLabels) drawText(stationCode(st).trim(), cx, baseY + koBand + textPx * 1.6f, labelPaint)
         }
     }
 }
@@ -1311,8 +1331,12 @@ private fun DrawScope.drawStation(
         return topY
     }
 
-    fun halfWidth(s: ProfileSegment, top: Boolean) =
-        (if (s.shape == SectionShape.HEX) s.maxWidthMm else if (top) s.dTopMm else s.dBottomMm).toFloat() * scale / 2f
+    fun halfWidth(s: ProfileSegment, top: Boolean) = when (s.shape) {
+        SectionShape.ROUND -> if (top) s.dTopMm else s.dBottomMm
+        // A dome closes to a point on the axis
+        SectionShape.DOME -> if (top) 0.0 else s.dBottomMm
+        else -> s.maxWidthMm
+    }.toFloat() * scale / 2f
 
     fun hatch(left: Float, top: Float, right: Float, bottom: Float, color: Color, gap: Float, rising: Boolean) =
         clipRect(left, top, right, bottom) {
@@ -1359,8 +1383,9 @@ private fun DrawScope.drawStation(
         }
     }
 
-    val chamferTop = segs.last().shape == SectionShape.HEX
-    val chamferBottom = segs.first().shape == SectionShape.HEX
+    fun chamfered(shape: SectionShape) = shape == SectionShape.HEX || shape == SectionShape.TWELVE_POINT
+    val chamferTop = chamfered(segs.last().shape)
+    val chamferBottom = chamfered(segs.first().shape)
     val outline: Path
     if (st.isCutOff) {
         // Sheared slug: both end faces lean with the shear blade; the mean length is the slug length
@@ -1391,9 +1416,25 @@ private fun DrawScope.drawStation(
             val y1 = y0 - drawnH[j]
             val rB = halfWidth(sg, false)
             val rT = halfWidth(sg, true)
-            val hex = sg.shape == SectionShape.HEX
+            // Prism sections (hex, 12-point, square) keep sharp corners; the forged radii belong to round sections
+            val hex = sg.shape == SectionShape.HEX || sg.shape == SectionShape.TWELVE_POINT || sg.shape == SectionShape.SQUARE
+            if (sg.shape == SectionShape.DOME) {
+                // Spherical cap: arc from the base edge to the crown
+                val rP = if (j == 0) 0f else halfWidth(segs[j - 1], true)
+                val h = drawnH[j]
+                if (h > 0.5f && rB > 0.5f) {
+                    val rs = (rB * rB + h * h) / (2f * h)
+                    val phi0 = kotlin.math.atan2(rB, rs - h)
+                    if (j > 0 && rB > rP + 0.5f) add(rB, y0, min(rB - rP, h) * 0.25f) else if (j == 0) add(rB, y0)
+                    for (i in 1..14) {
+                        val phi = phi0 * (1f - i / 14f)
+                        add(rs * kotlin.math.sin(phi), (y1 + rs) - rs * kotlin.math.cos(phi))
+                    }
+                }
+                return@forEachIndexed
+            }
             if (j == 0) {
-                if (hex && chamferBottom) { val c = rB * 0.12f; add(rB - c, y0); add(rB, y0 - c * 0.6f) }
+                if (chamfered(sg.shape) && chamferBottom) { val c = rB * 0.12f; add(rB - c, y0); add(rB, y0 - c * 0.6f) }
                 else add(rB, y0, if (segs.size == 1 && !isFinal) topCorner else rB * 0.10f)
             } else {
                 val rP = halfWidth(segs[j - 1], true)
@@ -1402,8 +1443,8 @@ private fun DrawScope.drawStation(
             }
             val next = segs.getOrNull(j + 1)
             if (next == null) {
-                if (hex) { val c = rT * 0.12f; add(rT, y1 + c * 0.6f); add(rT - c, y1) }
-                else add(rT, y1, topCorner)
+                if (chamfered(sg.shape)) { val c = rT * 0.12f; add(rT, y1 + c * 0.6f); add(rT - c, y1) }
+                else add(rT, y1, if (hex) 0f else topCorner)
             } else {
                 val rN = halfWidth(next, false)
                 when {
@@ -1460,6 +1501,13 @@ private fun DrawScope.drawStation(
                 if (sg.shape == SectionShape.HEX) {
                     drawRect(DieColors.hexFront, Offset(cx, y1), Size(r / 2f, y0 - y1))
                     drawRect(DieColors.hexSide, Offset(cx + r / 2f, y1), Size(maxR, y0 - y1))
+                } else if (sg.shape == SectionShape.TWELVE_POINT) {
+                    // Twelve narrow facets: light on the axis, darker toward the silhouette
+                    drawRect(DieColors.hexFront, Offset(cx, y1), Size(r * 0.26f, y0 - y1))
+                    drawRect(DieColors.shade[2], Offset(cx + r * 0.26f, y1), Size(r * 0.45f, y0 - y1))
+                    drawRect(DieColors.hexSide, Offset(cx + r * 0.71f, y1), Size(maxR, y0 - y1))
+                } else if (sg.shape == SectionShape.SQUARE) {
+                    drawRect(DieColors.hexFront, Offset(cx, y1), Size(maxR + 2f, y0 - y1))
                 } else {
                     drawRect(
                         androidx.compose.ui.graphics.Brush.horizontalGradient(
@@ -1517,11 +1565,18 @@ private fun DrawScope.drawStation(
 
     // Hex faces seen across corners (unsectioned right half): edges at ±e/4 and 30° chamfer arcs
     clipRect(cx, topY - 4f, cx + maxR + 4f, baseY + 4f) { segs.forEachIndexed { j, s ->
-        if (s.shape != SectionShape.HEX) return@forEachIndexed
+        if (s.shape != SectionShape.HEX && s.shape != SectionShape.TWELVE_POINT) return@forEachIndexed
         val y0 = bottoms[j]
         val y1 = y0 - drawnH[j]
         val r = halfWidth(s, true)
         val dip = min(drawnH[j] * 0.12f, r * 0.15f)
+        if (s.shape == SectionShape.TWELVE_POINT) {
+            // Projected corners of the bi-hex: cos 75°, cos 45°, cos 15° of the across-corners radius
+            listOf(0.26f, 0.71f, 0.97f).forEach { fr ->
+                drawLine(DieColors.faceLine, Offset(cx + r * fr, y1 + dip * 0.6f), Offset(cx + r * fr, y0), 1f)
+            }
+            return@forEachIndexed
+        }
         listOf(-r / 2f, r / 2f).forEach { dx ->
             drawLine(DieColors.faceLine, Offset(cx + dx, y1 + dip), Offset(cx + dx, y0 - if (j == 0 && chamferBottom) dip else 0f), 1f)
         }

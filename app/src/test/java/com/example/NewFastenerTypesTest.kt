@@ -104,7 +104,8 @@ class NewFastenerTypesTest {
         assertTrue(r.pokaYokeIssues.any { it.title == "Rivet joints are designed in shear" })
         val plan = r.headingPlan!!
         assertTrue(plan.offHeaderOps.isEmpty())
-        assertEquals("Head upset (finished round head)", plan.stations.last().title)
+        assertEquals("Head upset (universal head)", plan.stations.last().title)
+        assertEquals(com.example.data.SectionShape.DOME, plan.stations.last().segments.last().shape)
         assertTrue(plan.maxVolumeError < 1e-9)
         assertTrue(r.forgingStages.none { it.title.contains("Thread rolling") })
     }

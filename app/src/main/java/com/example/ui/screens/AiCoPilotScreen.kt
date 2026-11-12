@@ -93,6 +93,9 @@ data class ChatMessage(
 fun AiCoPilotScreen(
     currentResult: FastenerCalculationResult,
     extractedSpec: com.example.data.ExtractedFastenerSpec? = null,
+    /** The Sizing selection when a scanned drawing is the primary input (currentResult is then the drawing). */
+    sizingResult: FastenerCalculationResult? = null,
+    onOpenScanner: () -> Unit = {},
     initialMessages: List<com.example.data.ChatMessageData> = emptyList(),
     onChatMessageSent: ((List<com.example.data.ChatMessageData>) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -241,13 +244,14 @@ fun AiCoPilotScreen(
                     prompt = effectivePrompt,
                     currentResult = currentResult,
                     extractedSpec = extractedSpec,
+                    sizingResult = sizingResult,
                     imageBitmap = currentBitmap,
                     context = context,
                     history = history
                 )
                 messages.add(ChatMessage(isUser = false, text = reply))
             } catch (e: Exception) {
-                val fallback = GeminiAiService.tryAnswerLocally(trimmed, currentResult)
+                val fallback = GeminiAiService.tryAnswerLocally(trimmed, currentResult, extractedSpec)
                 val replyText = fallback ?: "🤖 **AeroFast AI Co-Pilot**: Based on your setup (${currentResult.threadLabel}), pre-roll blank target is Ø${String.format("%.3f", currentResult.blankTargetDia)} mm and AMS 2759 soaking time is ${currentResult.heatTreatmentSpec.soakingTimeMinutes}."
                 messages.add(ChatMessage(isUser = false, text = replyText))
             } finally {
@@ -333,7 +337,9 @@ fun AiCoPilotScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "Active: ${currentResult.threadLabel} (${currentResult.material.name})",
+                        text = if (extractedSpec != null) "Drawing: ${currentResult.threadLabel} ${currentResult.fastenerType.label.substringBefore(" (")} • ${"%,.0f".format(java.util.Locale.US, com.example.data.DrawingScan.volume(extractedSpec, currentResult).totalMm3)} mm³"
+                            else "No drawing scanned — tap to open the AI Scanner. Using Sizing: ${currentResult.threadLabel} (${currentResult.material.name})",
+                        modifier = Modifier.clickable(enabled = extractedSpec == null) { onOpenScanner() },
                         fontSize = 9.5.sp,
                         color = customColors.accentSecondary,
                         fontWeight = FontWeight.Bold,

@@ -92,7 +92,11 @@ import kotlinx.coroutines.launch
 fun AiScannerScreen(
     currentResult: com.example.data.FastenerCalculationResult,
     onApplyExtractedSpec: (ExtractedFastenerSpec) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The last scan, kept by the caller so it survives tab changes and feeds the Co-Pilot. */
+    scannedSpec: ExtractedFastenerSpec? = null,
+    onScanned: (ExtractedFastenerSpec?) -> Unit = {},
+    onAskCoPilot: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val customColors = LocalCustomColors.current
@@ -102,7 +106,7 @@ fun AiScannerScreen(
     var activeAttachment by remember { mutableStateOf<AttachmentResult?>(null) }
     var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isAnalyzing by remember { mutableStateOf(false) }
-    var extractedSpec by remember { mutableStateOf<ExtractedFastenerSpec?>(null) }
+    val extractedSpec = scannedSpec
     var ocrValues by remember { mutableStateOf<List<com.example.util.OcrValue>?>(null) }
     var extractionError by remember { mutableStateOf<String?>(null) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -125,7 +129,7 @@ fun AiScannerScreen(
         val att = DocumentAttachmentHelper.createSampleBlueprintBitmap(sampleType)
         activeAttachment = att
         selectedBitmap = att.bitmap
-        extractedSpec = ExtractedFastenerSpec(
+        onScanned(ExtractedFastenerSpec(
             fastenerType = when(sampleType) {
                 SampleBlueprintType.M8_SHCS -> FastenerType.SHCS
                 SampleBlueprintType.M12_FLANGE_BOLT -> FastenerType.FLANGE_BOLT
@@ -150,7 +154,7 @@ fun AiScannerScreen(
             ),
             isAiVisionExtracted = true,
             modelUsed = "Sample Spec (built-in)"
-        )
+        ))
         extractionError = null
     }
 
@@ -163,7 +167,7 @@ fun AiScannerScreen(
             CoroutineScope(Dispatchers.Main).launch {
                 runCatching { com.example.util.OcrDimensionReader.read(bitmap) }
                     .onSuccess { vals ->
-                        extractedSpec = null
+                        onScanned(null)
                         if (vals.isEmpty()) extractionError = "No numbers could be read from this image. Try a sharper photo, or add a Gemini key (Key button) for full AI reading."
                         else ocrValues = vals
                     }
@@ -176,7 +180,7 @@ fun AiScannerScreen(
             val result = GeminiAiService.extractBlueprintSpecFromImage(bitmap, context)
             isAnalyzing = false
             result.onSuccess { spec ->
-                extractedSpec = spec
+                onScanned(spec)
             }.onFailure { err ->
                 extractionError = err.message ?: "AI Extraction failed"
             }
@@ -269,7 +273,7 @@ fun AiScannerScreen(
                             modifier = Modifier.padding(end = 6.dp)
                         )
                         Text(
-                            text = "GEMINI 3.8 AI BLUEPRINT VISION",
+                            text = "AI DRAWING SCANNER — VOLUME AS PER DRAWING",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Black,
                             color = customColors.textMain
@@ -292,7 +296,7 @@ fun AiScannerScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Upload PDF blueprints or photos of threaded fasteners. Gemini AI Vision extracts nominal diameter, pitch, length, material, and coating specs, and auto-recommends input wire conditions & process flows.",
+                    text = "Upload a PDF or a photo of the part drawing. The scanner reads every dimension and gives the total volume of the part as drawn, with its weight and cut-off length. A dimension the drawing does not show is listed with the value used instead — never guessed silently.",
                     fontSize = 10.sp,
                     color = customColors.textMuted
                 )
@@ -413,7 +417,7 @@ fun AiScannerScreen(
                                 onClick = {
                                     activeAttachment = null
                                     selectedBitmap = null
-                                    extractedSpec = null
+                                    onScanned(null)
                                     extractionError = null
                                 },
                                 modifier = Modifier.size(28.dp)
@@ -452,7 +456,7 @@ fun AiScannerScreen(
                             if (isAnalyzing) {
                                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Analyzing Drawing with Gemini 3.8 Flash...", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Reading the drawing...", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             } else {
                                 Icon(Icons.Default.FlashOn, contentDescription = "Analyze", modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -483,13 +487,19 @@ fun AiScannerScreen(
 
                 ocrValues?.let { vals ->
                     OcrAssignPanel(vals, currentResult) { spec ->
-                        extractedSpec = spec
+                        onScanned(spec)
                         ocrValues = null
                     }
                 }
 
                 extractedSpec?.let { spec ->
+                    // One calculation of the scanned part: the volume card, the forging data and the Co-Pilot all read it
+                    val scanResult = remember(spec, FastenerCatalog.MATERIALS.size) { com.example.data.DrawingScan.calculate(spec) }
+                    val volume = remember(spec, scanResult) { com.example.data.DrawingScan.volume(spec, scanResult) }
                     Spacer(modifier = Modifier.height(14.dp))
+                    DrawingVolumeCard(spec = spec, volume = volume, materialName = scanResult.material.name)
+
+                    Spacer(modifier = Modifier.height(10.dp))
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = customColors.bgElevated,
@@ -497,16 +507,10 @@ fun AiScannerScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.CheckCircle, contentDescription = "Success", tint = SuccessGreen, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(text = "BLUEPRINT DETECTED SPECIFICATIONS", fontSize = 11.sp, fontWeight = FontWeight.Black, color = SuccessGreen)
-                                }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = "Read", tint = SuccessGreen, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "SPECIFICATION READ FROM THE DRAWING", fontSize = 11.sp, fontWeight = FontWeight.Black, color = SuccessGreen)
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
@@ -516,12 +520,21 @@ fun AiScannerScreen(
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 SpecItemRow("Type", spec.fastenerType.label)
                                 SpecItemRow("Diameter", "${spec.nominalDiaMm} mm")
-                                SpecItemRow("Pitch", "${spec.pitchValue} mm")
-                                SpecItemRow("Length", "${spec.lengthMm} mm")
+                                if (!spec.fastenerType.isUnthreaded && !spec.fastenerType.isWasher) SpecItemRow("Pitch", "${spec.pitchValue} mm")
+                                if (!spec.fastenerType.isNut && !spec.fastenerType.isWasher) SpecItemRow("Length", "${spec.lengthMm} mm")
                                 SpecItemRow("Material", spec.materialKey)
-                                SpecItemRow("Property Class", spec.propertyClass.label)
-                                SpecItemRow("Thread Class", spec.threadClass)
+                                if (!spec.fastenerType.isWasher) SpecItemRow("Property Class", spec.propertyClass.label)
+                                if (!spec.fastenerType.isUnthreaded && !spec.fastenerType.isWasher) SpecItemRow("Thread Class", spec.threadClass)
                                 SpecItemRow("Coating", spec.coating.label)
+                            }
+                            if (spec.assumed.isNotEmpty()) {
+                                Text(
+                                    text = "Not on the drawing — default used: " + spec.assumed.joinToString("; "),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = customColors.accentPrimary,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
                             }
 
                             if (com.example.data.BoltForging.applies(spec.fastenerType)) {
@@ -575,6 +588,17 @@ fun AiScannerScreen(
                             Spacer(modifier = Modifier.height(12.dp))
 
                             Button(
+                                onClick = onAskCoPilot,
+                                colors = ButtonDefaults.buttonColors(containerColor = customColors.accentPrimary),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth().height(46.dp)
+                            ) {
+                                Text("Ask the Co-Pilot About This Drawing", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Button(
                                 onClick = {
                                     onApplyExtractedSpec(spec)
                                     Toast.makeText(context, "Applied specs to Sizing & Heat Treatment!", Toast.LENGTH_SHORT).show()
@@ -590,7 +614,7 @@ fun AiScannerScreen(
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            AiProcessFlowCard(spec = spec)
+                            AiProcessFlowCard(spec = spec, issues = scanResult.pokaYokeIssues)
                         }
                     }
                 }
@@ -604,10 +628,16 @@ fun AiScannerScreen(
 }
 
 @Composable
-fun AiProcessFlowCard(spec: ExtractedFastenerSpec) {
+fun AiProcessFlowCard(spec: ExtractedFastenerSpec, issues: List<com.example.data.PokaYokeIssue>) {
     val customColors = LocalCustomColors.current
     val mat = FastenerCatalog.MATERIALS[spec.materialKey] ?: FastenerCatalog.MATERIALS["10B21"]!!
-    val isAero = mat.isAero
+    // Aluminium and copper alloys are headed cold; titanium, nickel and high-strength aerospace steels are headed warm
+    val forgingMethod = when (com.example.data.PokaYokeEngine.materialFamily(mat)) {
+        com.example.data.MaterialFamily.ALUMINUM, com.example.data.MaterialFamily.COPPER_ALLOY -> "Cold heading from annealed wire"
+        com.example.data.MaterialFamily.TITANIUM, com.example.data.MaterialFamily.NICKEL_SUPERALLOY ->
+            "Warm heading — temperature per the alloy's forging specification"
+        else -> if (mat.isAero) "Warm heading — temperature per the alloy's forging specification" else "Multi-station cold heading"
+    }
 
     Surface(
         shape = RoundedCornerShape(10.dp),
@@ -620,7 +650,7 @@ fun AiProcessFlowCard(spec: ExtractedFastenerSpec) {
                 Icon(Icons.Default.PrecisionManufacturing, contentDescription = "Process Flow", tint = customColors.accentPrimary, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "AI-RECOMMENDED PROCESS FLOW & POKA-YOKE AUDIT",
+                    text = "PROCESS FLOW & POKA-YOKE CHECK OF THE DRAWING",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
                     color = customColors.textMain
@@ -629,25 +659,8 @@ fun AiProcessFlowCard(spec: ExtractedFastenerSpec) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Poka-Yoke Blueprint Audit Card
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = customColors.bgElevated,
-                border = BorderStroke(1.dp, customColors.accentPrimary.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-            ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    Text(text = "🛡️ POKA-YOKE BLUEPRINT COMPLIANCE AUDIT", fontSize = 10.sp, fontWeight = FontWeight.Black, color = customColors.accentPrimary)
-                    Text(
-                        text = "• Pitch & Diameter: M${spec.nominalDiaMm} x ${spec.pitchValue}mm complies with ISO 261 / ASME B1.1 standard thread pitch\n" +
-                                "• Material Compatibility: ${spec.materialKey} verified for ${spec.fastenerType.label} forging & thread rolling\n" +
-                                "• Hydrogen Risk: ${if (mat.hasHighHardness && spec.coating.name.contains("ZN")) "⚠️ Mandatory De-embrittlement Baking (190°C–200°C, 8-24 hrs)" else "✓ Low risk under standard plating process"}",
-                        fontSize = 9.sp,
-                        color = customColors.textMain,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
+            // The same release gate as the Sizing tab, run on the scanned part
+            com.example.ui.components.PokaYokePanel(issues = issues)
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -658,13 +671,138 @@ fun AiProcessFlowCard(spec: ExtractedFastenerSpec) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(10.dp)) {
-                    Text(text = "1. Forging Method: ${if (isAero) "Controlled Warm Heading (650–700°C) with Carbide Dies" else "High-Speed Multi-Station Cold Heading"}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = customColors.accentSecondary)
-                    Text(text = "2. Input Wire Sourcing: ${mat.rawMaterialSourcingUtsMpa} MPa • Density: ${mat.density} g/cm³", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
+                    Text(text = "1. Forging Method: $forgingMethod", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = customColors.accentSecondary)
+                    Text(text = "2. Input Wire Sourcing: ${mat.rawMaterialSourcingUtsMpa} • Density: ${mat.density} g/cm³", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
                     Text(text = "3. Surface Lubrication: ${mat.lubricationCoating}", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
                     Text(text = "4. Heat Treatment: ${mat.heatTreatment}", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
                     Text(text = "5. Tooling Steels: ${mat.dieTooling}", fontSize = 9.5.sp, color = customColors.textMain, modifier = Modifier.padding(top = 2.dp))
                 }
             }
+        }
+    }
+}
+
+/** The scanner's headline: total volume of the part as drawn, what it is made of, and how much of it the drawing really gave. */
+@Composable
+private fun DrawingVolumeCard(spec: ExtractedFastenerSpec, volume: com.example.data.DrawingVolume, materialName: String) {
+    val context = LocalContext.current
+    val customColors = LocalCustomColors.current
+    fun n(v: Double, dp: Int = 2) = "%,.${dp}f".format(java.util.Locale.US, v)
+    val statusText: String
+    val statusColor: Color
+    when {
+        volume.totalMm3 <= 0.0 -> { statusText = "NOT CALCULATED — see the notes below"; statusColor = AlertRed }
+        volume.isComplete -> { statusText = "COMPLETE — every dimension in this volume is from the drawing"; statusColor = SuccessGreen }
+        volume.notOnDrawing.isNotEmpty() -> {
+            statusText = "NOT COMPLETE — ${volume.notOnDrawing.size} dimension(s) are not on the drawing; the value used is listed below"
+            statusColor = customColors.accentPrimary
+        }
+        else -> { statusText = "CHECK — read the notes below before using this volume"; statusColor = customColors.accentPrimary }
+    }
+    val summary = buildString {
+        append("${spec.fastenerType.label} — total volume as per drawing (AeroFast Pro)\n")
+        append("Total volume: ${n(volume.totalMm3, 0)} mm³ = ${n(volume.totalMm3 / 1000.0, 3)} cm³\n")
+        append("Weight: ${n(volume.massG)} g ($materialName, ${volume.densityGPerCm3} g/cm³)\n")
+        append("Cut-off: Ø${n(volume.wireDiaMm)} × ${n(volume.cutOffLengthMm)} mm\n")
+        append("Basis: ${volume.basis.label}\n$statusText\n")
+        volume.items.forEach { append("- ${it.feature}: ${it.detail} = ${n(it.volumeMm3, 0)} mm³ [${it.source.label}]\n") }
+        volume.notOnDrawing.forEach { append("Not on drawing: $it\n") }
+        volume.cautions.forEach { append("Note: $it\n") }
+    }
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = customColors.bgCard,
+        border = BorderStroke(1.5.dp, statusColor),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("TOTAL VOLUME AS PER DRAWING", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
+            Text(
+                text = "${n(volume.totalMm3, 0)} mm³",
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = FontFamily.Monospace,
+                color = customColors.textMain
+            )
+            Text(
+                text = "= ${n(volume.totalMm3 / 1000.0, 3)} cm³  •  ${n(volume.massG)} g  ($materialName, ${volume.densityGPerCm3} g/cm³)",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = customColors.textMain
+            )
+            Text(
+                text = "Cut-off slug: Ø${n(volume.wireDiaMm)} × ${n(volume.cutOffLengthMm)} mm" +
+                    if (volume.scrapMm3 > 0.5) "  (includes ${n(volume.scrapMm3, 0)} mm³ trim / pierce scrap)" else "",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = customColors.accentPrimary
+            )
+            Surface(shape = RoundedCornerShape(6.dp), color = statusColor.copy(alpha = 0.15f), modifier = Modifier.fillMaxWidth().padding(top = 2.dp)) {
+                Text(statusText, fontSize = 10.sp, fontWeight = FontWeight.Black, color = statusColor, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
+            }
+
+            volume.outline?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                PartOutlineCanvas(outline = it)
+                Text("The part as understood from the drawing, to scale (long shanks broken). Compare it with the drawing.", fontSize = 9.sp, color = customColors.textMuted)
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("VOLUME BREAKDOWN — ${volume.basis.label}", fontSize = 10.sp, fontWeight = FontWeight.Black, color = customColors.accentPrimary)
+            volume.items.forEach { item ->
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(item.feature, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = customColors.textMain)
+                        Text("${item.detail}  •  ${item.source.label}", fontSize = 9.sp, color = customColors.textMuted)
+                    }
+                    Text(
+                        text = (if (item.volumeMm3 < 0) "− " else "") + "${n(kotlin.math.abs(item.volumeMm3), 0)} mm³",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (item.volumeMm3 < 0) AlertRed else customColors.textMain
+                    )
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("TOTAL", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.textMain)
+                Text("${n(volume.totalMm3, 0)} mm³", fontSize = 11.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+            }
+            if (volume.basis == com.example.data.VolumeBasis.SOLIDS) {
+                Text("Cross-check — standard shape of this fastener type: ${n(volume.modelVolumeMm3, 0)} mm³", fontSize = 9.5.sp, color = customColors.textMuted)
+            }
+
+            if (volume.notOnDrawing.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("NOT ON THE DRAWING — VALUE USED INSTEAD (${volume.notOnDrawing.size})", fontSize = 10.sp, fontWeight = FontWeight.Black, color = customColors.accentPrimary)
+                volume.notOnDrawing.forEach { Text("• $it", fontSize = 9.5.sp, color = customColors.textMain) }
+            }
+            if (volume.cautions.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("NOT IN THIS VOLUME / CHECK", fontSize = 10.sp, fontWeight = FontWeight.Black, color = AlertRed)
+                volume.cautions.forEach { Text("• $it", fontSize = 9.5.sp, color = customColors.textMain) }
+            }
+            if (volume.fromDrawing.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("FROM THE DRAWING (${volume.fromDrawing.size})", fontSize = 10.sp, fontWeight = FontWeight.Black, color = SuccessGreen)
+                Text(volume.fromDrawing.joinToString("  •  "), fontSize = 9.5.sp, color = customColors.textMain)
+            }
+            Text(
+                "Chamfers, fillet radii and the thread run-out are not counted (typically under 1 % of the volume).",
+                fontSize = 9.sp, color = customColors.textMuted, modifier = Modifier.padding(top = 2.dp)
+            )
+            OutlinedButton(
+                onClick = {
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Volume", summary))
+                    Toast.makeText(context, "Volume copied", Toast.LENGTH_SHORT).show()
+                },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Copy Volume Breakdown", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }
@@ -716,7 +854,7 @@ private fun BoltForgingPanel(spec: ExtractedFastenerSpec) {
             standard = com.example.data.PokaYokeEngine.defaultStandard(spec.fastenerType, spec.unitSystem),
             nominalSizeIndex = spec.nominalSizeIndex, pitchValue = spec.pitchValue, lengthMm = spec.lengthMm,
             threadClass = spec.threadClass, material = material, coating = spec.coating, batchQty = 1,
-            customNominalDiaMm = spec.nominalDiaMm, propertyClass = spec.propertyClass
+            customNominalDiaMm = spec.nominalDiaMm, propertyClass = spec.propertyClass, drawing = spec.geometry()
         )
         val fl = if (spec.fastenerType == FastenerType.FLANGE_BOLT) com.example.data.BoltForging.resolveFlange(
             spec.nominalDiaMm, spec.flangeDiaMm, spec.headHeightMm, spec.headAcrossFlatsMm, spec.flangeThicknessMm) else null
@@ -755,7 +893,11 @@ private fun BoltForgingPanel(spec: ExtractedFastenerSpec) {
     }
 }
 
-private val OCR_ROLES = listOf("—", "Nominal d", "Length L", "Thread length b", "Shank Ø", "Across flats s", "Head height k", "Flange Ø dc", "Flange thickness c")
+private val OCR_ROLES = listOf(
+    "—", "Nominal d", "Length L", "Thread length b", "Shank Ø", "Across flats s", "Head Ø dk", "Head height k",
+    "Flange Ø dc", "Flange thickness c", "Socket key s", "Socket depth t", "Square neck f", "Nut height m",
+    "Washer outside Ø", "Washer bore Ø", "Washer thickness"
+)
 
 /** On-phone OCR result: the user assigns each number; type, material, class and coating come from the current Sizing selection. */
 @Composable
@@ -812,7 +954,16 @@ private fun OcrAssignPanel(
                         modelUsed = "On-phone OCR + your assignment",
                         threadLengthMm = pick("Thread length b")?.value, shankDiaMm = pick("Shank Ø")?.value,
                         headAcrossFlatsMm = pick("Across flats s")?.value, headHeightMm = pick("Head height k")?.value,
-                        flangeDiaMm = pick("Flange Ø dc")?.value, flangeThicknessMm = pick("Flange thickness c")?.value
+                        flangeDiaMm = pick("Flange Ø dc")?.value, flangeThicknessMm = pick("Flange thickness c")?.value,
+                        headDiaMm = pick("Head Ø dk")?.value, socketSizeMm = pick("Socket key s")?.value, socketDepthMm = pick("Socket depth t")?.value,
+                        neckHeightMm = pick("Square neck f")?.value, nutHeightMm = pick("Nut height m")?.value,
+                        washerOuterDiaMm = pick("Washer outside Ø")?.value, washerInnerDiaMm = pick("Washer bore Ø")?.value,
+                        washerThicknessMm = pick("Washer thickness")?.value,
+                        // Values you did not assign come from the Sizing selection, not from this drawing
+                        assumed = buildList {
+                            if (d == null) add("nominal diameter (not assigned: ${current.nominalDiaMm} mm from Sizing used)")
+                            if (pick("Length L") == null) add("length (not assigned: ${current.lengthMm} mm from Sizing used)")
+                        }
                     ))
                 },
                 enabled = roles.values.any { it != OCR_ROLES.first() },

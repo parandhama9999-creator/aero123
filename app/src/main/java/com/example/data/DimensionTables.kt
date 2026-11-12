@@ -4,15 +4,19 @@ import kotlin.math.abs
 
 /** Head / nut geometry in mm. isTable = false means the size is outside the standard table and was estimated. */
 data class HeadDimensions(
-    val acrossFlatsS: Double,   // hex s (or SHCS head diameter dk)
+    val acrossFlatsS: Double,   // hex s, or the head diameter dk of a round head
     val headHeightK: Double,
     val bearingDiaDw: Double,   // min bearing face diameter
     val nutHeightM: Double,
     val source: String,
-    val isTable: Boolean
+    val isTable: Boolean,
+    /** Square neck height f of a carriage bolt (DIN 603); null for every other head. */
+    val neckHeightMm: Double? = null
 )
 
-/** Nominal dimensions from ISO 4014/4017/4032 (hex), ISO 4762 (SHCS) and ASME B18.2.1/B18.2.2 (inch hex). */
+data class WasherDimensions(val innerDiaMm: Double, val outerDiaMm: Double, val thicknessMm: Double, val source: String, val isTable: Boolean)
+
+/** Nominal dimensions from ISO 4014/4017/4032 (hex), ISO 4762, ISO 10642, ISO 7380, DIN 603, ISO 7089 and ASME B18.2.1/B18.2.2/B18.3. */
 object DimensionTables {
     // d -> s, k (ISO 4014 nominal), m (ISO 4032 max), dw (ISO 4014 grade A min)
     private val ISO_HEX = mapOf(
@@ -49,44 +53,131 @@ object DimensionTables {
         36.0 to doubleArrayOf(27.0, 19.0)
     )
 
+    // ISO 10642 countersunk socket screws: d -> dk (theoretical max), k max, socket key s, socket depth t min
+    private val ISO_CSK = mapOf(
+        3.0 to doubleArrayOf(6.72, 1.86, 2.0, 1.1), 4.0 to doubleArrayOf(8.96, 2.48, 2.5, 1.5),
+        5.0 to doubleArrayOf(11.2, 3.1, 3.0, 1.9), 6.0 to doubleArrayOf(13.44, 3.72, 4.0, 2.2),
+        8.0 to doubleArrayOf(17.92, 4.96, 5.0, 3.0), 10.0 to doubleArrayOf(22.4, 6.2, 6.0, 3.6),
+        12.0 to doubleArrayOf(26.88, 7.44, 8.0, 4.3), 14.0 to doubleArrayOf(30.8, 8.4, 10.0, 4.5),
+        16.0 to doubleArrayOf(33.6, 8.8, 10.0, 4.8), 20.0 to doubleArrayOf(40.32, 10.16, 12.0, 5.6)
+    )
+    // ISO 7380-1 button head socket screws: d -> dk max, k max, socket key s, socket depth t min
+    private val ISO_BUTTON = mapOf(
+        3.0 to doubleArrayOf(5.7, 1.65, 2.0, 1.04), 4.0 to doubleArrayOf(7.6, 2.2, 2.5, 1.3),
+        5.0 to doubleArrayOf(9.5, 2.75, 3.0, 1.56), 6.0 to doubleArrayOf(10.5, 3.3, 4.0, 2.08),
+        8.0 to doubleArrayOf(14.0, 4.4, 5.0, 2.6), 10.0 to doubleArrayOf(17.5, 5.5, 6.0, 3.12),
+        12.0 to doubleArrayOf(21.0, 6.6, 8.0, 4.16), 16.0 to doubleArrayOf(28.0, 8.8, 10.0, 5.2)
+    )
+    // DIN 603 carriage bolts: d -> dk max, k max, square neck height f max (neck side v = d)
+    private val DIN_603 = mapOf(
+        5.0 to doubleArrayOf(13.55, 3.3, 4.1), 6.0 to doubleArrayOf(16.55, 3.88, 4.6), 8.0 to doubleArrayOf(20.65, 4.88, 5.6),
+        10.0 to doubleArrayOf(24.65, 5.38, 6.6), 12.0 to doubleArrayOf(30.65, 6.95, 8.75),
+        16.0 to doubleArrayOf(38.8, 8.95, 12.9), 20.0 to doubleArrayOf(46.8, 11.05, 15.9)
+    )
+    // ISO 7089 plain washers, normal series: d -> d1 (bore), d2 (outside), h (thickness)
+    private val ISO_7089 = mapOf(
+        1.6 to doubleArrayOf(1.7, 4.0, 0.3), 2.0 to doubleArrayOf(2.2, 5.0, 0.3), 2.5 to doubleArrayOf(2.7, 6.0, 0.5),
+        3.0 to doubleArrayOf(3.2, 7.0, 0.5), 4.0 to doubleArrayOf(4.3, 9.0, 0.8), 5.0 to doubleArrayOf(5.3, 10.0, 1.0),
+        6.0 to doubleArrayOf(6.4, 12.0, 1.6), 8.0 to doubleArrayOf(8.4, 16.0, 1.6), 10.0 to doubleArrayOf(10.5, 20.0, 2.0),
+        12.0 to doubleArrayOf(13.0, 24.0, 2.5), 14.0 to doubleArrayOf(15.0, 28.0, 2.5), 16.0 to doubleArrayOf(17.0, 30.0, 3.0),
+        20.0 to doubleArrayOf(21.0, 37.0, 3.0), 24.0 to doubleArrayOf(25.0, 44.0, 4.0), 30.0 to doubleArrayOf(31.0, 56.0, 4.0),
+        36.0 to doubleArrayOf(37.0, 66.0, 5.0)
+    )
+    // ASME B18.3 socket head cap screws (1960 series), inch: d -> head diameter A, hex socket J. Head height H = D.
+    private val ASME_SHCS = mapOf(
+        0.060 to doubleArrayOf(0.096, 0.050), 0.073 to doubleArrayOf(0.118, 0.0625), 0.086 to doubleArrayOf(0.140, 0.078125),
+        0.099 to doubleArrayOf(0.161, 0.078125), 0.112 to doubleArrayOf(0.183, 0.09375), 0.125 to doubleArrayOf(0.205, 0.09375),
+        0.138 to doubleArrayOf(0.226, 0.109375), 0.164 to doubleArrayOf(0.270, 0.140625), 0.190 to doubleArrayOf(0.312, 0.15625),
+        0.25 to doubleArrayOf(0.375, 0.1875), 0.3125 to doubleArrayOf(0.469, 0.25), 0.375 to doubleArrayOf(0.562, 0.3125),
+        0.4375 to doubleArrayOf(0.656, 0.375), 0.5 to doubleArrayOf(0.750, 0.375), 0.5625 to doubleArrayOf(0.844, 0.4375),
+        0.625 to doubleArrayOf(0.938, 0.5), 0.75 to doubleArrayOf(1.125, 0.625), 0.875 to doubleArrayOf(1.312, 0.75),
+        1.0 to doubleArrayOf(1.500, 0.75), 1.125 to doubleArrayOf(1.688, 0.875), 1.25 to doubleArrayOf(1.875, 0.875),
+        1.375 to doubleArrayOf(2.062, 1.0), 1.5 to doubleArrayOf(2.250, 1.0), 1.75 to doubleArrayOf(2.625, 1.25)
+    )
+
     /** Hex socket (key size, depth) in mm, or null when the part has no socket. */
-    fun socketFor(type: FastenerType, unit: UnitSystem, dMm: Double): Pair<Double, Double>? = when (type) {
-        FastenerType.SOCKET_SET -> 0.5 * dMm to 0.5 * dMm
-        FastenerType.SHCS, FastenerType.SOCKET_BUTTON, FastenerType.SOCKET_CSK, FastenerType.HEXALOBULAR_SCREW ->
-            (if (unit == UnitSystem.METRIC) lookup(ISO_SHCS_SOCKET, dMm)?.let { it[0] to it[1] } else null)
-                ?: (0.8 * dMm to 0.5 * dMm)
-        else -> null
+    fun socketFor(type: FastenerType, unit: UnitSystem, dMm: Double): Pair<Double, Double>? {
+        val metric = unit == UnitSystem.METRIC
+        return when (type) {
+            // ISO 4026: key = d / 2 from M3 up; the depth is a typical value, not a table one
+            FastenerType.SOCKET_SET -> 0.5 * dMm to 0.5 * dMm
+            FastenerType.SHCS, FastenerType.HEXALOBULAR_SCREW ->
+                (if (metric) lookup(ISO_SHCS_SOCKET, dMm)?.let { it[0] to it[1] }
+                else lookup(ASME_SHCS, dMm / 25.4)?.let { it[1] * 25.4 to 0.5 * dMm }) ?: (0.8 * dMm to 0.5 * dMm)
+            FastenerType.SOCKET_CSK -> (if (metric) lookup(ISO_CSK, dMm)?.let { it[2] to it[3] } else null) ?: (0.6 * dMm to 0.36 * dMm)
+            FastenerType.SOCKET_BUTTON -> (if (metric) lookup(ISO_BUTTON, dMm)?.let { it[2] to it[3] } else null) ?: (0.6 * dMm to 0.31 * dMm)
+            else -> null
+        }
+    }
+
+    /** Washer bore, outside diameter and thickness: ISO 7089 for metric plain washers, otherwise a flagged estimate. */
+    fun washerFor(type: FastenerType, unit: UnitSystem, dMm: Double): WasherDimensions {
+        if (type == FastenerType.FLAT_WASHER && unit == UnitSystem.METRIC) {
+            lookup(ISO_7089, dMm)?.let { return WasherDimensions(it[0], it[1], it[2], "ISO 7089", true) }
+        }
+        return if (type == FastenerType.SPRING_WASHER) WasherDimensions(1.02 * dMm, 1.75 * dMm, 0.22 * dMm, "Estimated (no spring washer table in the app)", false)
+        else WasherDimensions(1.06 * dMm, 2.0 * dMm, 0.18 * dMm, "Estimated (no washer table for this size / standard)", false)
     }
 
     private fun <V> lookup(map: Map<Double, V>, key: Double): V? =
         map.entries.firstOrNull { abs(it.key - key) < 0.002 }?.value
 
-    /** Types the app has no dimension table for: they reuse hex geometry and are labelled as approximations. */
+    /** Types the app has no dimension table for: they reuse the nearest standard geometry and are labelled as approximations. */
     private val APPROXIMATED = setOf(
         FastenerType.TTY_HEAD_BOLT, FastenerType.THREAD_FORMING_SCREW, FastenerType.WHEEL_BOLT, FastenerType.WHEEL_NUT,
         FastenerType.BANJO_BOLT, FastenerType.NAS_CLOSE_TOL_BOLT, FastenerType.HI_LOK_PIN, FastenerType.HI_LOK_COLLAR,
         FastenerType.TAPER_LOK, FastenerType.LOCKBOLT_PIN, FastenerType.BLIND_BOLT, FastenerType.AERO_LOCK_NUT,
-        FastenerType.NUTPLATE, FastenerType.SOLID_RIVET, FastenerType.BLIND_RIVET
+        FastenerType.NUTPLATE, FastenerType.SOLID_RIVET, FastenerType.BLIND_RIVET,
+        // These were silently given plain hex bolt / hex nut dimensions; their own standards differ
+        FastenerType.TWELVE_POINT, FastenerType.T_BOLT, FastenerType.EYE_BOLT, FastenerType.HEAVY_HEX_BOLT,
+        FastenerType.HEAVY_HEX_NUT, FastenerType.FLANGE_NUT, FastenerType.NYLOC_NUT, FastenerType.METAL_LOCK_NUT,
+        FastenerType.CASTLE_NUT, FastenerType.ACORN_NUT, FastenerType.WELD_NUT
     )
 
     fun forPart(type: FastenerType, unit: UnitSystem, dMm: Double): HeadDimensions {
         val dims = tableFor(type, unit, dMm)
         if (type !in APPROXIMATED) return dims
         val std = PokaYokeEngine.defaultStandard(type, unit).code
-        return dims.copy(source = "Approximated from ${dims.source} hex geometry — no $std table in the app", isTable = false)
+        return dims.copy(source = "Approximated from ${dims.source} — no $std table in the app", isTable = false)
     }
 
+    private fun estimated(dk: Double, k: Double, dMm: Double, why: String, neck: Double? = null) =
+        HeadDimensions(dk, k, 0.92 * dk, 0.84 * dMm, "Estimated ($why)", false, neck)
+
     private fun tableFor(type: FastenerType, unit: UnitSystem, dMm: Double): HeadDimensions {
-        if (unit == UnitSystem.INCH) {
+        val metric = unit == UnitSystem.METRIC
+        val nutM = lookup(ISO_HEX, dMm)?.get(2) ?: 0.84 * dMm
+        when (type) {
+            FastenerType.SHCS, FastenerType.HEXALOBULAR_SCREW -> {
+                if (metric) lookup(ISO_SHCS_DK, dMm)?.let { dk ->
+                    val src = if (type == FastenerType.HEXALOBULAR_SCREW) "ISO 14579 (head per ISO 4762)" else "ISO 4762"
+                    return HeadDimensions(dk, dMm, 0.92 * dk, nutM, src, true)
+                } else lookup(ASME_SHCS, dMm / 25.4)?.let { a ->
+                    return HeadDimensions(a[0] * 25.4, dMm, 0.92 * a[0] * 25.4, nutM, "ASME B18.3 (1960 series, H = D)", true)
+                }
+                return estimated(1.5 * dMm, dMm, dMm, "outside the socket cap screw table")
+            }
+            FastenerType.SOCKET_CSK -> {
+                if (metric) lookup(ISO_CSK, dMm)?.let { return HeadDimensions(it[0], it[1], it[0], nutM, "ISO 10642", true) }
+                return estimated(2.0 * dMm, 0.5 * dMm, dMm, if (metric) "outside the ISO 10642 table" else "no inch countersunk table in the app")
+            }
+            FastenerType.SOCKET_BUTTON -> {
+                if (metric) lookup(ISO_BUTTON, dMm)?.let { return HeadDimensions(it[0], it[1], 0.92 * it[0], nutM, "ISO 7380-1", true) }
+                return estimated(1.75 * dMm, 0.55 * dMm, dMm, if (metric) "outside the ISO 7380 table" else "no inch button head table in the app")
+            }
+            FastenerType.CARRIAGE_BOLT -> {
+                if (metric) lookup(DIN_603, dMm)?.let { return HeadDimensions(it[0], it[1], 0.92 * it[0], nutM, "DIN 603", true, it[2]) }
+                return estimated(2.4 * dMm, 0.55 * dMm, dMm, if (metric) "outside the DIN 603 table" else "no inch carriage bolt table in the app", 0.65 * dMm)
+            }
+            // Universal head, MS20470 proportions: A = 2 D, H = 0.425 D
+            FastenerType.SOLID_RIVET, FastenerType.BLIND_RIVET ->
+                return HeadDimensions(2.0 * dMm, 0.425 * dMm, 2.0 * dMm, 0.84 * dMm, "MS20470 universal head proportions (A = 2 D, H = 0.425 D)", false)
+            else -> {}
+        }
+        if (!metric) {
             lookup(ASME_HEX, dMm / 25.4)?.let { a ->
                 val f = if (type.isNut) a[2] else a[0]
                 return HeadDimensions(f * 25.4, a[1] * 25.4, 0.95 * f * 25.4, a[3] * 25.4, "ASME B18.2.1 / B18.2.2", true)
-            }
-        } else if (type == FastenerType.SHCS || type == FastenerType.SOCKET_BUTTON || type == FastenerType.SOCKET_CSK ||
-            type == FastenerType.HEXALOBULAR_SCREW) {
-            lookup(ISO_SHCS_DK, dMm)?.let { dk ->
-                val src = if (type == FastenerType.HEXALOBULAR_SCREW) "ISO 14579 (head per ISO 4762)" else "ISO 4762"
-                return HeadDimensions(dk, dMm, 0.92 * dk, lookup(ISO_HEX, dMm)?.get(2) ?: 0.84 * dMm, src, true)
             }
         } else {
             lookup(ISO_HEX, dMm)?.let { h -> return HeadDimensions(h[0], h[1], h[3], h[2], "ISO 4014 / ISO 4032", true) }
