@@ -113,6 +113,14 @@ data class FastenerCalculationResult(
 ) {
     /** Volume of the finished part in mm³ (0 when no shape was built). */
     val partVolumeMm3: Double get() = finishedPart?.volumeMm3 ?: 0.0
+    /** Head volume on its own: the stock gathered above the die face (the whole part for a nut or washer). */
+    val headVolumeMm3: Double get() = finishedPart?.headVolumeMm3 ?: 0.0
+    /** Shank, thread section and neck: everything held in the die bore. Head + shank = [partVolumeMm3]. */
+    val shankVolumeMm3: Double get() = finishedPart?.shankVolumeMm3 ?: 0.0
+    /** Head weight on its own, in grams. */
+    val headWeightGrams: Double get() = headVolumeMm3 / 1000.0 * material.density
+    /** Shank + thread weight, in grams. */
+    val shankWeightGrams: Double get() = shankVolumeMm3 / 1000.0 * material.density
     val criticalIssues: List<PokaYokeIssue> get() = pokaYokeIssues.filter { it.severity == PokaYokeSeverity.CRITICAL }
     /** True when any CRITICAL rule fails: reports must not show the part as approved. */
     val isReleaseBlocked: Boolean get() = criticalIssues.isNotEmpty()
@@ -161,9 +169,7 @@ object CalculationEngine {
         extractedRadius: Double? = null,
         propertyClass: PropertyClass? = null,
         /** Geometry read from a scanned drawing; a null field means the standard / table value is used. */
-        drawing: DrawingGeometry = DrawingGeometry(),
-        /** Heading route asked for on screen; null picks the one that suits the part. */
-        headerRoute: HeaderRoute? = null
+        drawing: DrawingGeometry = DrawingGeometry()
     ): FastenerCalculationResult {
         val d: Double = customNominalDiaMm ?: if (unitSystem == UnitSystem.METRIC) {
             val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
@@ -426,8 +432,7 @@ object CalculationEngine {
         val headingPlan = HeadingProgression.build(
             type = fastenerType, wireDiaMm = dw, part = part, lengthMm = lengthMm, threadLabel = threadLabel,
             forging = boltForging, forgedHeadDiaMm = forgedHeadDia, trimmedHexS = trimS, trimmedHexK = trimK,
-            flangeDiaMm = flange?.dc?.takeIf { boltForging != null }, flangeThicknessMm = flange?.c?.takeIf { boltForging != null },
-            preferredRoute = headerRoute
+            flangeDiaMm = flange?.dc?.takeIf { boltForging != null }, flangeThicknessMm = flange?.c?.takeIf { boltForging != null }
         )
         // Slug also carries material removed during heading (pierced nut web)
         val cutOffLenMm = headingPlan?.slugLengthMm ?: (totalVolMm3 / wireAreaMm2)

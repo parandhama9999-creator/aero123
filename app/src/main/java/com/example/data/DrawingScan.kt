@@ -54,8 +54,18 @@ data class DrawingVolume(
     val scrapMm3: Double,
     val wireDiaMm: Double,
     /** The finished shape, drawable with the die-progression renderer. */
-    val outline: HeadingStation?
+    val outline: HeadingStation?,
+    /**
+     * Head volume on its own: the material above the die face (the whole part for a nut or a washer).
+     * On the solids basis the head share of the standard shape is applied to the scanned total, so head +
+     * shank always add up to [totalMm3]; [headIsScaled] says which of the two it is.
+     */
+    val headMm3: Double = 0.0,
+    val headIsScaled: Boolean = false
 ) {
+    /** Shank, thread section and neck: head + shank = [totalMm3]. */
+    val shankMm3: Double get() = totalMm3 - headMm3
+    val headMassG: Double get() = headMm3 / 1000.0 * densityGPerCm3
     val massG: Double get() = totalMm3 / 1000.0 * densityGPerCm3
     /** Slug length on the wire that holds this volume plus the scrap. */
     val cutOffLengthMm: Double get() = (totalMm3 + scrapMm3) / (PI / 4.0 * wireDiaMm * wireDiaMm)
@@ -91,6 +101,9 @@ object DrawingScan {
             if (spec.assumed.none { it.startsWith("length") } && !spec.fastenerType.isNut && !spec.fastenerType.isWasher) add("length L ${n(spec.lengthMm)} mm")
         }
 
+        val modelHead = part?.headVolumeMm3 ?: 0.0
+        val headShare = if (modelVol > 0.0) modelHead / modelVol else 0.0
+
         val solids = solidsVolume(spec, result)
         if (solids != null && solids.rejected == null) {
             val delta = if (modelVol > 0.0) (solids.total - modelVol) / modelVol * 100.0 else 0.0
@@ -105,7 +118,8 @@ object DrawingScan {
                             "(${if (delta > 0) "+" else ""}${n(delta, 1)} %). Check the solids list against the drawing."
                     )
                 },
-                modelVolumeMm3 = modelVol, scrapMm3 = scrap, wireDiaMm = result.wireDiaMm, outline = solids.outline
+                modelVolumeMm3 = modelVol, scrapMm3 = scrap, wireDiaMm = result.wireDiaMm, outline = solids.outline,
+                headMm3 = solids.total * headShare, headIsScaled = true
             )
         }
         return DrawingVolume(
@@ -113,7 +127,8 @@ object DrawingScan {
             fromDrawing = coreRead + part?.fromDrawing.orEmpty(),
             notOnDrawing = coreAssumed + part?.notOnDrawing.orEmpty(),
             cautions = part?.cautions.orEmpty() + listOfNotNull(solids?.rejected),
-            modelVolumeMm3 = modelVol, scrapMm3 = scrap, wireDiaMm = result.wireDiaMm, outline = part?.asStation()
+            modelVolumeMm3 = modelVol, scrapMm3 = scrap, wireDiaMm = result.wireDiaMm, outline = part?.asStation(),
+            headMm3 = modelHead, headIsScaled = false
         )
     }
 

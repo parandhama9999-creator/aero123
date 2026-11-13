@@ -602,6 +602,7 @@ object GeminiAiService {
         append("${spec.fastenerType.label}, ${result.threadLabel}, L ${n(spec.lengthMm)} mm, material ${result.material.name}, class ${spec.propertyClass.label.substringBefore(" (")}, coating ${spec.coating.label}.\n")
         append("Summary: ${spec.technicalSummary}\n")
         append("TOTAL VOLUME AS PER DRAWING: ${n(vol.totalMm3, 0)} mm³ = ${n(vol.massG)} g; cut-off slug Ø${n(vol.wireDiaMm)} × ${n(vol.cutOffLengthMm)} mm")
+        append("\nHEAD VOLUME: ${n(vol.headMm3, 0)} mm³ = ${n(vol.headMassG)} g; SHANK + THREAD: ${n(vol.shankMm3, 0)} mm³ (head + shank = total)")
         append(if (vol.isComplete) " (complete: every dimension from the drawing).\n" else " (NOT complete, see below).\n")
         append("Volume basis: ${vol.basis.label}.\n")
         vol.items.forEach { append("- ${it.feature}: ${it.detail} = ${n(it.volumeMm3, 0)} mm³ [${it.source.label}]\n") }

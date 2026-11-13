@@ -86,8 +86,6 @@ data class OffHeaderOp(val title: String, val operation: String)
 
 /** The machine the part is headed on. The two bolt routes give different station sequences, not just a different name. */
 enum class HeaderRoute(val label: String) {
-    /** One die, one or two blows on a rocker / sliding punch. No in-line extrusion; a hex head is trimmed on a separate press. */
-    ONE_DIE("1-die header"),
     /** Blanks transfer from die to die: extrusion, pre-upsets, socket back-extrusion and trimming are all in-line. */
     MULTI_STATION("Multi-station progressive former"),
     NUT_FORMER("Nut former"),
@@ -111,7 +109,6 @@ data class HeadingPlan(
 
     /** "1-die 2-blow header", "4-die progressive former". */
     val machineDescription: String get() = when (route) {
-        HeaderRoute.ONE_DIE -> "1-die $upsetBlows-blow header"
         HeaderRoute.MULTI_STATION -> "$dieStations-die progressive former"
         HeaderRoute.NUT_FORMER -> "$dieStations-die nut former"
         HeaderRoute.PRESS -> "progressive press"
@@ -140,26 +137,6 @@ object HeadingProgression {
     const val TWO_BLOW_LD = 4.5
     const val THREE_BLOW_LD = 6.5
 
-    /**
-     * Why a part cannot be headed in one die, or null when it can. A single die has no transfer, so anything
-     * that needs its own station — a reduced shank, a back-extruded socket, a pierced bore, a third blow — has
-     * to go on a progressive former.
-     */
-    fun oneDieBlocker(part: FinishedPart, wireDiaMm: Double): String? {
-        if (part.style == HeadStyle.NUT || part.style == HeadStyle.WASHER) return "it is not headed from wire in a bolt die"
-        if (part.style == HeadStyle.HEADLESS) return "it has no head to upset"
-        if (part.recesses.any { it.fromTop }) return "the socket has to be back-extruded in its own station"
-        val shank = part.dieSegments
-        if (shank.isEmpty()) return "it has no shank held in the die"
-        val minD = shank.minOf { minOf(it.dBottomMm, it.dTopMm) }
-        val maxD = shank.maxOf { maxOf(it.dBottomMm, it.dTopMm) }
-        // More than one shank diameter means the thread section is extruded down from the wire: that needs a station
-        if (maxD - minD > 0.02 * maxD) return "the shank is extruded from Ø${f(maxD)} to Ø${f(minD)}, which needs an extrusion station"
-        val ld = part.headVolumeMm3 / area(maxD) / maxD
-        if (ld > TWO_BLOW_LD) return "head stock L/D ${f(ld)} needs more than two blows (over $TWO_BLOW_LD)"
-        return null
-    }
-
     fun build(
         type: FastenerType,
         wireDiaMm: Double,
@@ -171,22 +148,13 @@ object HeadingProgression {
         trimmedHexS: Double = 0.0,
         trimmedHexK: Double = 0.0,
         flangeDiaMm: Double? = null,
-        flangeThicknessMm: Double? = null,
-        /** The route asked for on screen; null picks the one that suits the part. */
-        preferredRoute: HeaderRoute? = null
+        flangeThicknessMm: Double? = null
     ): HeadingPlan? {
         if (part.style == HeadStyle.WASHER) return null
         if (part.style == HeadStyle.NUT) return nut(type, wireDiaMm, part, threadLabel)
-        val blocker = oneDieBlocker(part, wireDiaMm)
-        if (preferredRoute != HeaderRoute.MULTI_STATION && blocker == null) {
-            return oneDie(type, part, threadLabel)
-        }
-        val reason = when {
-            blocker == null -> "A progressive former was asked for; this part would also run in one die."
-            part.style == HeadStyle.HEADLESS -> "Progressive former: the thread sections are extruded and there is no head to upset."
-            preferredRoute == HeaderRoute.ONE_DIE -> "A 1-die header cannot make this part: $blocker."
-            else -> "Progressive former: $blocker."
-        }
+        val reason = if (part.style == HeadStyle.HEADLESS)
+            "Progressive former: the thread sections are extruded and there is no head to upset."
+        else "Progressive former: extrusion, pre-upsets, socket back-extrusion and trimming each run in their own station."
         val plan = when {
             forging != null && forgedHeadDiaMm != null ->
                 trimmedHex(type, lengthMm, forging, forgedHeadDiaMm, trimmedHexS, trimmedHexK, threadLabel, flangeDiaMm, flangeThicknessMm, part.cautions)
@@ -195,80 +163,6 @@ object HeadingProgression {
         }
         return plan.copy(route = HeaderRoute.MULTI_STATION, routeReason = reason)
     }
-
-    /**
-     * One die, one or two blows. The wire is already at the shank diameter, so nothing is extruded. A prism head
-     * cannot be closed by a heading punch here: it is upset round and trimmed on a separate press afterwards.
-     */
-    /**
-     * One die, one or two blows, forming the head to size: the die carries the flange or washer-face cavity and the
-     * punch carries the hex insert, so a hex or hex flange head is closed in the finishing blow with no trim at all.
-     * The wire is already at the shank diameter, so nothing is extruded on the machine either.
-     */
-    private fun oneDie(type: FastenerType, part: FinishedPart, threadLabel: String): HeadingPlan {
-        val body = part.dieSegments
-        val inDie = body.sumOf { it.heightMm }
-        val wire = body.maxOf { maxOf(it.dBottomMm, it.dTopMm) }
-        val aw = area(wire)
-        val top = part.headSegments.last()
-        val prism = top.shape == SectionShape.HEX || top.shape == SectionShape.TWELVE_POINT
-        // Formed, not trimmed: the slug is exactly the finished part
-        val slugVol = part.volumeMm3
-        val slugLen = slugVol / aw
-        val stock = part.headVolumeMm3 / aw
-        val ld = stock / wire
-        val blows = if (ld <= SINGLE_BLOW_LD) 1 else 2
-        // The preform has to enter the finishing cavity: its inscribed circle for a prism, its diameter otherwise
-        val dCavity = if (prism) 0.96 * top.dBottomMm else top.maxWidthMm
-
-        val stations = mutableListOf(cutOff(wire, slugLen))
-        if (blows == 2) {
-            var hc = stock * 0.62
-            var dc = coneLargeEnd(part.headVolumeMm3, wire, hc)
-            // Clamped to enter the cavity, so the cone grows taller to keep the same volume
-            if (dc > 0.9 * dCavity) {
-                dc = 0.9 * dCavity
-                hc = 12.0 * part.headVolumeMm3 / (PI * (dc * dc + dc * wire + wire * wire))
-            }
-            stations += HeadingStation(
-                index = 1,
-                title = "Cone pre-upset",
-                operation = "Square the sheared end and gather the head stock in the cone punch: Ø${f(dc)} → Ø${f(wire)} × ${f(hc, 1)} mm " +
-                    "(head stock ${f(stock, 1)} mm, L/D ${f(ld)} > $SINGLE_BLOW_LD)",
-                segments = body + ProfileSegment(hc, dc, wire),
-                inDieMm = inDie
-            )
-        }
-        val (finishTitle, finishOp) = finishingBlow(type, part)
-        stations += HeadingStation(
-            index = stations.size,
-            title = finishTitle,
-            operation = finishOp + if (blows == 1) "; squared and formed in a single blow" else "",
-            segments = part.segments,
-            recesses = part.recesses,
-            inDieMm = inDie,
-            isPeakBlow = true
-        )
-
-        val notes = buildList {
-            add("One die: the wire is drawn to the shank Ø${f(wire)} mm, so nothing is extruded on the machine.")
-            if (prism) add(
-                "Formed head, no trim: the hex is closed in the punch insert, so there is no trim station and no trim " +
-                    "cheese. Corners are slightly fuller than a trimmed head; take the trimmed route where the drawing " +
-                    "calls for sharp corners."
-            )
-            addAll(part.cautions)
-        }
-        return HeadingPlan(
-            wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), blows, notes,
-            route = HeaderRoute.ONE_DIE,
-            reasonForOneDie(part, wire)
-        )
-    }
-
-    private fun reasonForOneDie(part: FinishedPart, wire: Double) =
-        "1-die header: the shank is one diameter (Ø${f(wire)} mm, no extrusion), the head needs at most two blows " +
-            "and there is no socket or bore to form."
 
     private fun area(d: Double) = sectionArea(SectionShape.ROUND, d)
     private fun f(v: Double, decimals: Int = 2) = String.format(java.util.Locale.US, "%.${decimals}f", v)

@@ -66,8 +66,12 @@ data class FinishedPart(
             (throughHoleMm?.let { PI / 4.0 * it * it * heightMm } ?: 0.0)
     val dieSegments: List<ProfileSegment> get() = segments.dropLast(headSegmentCount)
     val headSegments: List<ProfileSegment> get() = segments.takeLast(headSegmentCount)
-    /** Material formed outside the die bore, net of the socket it displaces. */
-    val headVolumeMm3: Double get() = volumeMm3 - dieSegments.sumOf { it.volumeMm3 }
+    /** Material formed outside the die bore, net of the socket it displaces: the head stock to gather. */
+    val headVolumeMm3: Double
+        get() = if (headSegmentCount == 0) 0.0   // a set screw, stud or pin has no head: nothing is gathered
+        else maxOf(0.0, volumeMm3 - dieSegments.sumOf { it.volumeMm3 })
+    /** Everything held in the die bore: shank, thread section and any neck. Head + shank = [volumeMm3]. */
+    val shankVolumeMm3: Double get() = volumeMm3 - headVolumeMm3
     /** True when every dimension in the volume is from the drawing and the type's shape is fully modelled. */
     val isComplete: Boolean get() = notOnDrawing.isEmpty() && cautions.isEmpty()
 

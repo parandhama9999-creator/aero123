@@ -176,7 +176,6 @@ fun AeroFastApp() {
 
     var appliedExtractedSpec by remember { mutableStateOf<com.example.data.ExtractedFastenerSpec?>(null) }
     // null = let the part decide between a 1-die header and a progressive former
-    var headerRoute by remember { mutableStateOf<com.example.data.HeaderRoute?>(null) }
     // The last scanned drawing: kept across tabs, and the Co-Pilot's primary input
     var scannedSpec by remember { mutableStateOf<com.example.data.ExtractedFastenerSpec?>(null) }
     val scanCalculation = remember(scannedSpec, FastenerCatalog.MATERIALS.size) {
@@ -285,7 +284,6 @@ fun AeroFastApp() {
         marginPct,
         selectedPropClass,
         appliedExtractedSpec,
-        headerRoute,
         com.example.ui.components.ManualFlange.diaMm, com.example.ui.components.ManualFlange.dc,
         com.example.ui.components.ManualFlange.k, com.example.ui.components.ManualFlange.s, com.example.ui.components.ManualFlange.c
     ) {
@@ -311,7 +309,6 @@ fun AeroFastApp() {
             extractedRadius = appliedExtractedSpec?.radius,
             propertyClass = selectedPropClass,
             // Dimensions from the applied drawing; a flange bolt can also take its head sizes typed on the Sizing card
-            headerRoute = headerRoute,
             drawing = (appliedExtractedSpec?.geometry() ?: com.example.data.DrawingGeometry()).let { g ->
                 if (!flange) g else g.copy(
                     acrossFlatsMm = g.acrossFlatsMm ?: mf.sFor(sizingD), headHeightMm = g.headHeightMm ?: mf.kFor(sizingD),
@@ -541,9 +538,7 @@ fun AeroFastApp() {
 
                         NavigationTab.FORGING -> {
                             ForgingMetallurgyScreen(
-                                result = currentCalculation,
-                                route = headerRoute,
-                                onRouteChange = { headerRoute = it }
+                                result = currentCalculation
                             )
                         }
 

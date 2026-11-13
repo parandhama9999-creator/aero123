@@ -73,8 +73,6 @@ import com.example.ui.theme.SuccessGreen
 fun ForgingMetallurgyScreen(
     result: FastenerCalculationResult,
     modifier: Modifier = Modifier,
-    route: com.example.data.HeaderRoute? = null,
-    onRouteChange: (com.example.data.HeaderRoute?) -> Unit = {}
 ) {
     val customColors = LocalCustomColors.current
     val scrollState = rememberScrollState()
@@ -297,7 +295,7 @@ fun ForgingMetallurgyScreen(
         SoftAnnealCard(result = result)
 
         // 5-Station Cold Heading Die Progression Canvas
-        ColdHeadingProgressionCanvas(result = result, route = route, onRouteChange = onRouteChange)
+        ColdHeadingProgressionCanvas(result = result)
 
         // Section 2: Detailed Heat Treatment Cycles
         Surface(
@@ -1033,8 +1031,6 @@ private fun HtStageCard(
 fun ColdHeadingProgressionCanvas(
     result: FastenerCalculationResult,
     modifier: Modifier = Modifier,
-    route: com.example.data.HeaderRoute? = null,
-    onRouteChange: (com.example.data.HeaderRoute?) -> Unit = {}
 ) {
     val customColors = LocalCustomColors.current
     val plan = result.headingPlan
@@ -1092,45 +1088,13 @@ fun ColdHeadingProgressionCanvas(
                 return@Column
             }
 
-            // The two bolt routes are different machines, so they are different progressions, not one renamed
-            if (plan.route == com.example.data.HeaderRoute.ONE_DIE || plan.route == com.example.data.HeaderRoute.MULTI_STATION) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("ROUTE", fontSize = 9.sp, fontWeight = FontWeight.Black, color = customColors.textMuted)
-                    listOf(
-                        null to "Auto",
-                        com.example.data.HeaderRoute.ONE_DIE to "1-die header",
-                        com.example.data.HeaderRoute.MULTI_STATION to "Progressive"
-                    ).forEach { (option, label) ->
-                        val selected = route == option
-                        Surface(
-                            shape = RoundedCornerShape(5.dp),
-                            color = if (selected) Color(0xFF38BDF8) else DieColors.die,
-                            modifier = Modifier.clickable { onRouteChange(option) }
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (selected) Color(0xFF0F172A) else DieColors.label,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-                if (plan.routeReason.isNotBlank()) {
-                    val refused = route != null && plan.route != route
-                    Text(
-                        text = plan.routeReason,
-                        fontSize = 9.sp,
-                        fontWeight = if (refused) FontWeight.Bold else FontWeight.Normal,
-                        color = if (refused) Color(0xFFEF4444) else customColors.textMuted,
-                        modifier = Modifier.padding(top = 3.dp)
-                    )
-                }
+            if (plan.routeReason.isNotBlank()) {
+                Text(
+                    text = plan.routeReason,
+                    fontSize = 9.sp,
+                    color = customColors.textMuted,
+                    modifier = Modifier.padding(top = 3.dp)
+                )
             }
 
             Text(
@@ -1196,7 +1160,7 @@ fun ColdHeadingProgressionCanvas(
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 plan.stations.forEach { st ->
                     Text(
-                        text = "${stationCode(st, plan.route)}  ${st.title} — L ${fmt(st.heightMm, 1)} · ${stationFeatureLabel(st)} · V ${fmt(st.volumeMm3, 0)} mm³",
+                        text = "${stationCode(st)}  ${st.title} — L ${fmt(st.heightMm, 1)} · ${stationFeatureLabel(st)} · V ${fmt(st.volumeMm3, 0)} mm³",
                         fontSize = 9.sp,
                         fontFamily = FontFamily.Monospace,
                         color = if (st.isPeakBlow) Color(0xFFF59E0B) else customColors.textMuted
@@ -1224,6 +1188,15 @@ fun ColdHeadingProgressionCanvas(
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (volumeOk) Color(0xFF22C55E) else Color(0xFFEF4444)
+                )
+                Text(
+                    text = "Head volume ${fmt(result.headVolumeMm3, 0)} mm³ · shank + thread ${fmt(result.shankVolumeMm3, 0)} mm³ · " +
+                        "total part ${fmt(result.partVolumeMm3, 0)} mm³ · slug ${fmt(plan.slugVolumeMm3, 0)} mm³",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    color = customColors.textMain,
+                    modifier = Modifier.padding(top = 2.dp)
                 )
                 Row {
                     val ldOk = result.upsetLdRatio <= HeadingProgression.SINGLE_BLOW_LD
@@ -1282,12 +1255,7 @@ private object DieColors {
 
 private fun fmt(v: Double, decimals: Int) = String.format(java.util.Locale.US, "%,.${decimals}f", v)
 
-private fun stationCode(st: HeadingStation, route: com.example.data.HeaderRoute = com.example.data.HeaderRoute.MULTI_STATION) = when {
-    st.isCutOff -> "CUT"
-    // One die: the numbers are blows of the same tool, not separate stations
-    route == com.example.data.HeaderRoute.ONE_DIE -> "B${st.index} "
-    else -> "D${st.index} "
-}
+private fun stationCode(st: HeadingStation) = if (st.isCutOff) "CUT" else "D${st.index} "
 
 internal fun stationFeatureLabel(st: HeadingStation): String {
     val top = st.segments.last()
@@ -1359,7 +1327,7 @@ internal fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float, 
         drawContext.canvas.nativeCanvas.apply {
             drawText(stationFeatureLabel(st), cx, topY - textPx * 0.6f, dimPaint)
             labelPaint.color = (if (st.isPeakBlow) DieColors.peak else DieColors.label).toArgb()
-            if (stationLabels) drawText(stationCode(st, plan.route).trim(), cx, baseY + koBand + textPx * 1.6f, labelPaint)
+            if (stationLabels) drawText(stationCode(st).trim(), cx, baseY + koBand + textPx * 1.6f, labelPaint)
         }
     }
 }

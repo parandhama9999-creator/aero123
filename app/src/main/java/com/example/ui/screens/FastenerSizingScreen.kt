@@ -641,12 +641,6 @@ fun FastenerSizingScreen(
                             Text(text = "Stock to extrude: ${n(f1.stockToExtrudeMm)} – ${n(f2.stockToExtrudeMm)} mm", style = rowStyle)
                             Text(text = "Length under head before extrusion: ${n(f1.lengthUnderHeadBeforeMm)} – ${n(f2.lengthUnderHeadBeforeMm)} mm", style = rowStyle)
                             Text(text = "Range is for b min → b + 2P. L_pre = (A_blank·b + V_cone) / A_shank.", fontSize = 10.sp, color = customColors.textMuted)
-                            if (result.headingPlan?.route == com.example.data.HeaderRoute.ONE_DIE) {
-                                Text(
-                                    text = "These are the progressive-former figures. This part needs no extrusion, so HT & Forging heads it in one die from Ø${n(result.headingPlan!!.slugDiaMm)} mm wire.",
-                                    fontSize = 10.sp, fontWeight = FontWeight.Bold, color = customColors.accentPrimary
-                                )
-                            }
                         }
                         if (headModel) {
                             Spacer(modifier = Modifier.height(6.dp))
@@ -1204,6 +1198,54 @@ fun FastenerSizingScreen(
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
+
+                // Volume: the head on its own and the whole part (head + shank = total)
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(6.dp),
+                    color = customColors.bgElevated
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text(
+                            text = "VOLUME — HEAD AND TOTAL",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Black,
+                            color = customColors.accentSecondary
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            listOf(
+                                Triple("HEAD", result.headVolumeMm3, result.headWeightGrams),
+                                Triple("SHANK + THREAD", result.shankVolumeMm3, result.shankWeightGrams),
+                                Triple("TOTAL PART", result.partVolumeMm3, result.partVolumeMm3 / 1000.0 * result.material.density)
+                            ).forEach { (title, vol, grams) ->
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(title, fontSize = 8.5.sp, fontWeight = FontWeight.Black, color = customColors.textMuted)
+                                    Text(
+                                        text = "%,.0f mm³".format(java.util.Locale.US, vol),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = if (title == "TOTAL PART") customColors.accentPrimary else customColors.textMain
+                                    )
+                                    Text("%,.2f g".format(java.util.Locale.US, grams), fontSize = 9.sp, color = customColors.textMuted)
+                                }
+                            }
+                        }
+                        Text(
+                            text = if (selectedFastenerType.isNut || selectedFastenerType.isWasher)
+                                "A nut / washer is formed entirely above the die face, so the head volume is the whole part."
+                            else "Head volume is the stock gathered above the die face (it sets the upset L/D); head + shank = total.",
+                            fontSize = 9.sp,
+                            color = customColors.textMuted,
+                            modifier = Modifier.padding(top = 3.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // 3 Bottom Stats: Part Wt, Slug L0, Upset L/D
                 Row(

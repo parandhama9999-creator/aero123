@@ -702,6 +702,8 @@ private fun DrawingVolumeCard(spec: ExtractedFastenerSpec, volume: com.example.d
     val summary = buildString {
         append("${spec.fastenerType.label} — total volume as per drawing (AeroFast Pro)\n")
         append("Total volume: ${n(volume.totalMm3, 0)} mm³ = ${n(volume.totalMm3 / 1000.0, 3)} cm³\n")
+        append("Head volume : ${n(volume.headMm3, 0)} mm³${if (volume.headIsScaled) " (head share of the standard shape applied to the scanned total)" else ""}\n")
+        append("Shank + thread volume: ${n(volume.shankMm3, 0)} mm³\n")
         append("Weight: ${n(volume.massG)} g ($materialName, ${volume.densityGPerCm3} g/cm³)\n")
         append("Cut-off: Ø${n(volume.wireDiaMm)} × ${n(volume.cutOffLengthMm)} mm\n")
         append("Basis: ${volume.basis.label}\n$statusText\n")
@@ -731,6 +733,40 @@ private fun DrawingVolumeCard(spec: ExtractedFastenerSpec, volume: com.example.d
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
                 color = customColors.textMain
+            )
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = customColors.bgElevated,
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    listOf(
+                        Triple("HEAD", volume.headMm3, customColors.accentPrimary),
+                        Triple("SHANK + THREAD", volume.shankMm3, customColors.textMain),
+                        Triple("TOTAL", volume.totalMm3, customColors.accentSecondary)
+                    ).forEach { (title, v, colour) ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(title, fontSize = 8.5.sp, fontWeight = FontWeight.Black, color = customColors.textMuted)
+                            Text(
+                                text = "${n(v, 0)} mm³",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = FontFamily.Monospace,
+                                color = colour
+                            )
+                            Text("${n(v / 1000.0 * volume.densityGPerCm3, 2)} g", fontSize = 9.sp, color = customColors.textMuted)
+                        }
+                    }
+                }
+            }
+            Text(
+                text = if (volume.headIsScaled)
+                    "Head volume is the head share of this type's standard shape applied to the scanned total; head + shank = total."
+                else "Head volume is the material above the die face; head + shank = total.",
+                fontSize = 9.sp, color = customColors.textMuted
             )
             Text(
                 text = "Cut-off slug: Ø${n(volume.wireDiaMm)} × ${n(volume.cutOffLengthMm)} mm" +

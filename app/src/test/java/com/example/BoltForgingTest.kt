@@ -39,11 +39,6 @@ class ProgressionMatchesCardTest {
             if (plan.route == HeaderRoute.MULTI_STATION) {
                 assertEquals("d=$d L=$len scan=$scan", card.cutOffLengthMm!!, plan.slugLengthMm, 0.01)
                 assertEquals("Trim to hex", plan.stations.last().title)
-            } else {
-                // One die: nothing is extruded, so the card's extrusion figures do not describe it
-                assertEquals(HeaderRoute.ONE_DIE, plan.route)
-                assertEquals("d=$d L=$len scan=$scan", r.cutOffLengthMm, plan.slugLengthMm, 0.01)
-                assertTrue("one-die hex is formed, not trimmed", plan.offHeaderOps.none { it.title.contains("Trim") })
             }
             org.junit.Assert.assertTrue("vol err ${plan.maxVolumeError}", plan.maxVolumeError < 0.005)
         }
