@@ -310,8 +310,15 @@ object SoftAnnealEngine {
             }
 
             AnnealRoute.ANNEAL_REQUIRED -> {
-                notes += "The catalogue lists this wire as cold drawn / half-hard, which is not a headable condition. " +
-                    "Either source spheroidize-annealed wire, or anneal before heading."
+                notes += if (family == MaterialFamily.CARBON_ALLOY_STEEL)
+                    "The catalogue lists this wire as cold drawn / half-hard, which is not a headable condition. " +
+                        "Either source spheroidize-annealed wire, or anneal before heading."
+                else
+                    "The catalogue lists this wire in the cold-drawn condition. For ${material.name} that is the " +
+                        "work-strengthened delivery state, not a headable condition, and it is NOT spheroidize " +
+                        "annealed: " +
+                        "the soft condition is the solution-treated one. Source solution-treated stock, or take the " +
+                        "solution cycle from the alloy's own AMS specification before forming."
                 unsourced += "Anneal cycle — none in the catalogue, because this grade is listed in the hard condition"
                 SoftAnnealSpec(
                     route = route,

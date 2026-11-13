@@ -430,6 +430,20 @@ fun ForgingMetallurgyScreen(
                         subDetail = "Exempt for ${result.coating.label} coating on ${result.material.name}"
                     )
                 }
+
+                // Hours on every stage, worked out from the section size the specs actually use
+                com.example.data.HeatTreatCycleEngine
+                    .quenchTemper(result.material, result.wireDiaMm)
+                    ?.let { cycle ->
+                        CycleStagesBlock(
+                            title = "COMPLETE CYCLE \u2014 DOOR TO DOOR",
+                            stages = cycle.stages,
+                            totalText = cycle.totalText,
+                            basis = cycle.basis,
+                            cautions = cycle.cautions,
+                            sources = cycle.sources
+                        )
+                    }
             }
         }
 
@@ -1643,6 +1657,82 @@ private fun DrawScope.drawStation(
     }
 }
 
+/** One furnace cycle: every stage with its hours, the door-to-door total, then basis, cautions, sources. */
+@Composable
+private fun CycleStagesBlock(
+    title: String,
+    stages: List<com.example.data.AnnealStage>,
+    totalText: String,
+    totalSuffix: String = "",
+    basis: String,
+    cautions: List<String>,
+    sources: List<String>,
+    header: (@Composable () -> Unit)? = null
+) {
+    val customColors = LocalCustomColors.current
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Black,
+            color = customColors.accentSecondary
+        )
+        header?.invoke()
+    }
+    Spacer(modifier = Modifier.height(4.dp))
+    stages.forEach { st ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                Text(st.name, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = customColors.textMain)
+                Text(st.detail, fontSize = 9.sp, color = customColors.textMuted)
+            }
+            Text(
+                text = st.hoursText,
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = FontFamily.Monospace,
+                color = customColors.accentPrimary
+            )
+        }
+    }
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = customColors.bgElevated,
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("TOTAL CYCLE", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.textMain)
+            Text(
+                text = totalText + totalSuffix,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = FontFamily.Monospace,
+                color = customColors.accentSecondary
+            )
+        }
+    }
+    Text(basis, fontSize = 9.sp, color = customColors.textMuted, modifier = Modifier.padding(top = 3.dp))
+    cautions.forEach {
+        Text("\u26a0 " + it, fontSize = 9.sp, color = AlertRed, modifier = Modifier.padding(top = 2.dp))
+    }
+    if (sources.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(3.dp))
+        Text("Cycle sources", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = customColors.textMuted)
+        sources.forEach { Text("\u2022 " + it, fontSize = 8.5.sp, color = customColors.textMuted) }
+    }
+}
+
 @Composable
 private fun SoftAnnealCard(result: FastenerCalculationResult) {
     val spec = result.softAnnealSpec ?: return
@@ -1741,111 +1831,51 @@ private fun SoftAnnealCard(result: FastenerCalculationResult) {
             // Complete furnace cycle: every stage with its hours, so the anneal can be booked and costed
             val cycle = com.example.data.AnnealCycleEngine.spheroidize(result.material, chargeTonnes)
             if (cycle != null && spec.inHouseAnnealNeeded) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "COMPLETE CYCLE \u2014 DOOR TO DOOR",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black,
-                        color = customColors.accentSecondary
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Charge", fontSize = 9.sp, color = customColors.textMuted)
-                        listOf(2.0, 5.0, 10.0, 20.0, 30.0).forEach { t ->
-                            val on = kotlin.math.abs(chargeTonnes - t) < 0.01
-                            Surface(
-                                shape = RoundedCornerShape(5.dp),
-                                color = if (on) customColors.accentPrimary else customColors.bgElevated,
-                                modifier = Modifier
-                                    .padding(start = 3.dp)
-                                    .clickable { chargeTonnes = t }
-                            ) {
-                                Text(
-                                    text = fmt(t, 0) + "t",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (on) Color(0xFF0F172A) else customColors.textMuted,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp)
-                                )
+                CycleStagesBlock(
+                    title = "COMPLETE CYCLE \u2014 DOOR TO DOOR",
+                    stages = cycle.stages,
+                    totalText = cycle.totalText,
+                    totalSuffix = "  \u2022  " + cycle.hoursPerTonne,
+                    basis = cycle.basis,
+                    cautions = cycle.cautions,
+                    sources = cycle.sources,
+                    header = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Charge", fontSize = 9.sp, color = customColors.textMuted)
+                            listOf(2.0, 5.0, 10.0, 20.0, 30.0).forEach { t ->
+                                val on = kotlin.math.abs(chargeTonnes - t) < 0.01
+                                Surface(
+                                    shape = RoundedCornerShape(5.dp),
+                                    color = if (on) customColors.accentPrimary else customColors.bgElevated,
+                                    modifier = Modifier
+                                        .padding(start = 3.dp)
+                                        .clickable { chargeTonnes = t }
+                                ) {
+                                    Text(
+                                        text = fmt(t, 0) + "t",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (on) Color(0xFF0F172A) else customColors.textMuted,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp)
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                cycle.stages.forEach { st ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                            Text(
-                                text = st.name,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = customColors.textMain
-                            )
-                            Text(text = st.detail, fontSize = 9.sp, color = customColors.textMuted)
-                        }
-                        Text(
-                            text = st.hoursText,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace,
-                            color = customColors.accentPrimary
-                        )
-                    }
-                }
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = customColors.bgElevated,
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "TOTAL CYCLE",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            color = customColors.textMain
-                        )
-                        Text(
-                            text = cycle.totalText + "  \u2022  " + cycle.hoursPerTonne,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace,
-                            color = customColors.accentSecondary
-                        )
-                    }
-                }
-                Text(
-                    text = cycle.basis,
-                    fontSize = 9.sp,
-                    color = customColors.textMuted,
-                    modifier = Modifier.padding(top = 3.dp)
                 )
-                cycle.cautions.forEach {
-                    Text(
-                        text = "\u26a0 " + it,
-                        fontSize = 9.sp,
-                        color = AlertRed,
-                        modifier = Modifier.padding(top = 2.dp)
+            }
+
+            // Aluminium and copper: the catalogue left the O-temper cycle blank, so it is built here
+            if (cycle == null) {
+                com.example.data.HeatTreatCycleEngine.softAnneal(result.material, result.wireDiaMm)?.let { nf ->
+                    CycleStagesBlock(
+                        title = nf.title.uppercase(),
+                        stages = nf.stages,
+                        totalText = nf.totalText,
+                        basis = nf.basis,
+                        cautions = nf.cautions,
+                        sources = nf.sources
                     )
-                }
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    text = "Cycle sources",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = customColors.textMuted
-                )
-                cycle.sources.forEach {
-                    Text(text = "\u2022 " + it, fontSize = 8.5.sp, color = customColors.textMuted)
                 }
             }
 

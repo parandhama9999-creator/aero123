@@ -29,7 +29,9 @@ object PokaYokeEngine {
         return when {
             k.startsWith("TI_") || k == "VT16" || n.contains("TITANIUM") -> MaterialFamily.TITANIUM
             k.startsWith("AL") && n.contains("ALLOY") || n.contains(" AL ") || n.contains("ALUMINUM") || n.contains("ALUMINIUM") -> MaterialFamily.ALUMINUM
-            k.startsWith("BRASS") || k == "CUBE2" || n.contains("BRASS") || n.contains("COPPER") -> MaterialFamily.COPPER_ALLOY
+            k.startsWith("BRASS") || k.contains("BRONZE") || k.startsWith("CUNI") || k == "CUBE2" ||
+                n.contains("BRASS") || n.contains("BRONZE") || n.contains("COPPER") || n.contains("CUSN") ||
+                n.contains("CUSI") || n.contains("CUNI") -> MaterialFamily.COPPER_ALLOY
             listOf("INCONEL", "WASPALOY", "RENE", "MP35N", "MP159", "HASTELLOY", "MONEL", "NIMONIC", "A286", "10KH11N23T3MR", "INVAR")
                 .any { k.contains(it) } -> MaterialFamily.NICKEL_SUPERALLOY
             k.startsWith("SS") || k.contains("PH") || k.contains("X13") || k == "NITRONIC60" || k == "CUSTOM_455" ||
