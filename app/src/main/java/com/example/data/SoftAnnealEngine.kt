@@ -207,14 +207,13 @@ object SoftAnnealEngine {
                 notes += "A1 baseline is ${fmt(A1_PLAIN_CARBON_C)} °C for plain carbon steel. Cr, Mo and Si raise A1; " +
                     "Mn and Ni lower it — confirm A1 for this grade before setting the furnace."
                 unsourced += "Exact A1 for this grade"
-                unsourced += "Soak hours — driven by coil mass and furnace load, not part diameter"
                 SoftAnnealSpec(
                     route = route,
                     inHouseAnnealNeeded = true,
                     suppliedCondition = supplied,
                     temperatureC = "${fmt(A1_PLAIN_CARBON_C - 25)} – ${fmt(A1_PLAIN_CARBON_C - 5)} °C " +
                         "(just below A1; baseline A1 = ${fmt(A1_PLAIN_CARBON_C)} °C)",
-                    soakTime = "Coil-mass driven — set from furnace load, not part Ø",
+                    soakTime = "See the full cycle below — soak is coil-mass driven, not part Ø",
                     coolingRate = "Slow furnace cool through the transformation range, then still air",
                     atmosphere = "Protective N₂ or endothermic gas — prevent decarburisation of the wire surface",
                     targetUtsMpa = supplied,
@@ -345,5 +344,171 @@ object SoftAnnealEngine {
             )
         }
         return spec
+    }
+}
+
+/** One stage of a furnace cycle, with the time it takes. */
+data class AnnealStage(
+    val name: String,
+    val detail: String,
+    val hoursLow: Double,
+    val hoursHigh: Double
+) {
+    val hoursText: String
+        get() = if (kotlin.math.abs(hoursHigh - hoursLow) < 0.05) "${fmtH(hoursLow)} h"
+        else "${fmtH(hoursLow)} – ${fmtH(hoursHigh)} h"
+
+    private fun fmtH(v: Double) = String.format(java.util.Locale.US, "%.1f", v)
+}
+
+/**
+ * A complete furnace cycle: every stage from charging to unloading, with door-to-door hours.
+ *
+ * The stage times are the published figures for spheroidize annealing of cold-heading wire in a
+ * bell furnace (see [sources]), scaled for the charge mass where the source says the stage is
+ * charge-driven. They are a starting schedule for a furnace trial, not a substitute for the
+ * furnace's own thermocouple chart: a bell furnace's ramp depends on coil weight, stack height,
+ * and where a coil sits in the stack.
+ */
+data class AnnealCycle(
+    val stages: List<AnnealStage>,
+    val chargeTonnes: Double,
+    val soakTempC: String,
+    val basis: String,
+    val sources: List<String>,
+    val cautions: List<String>
+) {
+    val totalLow: Double get() = stages.sumOf { it.hoursLow }
+    val totalHigh: Double get() = stages.sumOf { it.hoursHigh }
+    val totalText: String
+        get() = String.format(java.util.Locale.US, "%.1f – %.1f h", totalLow, totalHigh)
+    /** Door-to-door hours per tonne of charge: what the cycle really costs the furnace. */
+    val hoursPerTonne: String
+        get() = if (chargeTonnes <= 0.0) "" else
+            String.format(java.util.Locale.US, "%.1f h/t", (totalLow + totalHigh) / 2.0 / chargeTonnes)
+}
+
+/**
+ * Timing for the sub-critical spheroidize anneal. The temperature was always on the card; this adds
+ * how long each stage takes, which is what sets furnace booking and cost per tonne.
+ */
+object AnnealCycleEngine {
+
+    const val DEFAULT_CHARGE_TONNES = 10.0
+
+    private fun fmt(v: Double) = String.format(java.util.Locale.US, "%.0f", v)
+
+    private val SOURCES = listOf(
+        "Lin et al., AISI 1022 cold-heading wire, Taguchi study: 695 – 705 °C, 7 – 8 h soak, 7.5 – 8.5 h furnace cool (optimum 700 °C, 8 h cool)",
+        "CN102876859A (screw wire): 710 – 730 °C for 5 – 8 h under inert gas, cool ≈ 20 °C/h to ≈ 550 °C, then ≈ 80 °C/h to ≈ 400 °C, then air",
+        "CN109593929B (cold-forging steel): 650 – 690 °C held 6 – 20 h, hold set by section thickness",
+        "Singh et al. (AIST), SCM435 wire rod in a bell furnace: whole cycle ≈ 21 – 22 h; alloy grades soak up to 10 h",
+        "Bell-furnace practice: a coil stack takes 13 – 25 h to reach 720 °C depending on coil weight, height and position in the stack"
+    )
+
+    /** Cr, Mo and high carbon spheroidise more slowly, so they hold longer. */
+    private fun soakHours(material: MaterialInfo): Pair<Double, Double> {
+        val id = (material.key + " " + material.name).uppercase()
+        val alloy = listOf("CRMO", "CR-MO", "4140", "4135", "42CRMO", "SCM", "34CR", "4340", "8740", "EN24", "35NCD")
+            .any { id.contains(it) }
+        val boronOrMedium = listOf("10B", "20MN", "23MN", "30MN", "32CR", "36CR", "41CR", "1035", "1045", "EN8", "EN16")
+            .any { id.contains(it) }
+        return when {
+            alloy -> 8.0 to 10.0          // SCM435 advanced cycle soaks 10 h
+            boronOrMedium -> 6.0 to 8.0   // 1022 Taguchi optimum sits in this band
+            else -> 5.0 to 7.0            // plain low carbon spheroidises fastest
+        }
+    }
+
+    /**
+     * Heat-up and unload scale with the charge: a bell furnace takes 13 – 25 h to bring a coil stack
+     * to temperature depending on its mass, so the ramp is interpolated across that published band.
+     */
+    private fun heatUpHours(tonnes: Double): Pair<Double, Double> {
+        val t = tonnes.coerceIn(1.0, 40.0)
+        val low = (4.0 + 0.30 * t).coerceIn(4.0, 16.0)
+        val high = (6.0 + 0.45 * t).coerceIn(6.0, 25.0)
+        return low to high
+    }
+
+    /**
+     * The cycle for a grade that is spheroidize annealed. Returns null for any other route: a
+     * solution anneal or a non-ferrous O temper is a different cycle and is not modelled here.
+     */
+    fun spheroidize(material: MaterialInfo, chargeTonnes: Double = DEFAULT_CHARGE_TONNES): AnnealCycle? {
+        if (PokaYokeEngine.materialFamily(material) != MaterialFamily.CARBON_ALLOY_STEEL) return null
+
+        val soakLo = 698.0
+        val soakHi = 718.0
+        val (heatLo, heatHi) = heatUpHours(chargeTonnes)
+        val (holdLo, holdHi) = soakHours(material)
+
+        // Controlled cool: 20 °C/h through the transformation range, then 80 °C/h to 400 °C.
+        val slowCoolTo = 550.0
+        val fastCoolTo = 400.0
+        val slowHours = (soakLo - slowCoolTo) / 20.0
+        val fastHours = (slowCoolTo - fastCoolTo) / 80.0
+        // Unloading a hot stack is charge-driven too, but it is a short tail on the cycle.
+        val unloadLo = (1.0 + 0.08 * chargeTonnes).coerceIn(1.0, 5.0)
+        val unloadHi = (2.0 + 0.12 * chargeTonnes).coerceIn(2.0, 7.0)
+
+        val stages = listOf(
+            AnnealStage(
+                "1. Charge & purge",
+                "Load the stack, seal the bell, purge to the protective atmosphere before any heat goes in",
+                0.5, 1.0
+            ),
+            AnnealStage(
+                "2. Heat to soak",
+                "Ramp to ${fmt(soakLo)} – ${fmt(soakHi)} °C under N₂ / endothermic gas. Charge-driven: " +
+                    "a full stack takes 13 – 25 h, a light one far less",
+                heatLo, heatHi
+            ),
+            AnnealStage(
+                "3. Equalise",
+                "Hold until the coldest coil in the stack reaches temperature — the control thermocouple " +
+                    "leads the charge, so time from the load couple, not the setpoint",
+                1.0, 2.0
+            ),
+            AnnealStage(
+                "4. Soak (spheroidise)",
+                "Hold just below A1 to break the lamellar pearlite into globular cementite. This is the " +
+                    "stage that decides the structure: too short leaves lamellae, too long coarsens the carbide",
+                holdLo, holdHi
+            ),
+            AnnealStage(
+                "5. Controlled cool to ${fmt(slowCoolTo)} °C",
+                "≈ 20 °C/h through the transformation range — the slow leg is what keeps the carbide globular",
+                slowHours, slowHours
+            ),
+            AnnealStage(
+                "6. Cool to ${fmt(fastCoolTo)} °C",
+                "≈ 80 °C/h once past transformation; nothing is gained by holding the charge hot",
+                fastHours, fastHours
+            ),
+            AnnealStage(
+                "7. Cool under cover & unload",
+                "Stay under the protective atmosphere below ${fmt(fastCoolTo)} °C until safe to strip, then still air. " +
+                    "Opening hot scales and decarburises the wire surface",
+                unloadLo, unloadHi
+            )
+        )
+
+        return AnnealCycle(
+            stages = stages,
+            chargeTonnes = chargeTonnes,
+            soakTempC = "${fmt(soakLo)} – ${fmt(soakHi)} °C",
+            basis = "Published bell-furnace cycles for cold-heading wire, with the charge-driven stages scaled " +
+                "to ${String.format(java.util.Locale.US, "%.1f", chargeTonnes)} t",
+            sources = SOURCES,
+            cautions = listOf(
+                "A starting schedule for a furnace trial, not a released process. Prove it on the furnace's own " +
+                    "load thermocouple before running production.",
+                "Soak and ramp are set by coil mass, stack height and position in the stack — not by the part " +
+                    "diameter. Two coils in one stack do not see the same cycle.",
+                "Set the soak against the A1 of THIS grade. The 698 – 718 °C band is the plain-carbon baseline; " +
+                    "Cr, Mo and Si raise A1, Mn and Ni lower it. Soaking above A1 austenitises and undoes the anneal."
+            )
+        )
     }
 }
