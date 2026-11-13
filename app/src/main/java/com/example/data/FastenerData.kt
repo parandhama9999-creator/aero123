@@ -22,6 +22,35 @@ enum class FastenerType(
     T_BOLT("T-Head / Slot Bolt (DIN 186 / DIN 261)", false, false, false, "Bolts & Screws"),
     HEAVY_HEX_BOLT("Heavy Hex Structural Bolt (ASTM A325 / A490)", false, false, false, "Bolts & Screws"),
     EYE_BOLT("Precision Eye Bolt / Lifting Ring (DIN 444 / ISO 9001)", false, false, false, "Bolts & Screws"),
+    SQUARE_BOLT("Square Head Bolt (ASME B18.2.1 / DIN 478)", false, false, false, "Bolts & Screws"),
+    SHOULDER_BOLT("Shoulder Screw / Stripper Bolt (ISO 7379)", false, false, false, "Bolts & Screws"),
+    SET_SCREW_CONE("Cone Point Set Screw (ISO 4027 / DIN 914)", false, false, false, "Bolts & Screws"),
+    SET_SCREW_DOG("Dog Point Set Screw (ISO 4028 / DIN 915)", false, false, false, "Bolts & Screws"),
+    SET_SCREW_CUP("Cup Point Set Screw (ISO 4029 / DIN 916)", false, false, false, "Bolts & Screws"),
+    SLOTTED_SET_SCREW("Slotted Set Screw (DIN 438 / ISO 7436)", false, false, false, "Bolts & Screws"),
+    THUMB_SCREW("Knurled Thumb Screw (DIN 464 / DIN 653)", false, false, false, "Bolts & Screws"),
+    WING_SCREW("Wing Screw (DIN 316)", false, false, false, "Bolts & Screws"),
+    HANGER_BOLT("Hanger / Dowel Screw - Wood to Metal (DIN 7961)", false, false, false, "Bolts & Screws"),
+    ANCHOR_BOLT("Anchor / Foundation Bolt, L & J Type (ASTM F1554)", false, false, false, "Bolts & Screws"),
+    LAG_SCREW("Hex Lag / Coach Screw (DIN 571 / ASME B18.2.1)", false, false, false, "Bolts & Screws"),
+
+    // Machine Screws (small-diameter headed screws, ISO 1207 family)
+    PAN_SLOT("Slotted Pan Head Machine Screw (ISO 1580 / DIN 85)", false, false, false, "Machine Screws"),
+    PAN_CROSS("Cross-Recess Pan Head Screw (ISO 7045 / DIN 7985)", false, false, false, "Machine Screws"),
+    CHEESE_SLOT("Slotted Cheese Head Screw (ISO 1207 / DIN 84)", false, false, false, "Machine Screws"),
+    CSK_SLOT("Slotted Countersunk Head Screw (ISO 2009 / DIN 963)", false, false, false, "Machine Screws"),
+    CSK_CROSS("Cross-Recess Countersunk Head Screw (ISO 7046 / DIN 965)", false, false, false, "Machine Screws"),
+    RAISED_CSK_CROSS("Cross-Recess Raised Countersunk (Oval) Screw (ISO 7047 / DIN 966)", false, false, false, "Machine Screws"),
+    HEX_WASHER_SCREW("Hex Washer Head Screw (DIN 6900-3 / ASME B18.6.3)", false, false, false, "Machine Screws"),
+    SEMS_SCREW("SEMS Screw & Captive Washer Assembly (DIN 6900)", false, false, false, "Machine Screws"),
+
+    // Tapping, Self-Drilling & Wood Screws
+    TAPPING_PAN("Self-Tapping Pan Head Screw (ISO 1481 / DIN 7981)", false, false, false, "Tapping & Wood Screws"),
+    TAPPING_CSK("Self-Tapping Countersunk Screw (ISO 7050 / DIN 7982)", false, false, false, "Tapping & Wood Screws"),
+    TAPPING_HEX("Hex Head Tapping Screw (ISO 10509 / DIN 7976)", false, false, false, "Tapping & Wood Screws"),
+    SELF_DRILLING("Self-Drilling Screw (ISO 15480 / DIN 7504K)", false, false, false, "Tapping & Wood Screws"),
+    DRYWALL_SCREW("Drywall Bugle Head Screw (DIN 18182 / ASTM C1002)", false, false, false, "Tapping & Wood Screws"),
+    CHIPBOARD_SCREW("Chipboard / Wood Screw (DIN 7505 / EN 14592)", false, false, false, "Tapping & Wood Screws"),
 
     // Automotive
     TTY_HEAD_BOLT("Torque-to-Yield Head Bolt - Reduced Shank, Flange (OEM)", false, false, false, "Automotive"),
@@ -29,6 +58,7 @@ enum class FastenerType(
     THREAD_FORMING_SCREW("Thread-Forming / Taptite Screw (DIN 7500)", false, false, false, "Automotive"),
     WHEEL_BOLT("Wheel Bolt - Conical / Spherical Seat (DIN 74361)", false, false, false, "Automotive"),
     BANJO_BOLT("Banjo / Hollow Bolt (DIN 7623)", false, false, false, "Automotive"),
+    CONROD_BOLT("Connecting Rod Bolt - Necked Down Shank (OEM)", false, false, false, "Automotive"),
 
     // Aerospace
     NAS_CLOSE_TOL_BOLT("Aircraft Hex Head Bolt - Close Tolerance (NAS 6203 / AN3)", false, false, false, "Aerospace"),
@@ -38,11 +68,25 @@ enum class FastenerType(
     BLIND_BOLT("Blind Bolt - Core Bolt (OEM / NAS series)", false, false, false, "Aerospace"),
     SOLID_RIVET("Solid Rivet - Universal Head (MS20470)", false, false, false, "Aerospace", isUnthreaded = true),
     BLIND_RIVET("Structural Blind Rivet (NAS 1398)", false, false, false, "Aerospace", isUnthreaded = true),
+    CLEVIS_BOLT("Aircraft Clevis Bolt (AN21 – AN36)", false, false, false, "Aerospace"),
+    SHEAR_BOLT("Aircraft Shear Bolt - Reduced Head (AN173 / NAS 464)", false, false, false, "Aerospace"),
 
     // Studs & Rods
     STUD("Double-End / Continuous Thread Stud (ASTM A193 B7)", false, true, false, "Studs & Rods"),
     WHEEL_STUD("Knurled Wheel / Hub Stud", false, true, false, "Studs & Rods"),
     U_BOLT("U-Bolt / Pipe Clamp Bolt (DIN 3570)", false, true, false, "Studs & Rods"),
+    THREADED_ROD("Threaded Rod / Stud Bolt, Full Length (DIN 975 / ASTM A193)", false, true, false, "Studs & Rods"),
+    TAP_END_STUD("Tap-End Flange Stud (ASME B16.5 / ASTM A193)", false, true, false, "Studs & Rods"),
+
+    // Pins & Retainers (unthreaded: no rolling, tapping or thread-root fatigue)
+    DOWEL_PIN("Dowel Pin - Ground (ISO 2338 / DIN 7)", false, false, false, "Pins & Retainers", isUnthreaded = true),
+    TAPER_PIN("Taper Pin 1:50 (ISO 2339 / DIN 1)", false, false, false, "Pins & Retainers", isUnthreaded = true),
+    CLEVIS_PIN("Clevis Pin with Head (ISO 2341 / DIN 1444)", false, false, false, "Pins & Retainers", isUnthreaded = true),
+    SPLIT_PIN("Split Cotter Pin (ISO 1234 / DIN 94)", false, false, false, "Pins & Retainers", isUnthreaded = true),
+    SPRING_PIN("Slotted Spring Pin (ISO 8752 / DIN 1481)", false, false, false, "Pins & Retainers", isUnthreaded = true),
+    GROOVED_PIN("Grooved Drive Pin (ISO 8739 / DIN 1473)", false, false, false, "Pins & Retainers", isUnthreaded = true),
+    // A circlip is a flat ring like a washer: it is parted and formed from strip, not upset on a header
+    RETAINING_RING("Retaining Ring / Circlip (DIN 471 / DIN 472)", false, false, true, "Pins & Retainers", isUnthreaded = true),
 
     // Nuts & Internal Taps
     HEX_NUT("Standard Hex Nut (ISO 4032 / DIN 934)", true, false, false, "Nuts & Locking"),
@@ -57,10 +101,26 @@ enum class FastenerType(
     AERO_LOCK_NUT("Self-Locking Reduced Hex Aero Nut (MS21042 / NAS 1291)", true, false, false, "Aerospace"),
     HI_LOK_COLLAR("Hi-Lok Torque-Off Collar (Hi-Shear)", true, false, false, "Aerospace"),
     NUTPLATE("Nutplate / Anchor Nut - Two Lug (MS21047)", true, false, false, "Aerospace"),
+    THIN_NUT("Thin Jam Hex Nut (ISO 4035 / DIN 439B)", true, false, false, "Nuts & Locking"),
+    HIGH_NUT("High Hex Nut, Style 2 (ISO 4033 / DIN 934 high)", true, false, false, "Nuts & Locking"),
+    SQUARE_NUT("Square Nut (DIN 557 / DIN 562)", true, false, false, "Nuts & Locking"),
+    COUPLING_NUT("Coupling / Extension Nut (DIN 6334)", true, false, false, "Nuts & Locking"),
+    T_SLOT_NUT("T-Slot Nut (DIN 508)", true, false, false, "Nuts & Locking"),
+    CAGE_NUT("Cage / Spring Channel Nut (sheet metal, OEM)", true, false, false, "Nuts & Locking"),
+    WING_NUT("Wing Nut (DIN 315 / ASME B18.17)", true, false, false, "Nuts & Locking"),
+    THUMB_NUT("Knurled Thumb Nut (DIN 466 / DIN 467)", true, false, false, "Nuts & Locking"),
+    RIVET_NUT("Blind Rivet Nut / Rivnut (OEM spec)", true, false, false, "Nuts & Locking"),
+    CLINCH_NUT("Self-Clinching Nut (IFI-100 / OEM)", true, false, false, "Nuts & Locking"),
 
     // Washers
     FLAT_WASHER("Flat Plain Washer (ISO 7089 / DIN 125A)", false, false, true, "Washers"),
-    SPRING_WASHER("Spring Lock Washer (DIN 127B / ISO 10270)", false, false, true, "Washers")
+    SPRING_WASHER("Spring Lock Washer (DIN 127B / ISO 10270)", false, false, true, "Washers"),
+    FENDER_WASHER("Large OD Fender Washer (ISO 7093 / DIN 9021)", false, false, true, "Washers"),
+    STRUCT_WASHER("Hardened Structural Washer (ASTM F436)", false, false, true, "Washers"),
+    TOOTH_LOCK_WASHER("Serrated Tooth Lock Washer (DIN 6797 / DIN 6798)", false, false, true, "Washers"),
+    BELLEVILLE_WASHER("Conical Belleville Spring Washer (DIN 6796 / DIN 2093)", false, false, true, "Washers"),
+    WAVE_WASHER("Curved / Wave Spring Washer (DIN 137)", false, false, true, "Washers"),
+    TAPER_WASHER("Square Taper Washer for Sections (DIN 434 / DIN 435)", false, false, true, "Washers")
 }
 
 enum class UnitSystem(val label: String) {
@@ -75,13 +135,58 @@ enum class ProductStandard(val code: String, val label: String, val category: St
     ISO_4762("ISO 4762", "ISO 4762 / DIN 912 (Socket Head Cap Screw)", "ISO/DIN Metric"),
     ISO_10642("ISO 10642", "ISO 10642 / DIN 7991 (Countersunk Socket Screw)", "ISO/DIN Metric"),
     ISO_7380("ISO 7380", "ISO 7380-1 / ISO 7380-2 (Button Head Socket Screw)", "ISO/DIN Metric"),
-    ISO_4026("ISO 4026", "ISO 4026 / DIN 913 (Socket Set Screw Cup Point)", "ISO/DIN Metric"),
+    ISO_4026("ISO 4026", "ISO 4026 / DIN 913 (Socket Set Screw, Flat Point)", "ISO/DIN Metric"),
+    ISO_4027("ISO 4027", "ISO 4027 / DIN 914 (Socket Set Screw, Cone Point)", "ISO/DIN Metric"),
+    ISO_4028("ISO 4028", "ISO 4028 / DIN 915 (Socket Set Screw, Dog Point)", "ISO/DIN Metric"),
+    ISO_4029("ISO 4029", "ISO 4029 / DIN 916 (Socket Set Screw, Cup Point)", "ISO/DIN Metric"),
+    DIN_438("DIN 438", "DIN 438 / ISO 7436 (Slotted Set Screw)", "ISO/DIN Metric"),
+    ISO_7379("ISO 7379", "ISO 7379 (Shoulder Screw / Stripper Bolt)", "ISO/DIN Metric"),
+    DIN_478("DIN 478", "DIN 478 / DIN 479 (Square Head Bolt)", "ISO/DIN Metric"),
+    DIN_464("DIN 464", "DIN 464 / DIN 653 (Knurled Thumb Screw)", "ISO/DIN Metric"),
+    DIN_316("DIN 316", "DIN 316 (Wing Screw)", "ISO/DIN Metric"),
+    DIN_7961("DIN 7961", "DIN 7961 (Hanger / Dowel Screw)", "ISO/DIN Metric"),
+    DIN_571("DIN 571", "DIN 571 (Hex Lag / Coach Screw for Wood)", "ISO/DIN Metric"),
+    ISO_1580("ISO 1580", "ISO 1580 / DIN 85 (Slotted Pan Head Machine Screw)", "ISO/DIN Metric"),
+    ISO_7045("ISO 7045", "ISO 7045 / DIN 7985 (Cross-Recess Pan Head Screw)", "ISO/DIN Metric"),
+    ISO_1207("ISO 1207", "ISO 1207 / DIN 84 (Slotted Cheese Head Screw)", "ISO/DIN Metric"),
+    ISO_2009("ISO 2009", "ISO 2009 / DIN 963 (Slotted Countersunk Head Screw)", "ISO/DIN Metric"),
+    ISO_7046("ISO 7046", "ISO 7046 / DIN 965 (Cross-Recess Countersunk Screw)", "ISO/DIN Metric"),
+    ISO_7047("ISO 7047", "ISO 7047 / DIN 966 (Cross-Recess Raised Countersunk Screw)", "ISO/DIN Metric"),
+    DIN_6900("DIN 6900", "DIN 6900 / DIN 6900-3 (SEMS & Hex Washer Head Screw)", "ISO/DIN Metric"),
+    ISO_1481("ISO 1481", "ISO 1481 / DIN 7981 (Self-Tapping Pan Head Screw)", "ISO/DIN Metric"),
+    ISO_7050("ISO 7050", "ISO 7050 / DIN 7982 (Self-Tapping Countersunk Screw)", "ISO/DIN Metric"),
+    ISO_10509("ISO 10509", "ISO 10509 / DIN 7976 (Hex Head Tapping Screw)", "ISO/DIN Metric"),
+    ISO_15480("ISO 15480", "ISO 15480 / DIN 7504K (Self-Drilling Screw)", "ISO/DIN Metric"),
+    DIN_18182("DIN 18182", "DIN 18182-2 / ASTM C1002 (Drywall Screw)", "ISO/DIN Metric"),
+    DIN_7505("DIN 7505", "DIN 7505 / EN 14592 (Chipboard / Wood Screw)", "ISO/DIN Metric"),
+    DIN_975("DIN 975", "DIN 975 / DIN 976 (Threaded Rod / Stud Bolt)", "ISO/DIN Metric"),
+    ISO_2338("ISO 2338", "ISO 2338 / DIN 7 (Ground Dowel Pin)", "ISO/DIN Metric"),
+    ISO_2339("ISO 2339", "ISO 2339 / DIN 1 (Taper Pin 1:50)", "ISO/DIN Metric"),
+    ISO_2341("ISO 2341", "ISO 2341 / DIN 1444 (Clevis Pin with Head)", "ISO/DIN Metric"),
+    ISO_1234("ISO 1234", "ISO 1234 / DIN 94 (Split Cotter Pin)", "ISO/DIN Metric"),
+    ISO_8752("ISO 8752", "ISO 8752 / DIN 1481 (Slotted Spring Pin)", "ISO/DIN Metric"),
+    ISO_8739("ISO 8739", "ISO 8739 / DIN 1473 (Grooved Drive Pin)", "ISO/DIN Metric"),
+    DIN_471("DIN 471", "DIN 471 / DIN 472 (Retaining Ring / Circlip)", "ISO/DIN Metric"),
+    ISO_4035("ISO 4035", "ISO 4035 / DIN 439B (Thin Jam Hex Nut)", "ISO/DIN Metric"),
+    DIN_557("DIN 557", "DIN 557 / DIN 562 (Square Nut)", "ISO/DIN Metric"),
+    DIN_6334("DIN 6334", "DIN 6334 (Coupling / Extension Nut)", "ISO/DIN Metric"),
+    DIN_508("DIN 508", "DIN 508 (T-Slot Nut)", "ISO/DIN Metric"),
+    DIN_315("DIN 315", "DIN 315 / ASME B18.17 (Wing Nut)", "ISO/DIN Metric"),
+    DIN_466("DIN 466", "DIN 466 / DIN 467 (Knurled Thumb Nut)", "ISO/DIN Metric"),
+    OEM_RIVET_NUT("OEM Rivet Nut", "Blind Rivet Nut (manufacturer spec)", "ISO/DIN Metric"),
+    IFI_100("IFI-100", "IFI-100 / IFI-107 (Self-Clinching Nut)", "ISO/DIN Metric"),
+    OEM_CAGE_NUT("OEM Cage Nut", "Cage / Spring Channel Nut (manufacturer spec)", "ISO/DIN Metric"),
+    DIN_6797("DIN 6797", "DIN 6797 / DIN 6798 (Serrated Tooth Lock Washer)", "ISO/DIN Metric"),
+    DIN_6796("DIN 6796", "DIN 6796 / DIN 2093 (Conical Belleville Spring Washer)", "ISO/DIN Metric"),
+    DIN_137("DIN 137", "DIN 137 (Curved / Wave Spring Washer)", "ISO/DIN Metric"),
+    DIN_434("DIN 434", "DIN 434 / DIN 435 (Square Taper Washer)", "ISO/DIN Metric"),
+    OEM_CONROD("OEM Con-Rod", "OEM Connecting Rod Bolt Spec (necked shank, angle tightened)", "ISO/DIN Metric"),
     ISO_1665("ISO 1665", "ISO 1665 / DIN 6921 (Hex Flange Bolt)", "ISO/DIN Metric"),
     DIN_603("DIN 603", "DIN 603 / ISO 8677 (Carriage Bolt Square Neck)", "ISO/DIN Metric"),
     DIN_444("DIN 444", "DIN 444 / ISO 9001 (Precision Eye Bolt)", "ISO/DIN Metric"),
     DIN_186("DIN 186", "DIN 186 / DIN 261 (T-Head Bolt)", "ISO/DIN Metric"),
     ISO_4032("ISO 4032", "ISO 4032 / DIN 934 (Standard Hex Nut)", "ISO/DIN Metric"),
-    ISO_4033("ISO 4033", "ISO 4033 / DIN 936 (Thin Jam Hex Nut)", "ISO/DIN Metric"),
+    ISO_4033("ISO 4033", "ISO 4033 / DIN 934 high (Hex Nut, Style 2)", "ISO/DIN Metric"),
     DIN_6923("DIN 6923", "DIN 6923 / ISO 4161 (Hex Flange Nut)", "ISO/DIN Metric"),
     ISO_7040("ISO 7040", "ISO 7040 / DIN 985 (Nyloc Insert Lock Nut)", "ISO/DIN Metric"),
     ISO_7042("ISO 7042", "ISO 7042 / DIN 980 (All-Metal Lock Nut)", "ISO/DIN Metric"),
@@ -107,6 +212,15 @@ enum class ProductStandard(val code: String, val label: String, val category: St
     ASTM_A193("ASTM A193", "ASTM A193 B7/B16 (High Temp Pressure Vessel Studs)", "ASME/Imperial"),
     ASTM_A194("ASTM A194", "ASTM A194 2H/7 (High Temp Heavy Hex Nuts)", "ASME/Imperial"),
     ASTM_F436("ASTM F436", "ASTM F436 (Hardened Structural Washers)", "ASME/Imperial"),
+    ASME_B18_6_3("ASME B18.6.3", "ASME B18.6.3 (Machine Screws, Inch)", "ASME/Imperial"),
+    ASME_B18_6_4("ASME B18.6.4", "ASME B18.6.4 (Tapping & Self-Drilling Screws, Inch)", "ASME/Imperial"),
+    ASME_B18_8_2("ASME B18.8.2", "ASME B18.8.2 (Dowel, Taper & Clevis Pins, Inch)", "ASME/Imperial"),
+    ASME_B18_22_1("ASME B18.22.1", "ASME B18.22.1 / B18.21.1 (Plain & Lock Washers, Inch)", "ASME/Imperial"),
+    ASME_B16_5("ASME B16.5", "ASME B16.5 / ASTM A193 (Tap-End Flange Stud)", "ASME/Imperial"),
+    ASTM_F1554("ASTM F1554", "ASTM F1554 (Anchor / Foundation Bolt, Gr 36/55/105)", "ASME/Imperial"),
+    ASTM_A563("ASTM A563", "ASTM A563 Gr A/C/DH (Structural Nuts)", "ASME/Imperial"),
+    ASTM_A307("ASTM A307", "ASTM A307 Gr A/B (Low Carbon Bolts & Studs)", "ASME/Imperial"),
+    ASTM_A320("ASTM A320", "ASTM A320 L7/L43 (Low Temperature Service Studs)", "ASME/Imperial"),
 
     // Aerospace & Defense Standards (NAS / MS / AS / EN)
     NAS624("NAS 624", "MS21250 / NAS 624 (12-Point Aero Flange Bolt)", "Aerospace/Defense"),
@@ -124,7 +238,9 @@ enum class ProductStandard(val code: String, val label: String, val category: St
     BLIND_BOLT_STD("Blind Bolt", "Blind Bolt (OEM / NAS series)", "Aerospace/Defense"),
     MS21047("MS21047", "MS21047 (Two-Lug Nutplate / Anchor Nut)", "Aerospace/Defense"),
     MS20470("MS20470", "MS20470 (Solid Rivet, Universal Head)", "Aerospace/Defense"),
-    NAS1398("NAS 1398", "NAS 1398 (Structural Blind Rivet)", "Aerospace/Defense")
+    NAS1398("NAS 1398", "NAS 1398 (Structural Blind Rivet)", "Aerospace/Defense"),
+    AN21("AN 21", "AN21 – AN36 (Aircraft Clevis Bolt)", "Aerospace/Defense"),
+    AN173("AN 173", "AN173 – AN186 / NAS 464 (Aircraft Shear Bolt)", "Aerospace/Defense")
 }
 
 /** utsMpa is the minimum tensile strength of the class; for the aerospace ranges it is the bottom of the range. */
@@ -138,14 +254,47 @@ enum class PropertyClass(val label: String, val defaultMatKey: String, val utsMp
     CLASS_9_8("Class 9.8 (900 MPa • Q&T, d ≤ 16)", "10B21", 900.0),
     CLASS_10_9("Class 10.9 (1040 MPa • Q&T Alloy)", "10B21", 1040.0),
     CLASS_12_9("Class 12.9 (1220 MPa • Q&T CrMo)", "4140", 1220.0),
-    A2_50("Stainless A2-50 / A4-50 (500 MPa)", "SS304", 500.0),
-    A2_70("Stainless A2-70 / A4-70 (700 MPa)", "SS304", 700.0),
-    A4_80("Stainless A2-80 / A4-80 (800 MPa)", "SS316", 800.0),
+    // ISO 898-2 nut classes: the figure is the proof stress of the class, not a tensile strength
+    NUT_04("ISO 898-2 Nut Class 04 (380 MPa proof • thin nut)", "1008", 380.0),
+    NUT_05("ISO 898-2 Nut Class 05 (500 MPa proof • thin nut)", "1018", 500.0),
+    NUT_5("ISO 898-2 Nut Class 5 (500 MPa proof • mates 3.6–5.8)", "1018", 500.0),
+    NUT_6("ISO 898-2 Nut Class 6 (600 MPa proof • mates 6.8)", "10B21", 600.0),
+    NUT_8("ISO 898-2 Nut Class 8 (800 MPa proof • mates 8.8)", "10B21", 800.0),
+    NUT_9("ISO 898-2 Nut Class 9 (900 MPa proof • mates 9.8)", "10B21", 900.0),
+    NUT_10("ISO 898-2 Nut Class 10 (1040 MPa proof • mates 10.9)", "10B21", 1040.0),
+    NUT_12("ISO 898-2 Nut Class 12 (1150 MPa proof • mates 12.9)", "4140", 1150.0),
+    // ISO 3506-1 / -2 stainless classes
+    A2_50("Stainless A2-50 (500 MPa • 304 austenitic, soft)", "SS304", 500.0),
+    A2_70("Stainless A2-70 (700 MPa • 304 austenitic, cold worked)", "SS304", 700.0),
+    A2_80("Stainless A2-80 (800 MPa • 304 austenitic, high strength)", "SS316", 800.0),
+    A4_50("Stainless A4-50 (500 MPa • 316 austenitic, soft)", "SS316", 500.0),
+    A4_70("Stainless A4-70 (700 MPa • 316 austenitic, cold worked)", "SS316", 700.0),
+    A4_80("Stainless A4-80 (800 MPa • 316 austenitic, high strength)", "SS316", 800.0),
+    C1_50("Stainless C1-50 (500 MPa • 410 martensitic, annealed)", "SS410", 500.0),
+    C1_70("Stainless C1-70 (700 MPa • 410 martensitic, Q&T)", "SS410", 700.0),
+    C4_70("Stainless C4-70 (700 MPa • 430F/416 martensitic, Q&T)", "SS410", 700.0),
+    C3_80("Stainless C3-80 (800 MPa • 1.4057 martensitic, Q&T)", "14KH17N2", 800.0),
+    F1_60("Stainless F1-60 (600 MPa • 430 ferritic, cold worked)", "SS430", 600.0),
     SAE_GRADE_2("SAE J429 Grade 2 (74 ksi / 510 MPa)", "1018", 510.0),
     SAE_GRADE_5("SAE J429 Grade 5 (120 ksi / 827 MPa)", "10B21", 827.0),
     SAE_GRADE_8("SAE J429 Grade 8 (150 ksi / 1034 MPa)", "4140", 1034.0),
+    SAE_NUT_5("SAE J995 Grade 5 Nut (120 ksi proof)", "10B21", 827.0),
+    SAE_NUT_8("SAE J995 Grade 8 Nut (150 ksi proof)", "4140", 1034.0),
     ASTM_A574("ASTM A574 Socket Head (180 / 170 ksi)", "4140", 1172.0),
     ASTM_A193_B7("ASTM A193 B7 (125 ksi / 862 MPa)", "4140", 862.0),
+    ASTM_A193_B16("ASTM A193 B16 (125 ksi / 862 MPa • 1Cr-0.5Mo-V, high temp)", "4140", 862.0),
+    ASTM_A193_B8_CL1("ASTM A193 B8 Class 1 (75 ksi / 515 MPa • 304 solution annealed)", "SS304", 515.0),
+    ASTM_A193_B8M_CL2("ASTM A193 B8M Class 2 (95 ksi / 655 MPa • 316 strain hardened)", "SS316", 655.0),
+    ASTM_A320_L7("ASTM A320 L7 (125 ksi / 862 MPa • low temperature)", "4140", 862.0),
+    ASTM_A325("ASTM A325 / F3125 Gr A325 (120 ksi / 830 MPa)", "10B21", 830.0),
+    ASTM_A490("ASTM A490 / F3125 Gr A490 (150 ksi / 1035 MPa)", "4140", 1035.0),
+    ASTM_A307_A("ASTM A307 Grade A (60 ksi / 414 MPa)", "1008", 414.0),
+    ASTM_A307_B("ASTM A307 Grade B (60–100 ksi / 414 MPa min)", "1018", 414.0),
+    ASTM_A194_2H("ASTM A194 Grade 2H Nut (24–35 HRC • mates B7)", "4140", 862.0),
+    ASTM_A194_8("ASTM A194 Grade 8 / 8M Nut (austenitic • mates B8/B8M)", "SS304", 515.0),
+    ASTM_A563_DH("ASTM A563 Grade DH Nut (structural • mates A490)", "10B21", 1035.0),
+    ASTM_F1554_36("ASTM F1554 Grade 36 (58 ksi / 400 MPa • anchor rod)", "1008", 400.0),
+    ASTM_F1554_105("ASTM F1554 Grade 105 (125 ksi / 862 MPa • anchor rod)", "4140", 862.0),
     AERO_1100("Aero Titanium (1050-1120 MPa • STA)", "TI_GR5", 1050.0),
     AERO_1380("Aero Superalloy (1380-1420 MPa • Aged)", "INCONEL718", 1380.0),
     AERO_1750("Aero Ultra-High (1720–1950 MPa • 300M/MP35N)", "300M", 1720.0),
@@ -1876,7 +2025,8 @@ object FastenerCatalog {
     )
 
     /** Base catalogue plus the researched automotive / aerospace grades (see ResearchedMaterials). */
-    val DEFAULT_MATERIALS: Map<String, MaterialInfo> = BASE_MATERIALS + ResearchedMaterials.extend(BASE_MATERIALS)
+    val DEFAULT_MATERIALS: Map<String, MaterialInfo> =
+        (BASE_MATERIALS + ResearchedMaterials.extend(BASE_MATERIALS)).let { it + ExtendedMaterials.extend(it) }
 
     // Observable Compose state map with all 38+ default alloys + dynamic custom additions
     val MATERIALS = androidx.compose.runtime.mutableStateMapOf<String, MaterialInfo>().apply {

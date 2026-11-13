@@ -69,7 +69,20 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      // Lets a sandbox without Maven access run the Robolectric tests from a pre-fetched android-all jar:
+      // set ROBOLECTRIC_DEPS_DIR to the folder holding it. Unset, Robolectric downloads as usual.
+      all {
+        val roboDeps = System.getenv("ROBOLECTRIC_DEPS_DIR")
+        if (!roboDeps.isNullOrBlank()) {
+          it.systemProperty("robolectric.offline", "true")
+          it.systemProperty("robolectric.dependency.dir", roboDeps)
+        }
+      }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true

@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +57,8 @@ import com.example.data.FastenerCatalog
 import com.example.data.FastenerType
 import com.example.data.ProductStandard
 import com.example.data.PropertyClass
+import com.example.data.ClassGroup
+import com.example.data.MaterialGroup
 import com.example.data.SelectionFilter
 import com.example.data.ThreadClassCatalog
 import com.example.data.UnitSystem
@@ -246,15 +250,26 @@ fun FastenerSizingScreen(
                 // Selectors Grid
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     // Row 1: Fastener Type & Unit System
+                    val typeCategories = remember { listOf("All") + FastenerType.values().map { it.category }.distinct() }
+                    var typeCategory by remember { mutableStateOf("All") }
+                    FilterChipRow(
+                        label = "Filter types",
+                        options = typeCategories,
+                        isSelected = { it == typeCategory },
+                        onSelected = { typeCategory = it }
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val visibleTypes = remember(typeCategory) {
+                            FastenerType.values().filter { typeCategory == "All" || it.category == typeCategory }
+                        }
                         SelectorDropdown(
-                            label = "1. Fastener Type",
+                            label = "1. Fastener Type (${visibleTypes.size} of ${FastenerType.values().size})",
                             selectedText = selectedFastenerType.label,
-                            items = FastenerType.values().map { it.label },
-                            onItemSelected = { onFastenerTypeSelected(FastenerType.values()[it]) },
+                            items = visibleTypes.map { it.label },
+                            onItemSelected = { onFastenerTypeSelected(visibleTypes[it]) },
                             modifier = Modifier.weight(1.3f)
                         )
                         SelectorDropdown(
@@ -386,16 +401,52 @@ fun FastenerSizingScreen(
                     }
 
                     // Row 4: Property Class & Material Alloy
+                    val allMaterials = FastenerCatalog.MATERIALS.values.toList()
+                    val graded = SelectionFilter.usesPropertyClass(selectedFastenerType)
+                    var classGroup by remember { mutableStateOf(ClassGroup.ALL) }
+                    var matGroup by remember { mutableStateOf(MaterialGroup.ALL) }
+                    var matClassOnly by remember { mutableStateOf(false) }
+
+                    if (graded) {
+                        val classGroups = remember(selectedFastenerType) { SelectionFilter.classGroups(selectedFastenerType) }
+                        LaunchedEffect(selectedFastenerType) {
+                            if (classGroup !in classGroups) classGroup = ClassGroup.ALL
+                        }
+                        FilterChipRow(
+                            label = "Filter classes",
+                            options = classGroups.map { it.label },
+                            isSelected = { it == classGroup.label },
+                            onSelected = { lbl -> classGroup = classGroups.first { it.label == lbl } }
+                        )
+                    }
+                    run {
+                        val groups = remember(allMaterials.size) { SelectionFilter.materialGroups(allMaterials) }
+                        val fitsLabel = "Fits ${selectedPropClass.label.substringBefore(" (")} only"
+                        FilterChipRow(
+                            label = "Filter alloys",
+                            options = groups.map { it.label } + if (graded) listOf(fitsLabel) else emptyList(),
+                            isSelected = { it == matGroup.label || (matClassOnly && it == fitsLabel) },
+                            onSelected = { lbl ->
+                                if (lbl == fitsLabel) {
+                                    matClassOnly = !matClassOnly
+                                } else {
+                                    matClassOnly = false
+                                    matGroup = groups.first { it.label == lbl }
+                                }
+                            }
+                        )
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val materialsList = FastenerCatalog.MATERIALS.values.toList()
+                        val materialsList = allMaterials
                         val currentMat = FastenerCatalog.MATERIALS[selectedMaterialKey] ?: materialsList[2]
-                        val graded = SelectionFilter.usesPropertyClass(selectedFastenerType)
-                        val validPropClasses = PropertyClass.values().toList()
+                        val validPropClasses = remember(selectedFastenerType, selectedUnitSystem, classGroup) {
+                            SelectionFilter.propertyClasses(selectedFastenerType, selectedUnitSystem, classGroup)
+                        }
                         SelectorDropdown(
-                            label = "7. Property Class",
+                            label = if (graded) "7. Property Class (${validPropClasses.size})" else "7. Property Class",
                             selectedText = if (graded) selectedPropClass.label else NOT_APPLICABLE_WASHER,
                             items = if (graded) validPropClasses.map { it.label } else listOf(NOT_APPLICABLE_WASHER),
                             onItemSelected = {
@@ -405,7 +456,14 @@ fun FastenerSizingScreen(
                         )
 
                         Column(modifier = Modifier.weight(1.2f)) {
-                            val filteredMaterials = FastenerCatalog.MATERIALS.values.toList()
+                            val filteredMaterials = remember(matGroup, matClassOnly, selectedPropClass, graded, allMaterials.size) {
+                                SelectionFilter.materials(
+                                    all = allMaterials,
+                                    group = matGroup,
+                                    pc = if (graded) selectedPropClass else null,
+                                    onlyForClass = matClassOnly && graded
+                                )
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1377,6 +1435,60 @@ internal fun lengthLabel(unit: UnitSystem, mm: Double): String {
         else -> "$whole-$num/$den"
     }
     return "$inch\" ($mmText mm)"
+}
+
+/**
+ * One scrollable row of filter chips above a selector, so a long catalogue can be narrowed before the
+ * dropdown is opened. [isSelected] decides which chips are highlighted, so a row can carry a family filter
+ * and an independent toggle at the same time.
+ */
+@Composable
+fun FilterChipRow(
+    label: String,
+    options: List<String>,
+    isSelected: (String) -> Boolean,
+    onSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val customColors = LocalCustomColors.current
+    Column(modifier = modifier.fillMaxWidth().padding(bottom = 2.dp)) {
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            color = customColors.textMuted,
+            maxLines = 1
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            options.forEach { option ->
+                val on = isSelected(option)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (on) customColors.accentPrimary.copy(alpha = 0.18f) else customColors.bgElevated,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (on) customColors.accentPrimary else customColors.border
+                    ),
+                    modifier = Modifier.clickable { onSelected(option) }
+                ) {
+                    Text(
+                        text = option,
+                        fontSize = 10.sp,
+                        fontWeight = if (on) FontWeight.Black else FontWeight.Bold,
+                        color = if (on) customColors.accentPrimary else customColors.textMuted,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+    }
 }
 
 private const val NOT_APPLICABLE_THREAD = "N/A — no thread"

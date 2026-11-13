@@ -79,20 +79,47 @@ data class FinishedPart(
 
 object PartGeometry {
 
-    private val ROUND_PIN_TYPES = setOf(FastenerType.HI_LOK_PIN, FastenerType.TAPER_LOK, FastenerType.LOCKBOLT_PIN, FastenerType.BLIND_BOLT)
+    private val ROUND_PIN_TYPES = setOf(
+        FastenerType.HI_LOK_PIN, FastenerType.TAPER_LOK, FastenerType.LOCKBOLT_PIN, FastenerType.BLIND_BOLT,
+        FastenerType.CLEVIS_PIN
+    )
+
+    /** Headless parts: set screws, studs, rod, and the screws whose "head" is a bend or a thread. */
+    private val HEADLESS_TYPES = setOf(
+        FastenerType.SOCKET_SET, FastenerType.SET_SCREW_CONE, FastenerType.SET_SCREW_DOG, FastenerType.SET_SCREW_CUP,
+        FastenerType.SLOTTED_SET_SCREW, FastenerType.HANGER_BOLT, FastenerType.ANCHOR_BOLT,
+        // Plain pins have no head at all: they are a parted-off cylinder, not an upset part
+        FastenerType.DOWEL_PIN, FastenerType.TAPER_PIN, FastenerType.SPRING_PIN, FastenerType.GROOVED_PIN,
+        FastenerType.SPLIT_PIN
+    )
+
+    /** Cylindrical-head screws: pan, cheese, shoulder, knurled and the aircraft clevis bolt. */
+    private val CYLINDRICAL_HEAD_TYPES = setOf(
+        FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.CHEESE_SLOT, FastenerType.SHOULDER_BOLT,
+        FastenerType.THUMB_SCREW, FastenerType.CLEVIS_BOLT
+    )
+
+    /** Countersunk screws: the head is a cone sunk into the joint. */
+    private val COUNTERSUNK_TYPES = setOf(
+        FastenerType.SOCKET_CSK, FastenerType.CSK_SLOT, FastenerType.CSK_CROSS, FastenerType.RAISED_CSK_CROSS,
+        FastenerType.TAPPING_CSK, FastenerType.DRYWALL_SCREW, FastenerType.CHIPBOARD_SCREW
+    )
     private val SOCKET_STYLES = setOf(HeadStyle.SOCKET_CAP, HeadStyle.SOCKET_COUNTERSUNK, HeadStyle.SOCKET_BUTTON)
     private val ROUND_HEAD_STYLES = SOCKET_STYLES + setOf(HeadStyle.CARRIAGE, HeadStyle.ROUND_PIN, HeadStyle.RIVET)
 
     fun styleOf(type: FastenerType): HeadStyle = when {
         type.isWasher -> HeadStyle.WASHER
         type.isNut -> HeadStyle.NUT
-        type.isStud || type == FastenerType.SOCKET_SET -> HeadStyle.HEADLESS
+        type.isStud || type in HEADLESS_TYPES -> HeadStyle.HEADLESS
         BoltForging.applies(type) -> HeadStyle.HEX_TRIMMED
         type == FastenerType.SHCS || type == FastenerType.HEXALOBULAR_SCREW -> HeadStyle.SOCKET_CAP
-        type == FastenerType.SOCKET_CSK -> HeadStyle.SOCKET_COUNTERSUNK
-        type == FastenerType.SOCKET_BUTTON -> HeadStyle.SOCKET_BUTTON
+        type in COUNTERSUNK_TYPES -> HeadStyle.SOCKET_COUNTERSUNK
+        type in CYLINDRICAL_HEAD_TYPES -> HeadStyle.SOCKET_CAP
+        type == FastenerType.SOCKET_BUTTON || type == FastenerType.TAPPING_PAN || type == FastenerType.SELF_DRILLING ->
+            HeadStyle.SOCKET_BUTTON
         type == FastenerType.TWELVE_POINT -> HeadStyle.TWELVE_POINT
         type == FastenerType.CARRIAGE_BOLT -> HeadStyle.CARRIAGE
+        type == FastenerType.RETAINING_RING -> HeadStyle.WASHER
         type in ROUND_PIN_TYPES -> HeadStyle.ROUND_PIN
         type.isUnthreaded -> HeadStyle.RIVET
         else -> HeadStyle.HEX_FORMED
@@ -118,6 +145,37 @@ object PartGeometry {
         FastenerType.SPRING_WASHER -> "Counted as a flat ring: the split and the helix are not in the volume."
         FastenerType.U_BOLT -> "The length is the developed (straight) length before bending."
         FastenerType.WHEEL_STUD -> "The head and the knurl are not modelled: counted as a plain stud."
+        FastenerType.SET_SCREW_CONE, FastenerType.SET_SCREW_DOG, FastenerType.SET_SCREW_CUP, FastenerType.SLOTTED_SET_SCREW ->
+            "The point (cone / dog / cup) and the drive recess are not modelled: counted as a plain threaded cylinder."
+        FastenerType.SHOULDER_BOLT -> "The ground shoulder is taken at the thread diameter: give the shoulder Ø and length on the drawing."
+        FastenerType.SQUARE_BOLT -> "The square head is counted as a hex prism of the same across flats."
+        FastenerType.HANGER_BOLT -> "Counted as a plain stud: the wood thread (coarse, different pitch) is not modelled."
+        FastenerType.ANCHOR_BOLT -> "The L or J bend is not modelled: the length is the developed (straight) length."
+        FastenerType.LAG_SCREW, FastenerType.CHIPBOARD_SCREW, FastenerType.DRYWALL_SCREW, FastenerType.SELF_DRILLING,
+        FastenerType.TAPPING_PAN, FastenerType.TAPPING_CSK, FastenerType.TAPPING_HEX ->
+            "The tapping / wood thread form and the point (or drill tip) are not modelled: the shank is taken at the rolling blank Ø."
+        FastenerType.SEMS_SCREW -> "The captive washer is not in the volume: screw only."
+        FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.CHEESE_SLOT, FastenerType.CSK_SLOT,
+        FastenerType.CSK_CROSS, FastenerType.RAISED_CSK_CROSS, FastenerType.HEX_WASHER_SCREW ->
+            "The slot or cross recess is not in the volume: the head is counted as solid."
+        FastenerType.CONROD_BOLT -> "The necked-down (waisted) shank is not modelled: the shank is taken at one diameter."
+        FastenerType.SHEAR_BOLT -> "The reduced head height of a shear bolt is taken from the drawing; no shear-bolt table in the app."
+        FastenerType.TAPER_PIN -> "Counted as a plain cylinder at the nominal Ø: the 1:50 taper is not in the volume."
+        FastenerType.SPRING_PIN -> "Counted as a solid cylinder: the slot and the rolled wall thickness are not modelled."
+        FastenerType.GROOVED_PIN -> "The three grooves are not in the volume: counted as a plain cylinder."
+        FastenerType.SPLIT_PIN -> "Counted as a solid cylinder: the split, the eye and the semicircular section are not modelled."
+        FastenerType.RETAINING_RING -> "Counted as a flat ring: the gap, lugs and the tapered section are not modelled."
+        FastenerType.THREADED_ROD, FastenerType.TAP_END_STUD -> "Counted as a plain threaded rod over the whole length."
+        FastenerType.SQUARE_NUT, FastenerType.T_SLOT_NUT -> "The square / T profile is counted as a hex prism of the same width."
+        FastenerType.COUPLING_NUT -> "Counted as a long hex nut: the full-length thread is bored through."
+        FastenerType.CAGE_NUT, FastenerType.CLINCH_NUT, FastenerType.RIVET_NUT ->
+            "Only the nut body is in the volume: the cage, the clinch ring or the deforming sleeve is not modelled."
+        FastenerType.WING_NUT, FastenerType.WING_SCREW, FastenerType.THUMB_NUT, FastenerType.THUMB_SCREW ->
+            "The wings / knurl are counted as a prism of the same envelope: the real profile is not modelled."
+        FastenerType.THIN_NUT, FastenerType.HIGH_NUT -> "Nut height m is taken from the type's own standard, not ISO 4032."
+        FastenerType.TOOTH_LOCK_WASHER -> "Counted as a flat ring: the teeth are not in the volume."
+        FastenerType.BELLEVILLE_WASHER, FastenerType.WAVE_WASHER -> "Counted as a flat ring at the material thickness: the cone / wave is not modelled."
+        FastenerType.TAPER_WASHER -> "Counted as a flat ring at the mean thickness: the 8° / 14° taper is not modelled."
         FastenerType.BLIND_RIVET -> "Blind rivet: only the sleeve is modelled, as a solid shank. The sleeve bore and the mandrel are separate parts not covered here."
         else -> null
     }

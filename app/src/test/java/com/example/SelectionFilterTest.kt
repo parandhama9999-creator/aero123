@@ -25,7 +25,11 @@ class SelectionFilterTest {
     @Test fun everyClassDefaultMaterialSatisfiesThatClass() {
         for (pc in PropertyClass.values()) {
             val unit = if (pc.name.startsWith("SAE") || pc.name.startsWith("ASTM")) UnitSystem.INCH else UnitSystem.METRIC
-            val type = if (pc.name.startsWith("AERO") || pc == PropertyClass.MATERIAL_SPEC) FastenerType.NAS_CLOSE_TOL_BOLT else FastenerType.HEX_BOLT
+            val type = when {
+                pc in PokaYokeEngine.NUT_ONLY_CLASSES -> if (pc == PropertyClass.NUT_04 || pc == PropertyClass.NUT_05) FastenerType.THIN_NUT else FastenerType.HEX_NUT
+                pc.name.startsWith("AERO") || pc == PropertyClass.MATERIAL_SPEC -> FastenerType.NAS_CLOSE_TOL_BOLT
+                else -> FastenerType.HEX_BOLT
+            }
             val issues = gate(type = type, unit = unit, d = if (unit == UnitSystem.METRIC) 10.0 else 9.525, pc = pc, material = pc.defaultMatKey, coating = CoatingType.AERO_IVD)
             assertTrue("$pc default ${pc.defaultMatKey}: ${issues.critical()}", issues.critical().none { it.contains("Material") || it.contains("needs") || it.contains("grade") })
         }

@@ -81,10 +81,40 @@ object PokaYokeEngine {
         PropertyClass.CLASS_9_8 -> ClassStrength(900.0, 720.0, 650.0, true)
         PropertyClass.CLASS_10_9 -> ClassStrength(1040.0, 940.0, 830.0, true)
         PropertyClass.CLASS_12_9 -> ClassStrength(1220.0, 1100.0, 970.0, true)
-        // ISO 3506-1: A2-70 / A4-70 — the proof check uses the 0.2 % yield (Rp0.2) load
-        PropertyClass.A2_70 -> ClassStrength(700.0, 450.0, 450.0, false)
-        PropertyClass.A2_50 -> ClassStrength(500.0, 210.0, 210.0, false)
-        PropertyClass.A4_80 -> ClassStrength(800.0, 600.0, 600.0, false)
+        // ISO 898-2 nut classes are specified by proof load and hardness, not by Rm. The nut material still has to
+        // carry the proof load, so the class's proof stress is used as the minimum strength the material must reach.
+        PropertyClass.NUT_04 -> ClassStrength(380.0, 380.0, 380.0, true)
+        PropertyClass.NUT_05 -> ClassStrength(500.0, 500.0, 500.0, true)
+        PropertyClass.NUT_5 -> ClassStrength(500.0, 500.0, 500.0, true)
+        PropertyClass.NUT_6 -> ClassStrength(600.0, 600.0, 600.0, true)
+        PropertyClass.NUT_8 -> ClassStrength(800.0, 800.0, 800.0, true)
+        PropertyClass.NUT_9 -> ClassStrength(900.0, 900.0, 900.0, true)
+        PropertyClass.NUT_10 -> ClassStrength(1040.0, 1040.0, 1040.0, true)
+        PropertyClass.NUT_12 -> ClassStrength(1150.0, 1150.0, 1150.0, true)
+        // ISO 3506-1: A2 / A4 / C / F — the proof check uses the 0.2 % yield (Rp0.2) load
+        PropertyClass.A2_70, PropertyClass.A4_70 -> ClassStrength(700.0, 450.0, 450.0, false)
+        PropertyClass.A2_50, PropertyClass.A4_50 -> ClassStrength(500.0, 210.0, 210.0, false)
+        PropertyClass.A2_80, PropertyClass.A4_80 -> ClassStrength(800.0, 600.0, 600.0, false)
+        PropertyClass.C1_50 -> ClassStrength(500.0, 250.0, 250.0, false)
+        PropertyClass.C1_70, PropertyClass.C4_70 -> ClassStrength(700.0, 410.0, 410.0, false)
+        PropertyClass.C3_80 -> ClassStrength(800.0, 640.0, 640.0, false)
+        PropertyClass.F1_60 -> ClassStrength(600.0, 410.0, 410.0, false)
+        // SAE J995 / ASTM A563 / A194 nuts: proof stress of the class (the nut is not tensile tested)
+        PropertyClass.SAE_NUT_5 -> ClassStrength(827.0, 827.0, 827.0, false)
+        PropertyClass.SAE_NUT_8 -> ClassStrength(1034.0, 1034.0, 1034.0, false)
+        PropertyClass.ASTM_A563_DH -> ClassStrength(1035.0, 1035.0, 1035.0, false)
+        PropertyClass.ASTM_A194_2H -> ClassStrength(862.0, 862.0, 862.0, false)
+        PropertyClass.ASTM_A194_8 -> ClassStrength(515.0, 515.0, 515.0, false)
+        // ASTM structural and pressure-vessel grades (ksi → MPa)
+        PropertyClass.ASTM_A325 -> if (dMm <= 25.4) ClassStrength(830.0, 660.0, 600.0, false) else ClassStrength(725.0, 560.0, 510.0, false)
+        PropertyClass.ASTM_A490 -> ClassStrength(1035.0, 895.0, 825.0, false)
+        PropertyClass.ASTM_A307_A, PropertyClass.ASTM_A307_B -> ClassStrength(414.0, 248.0, 228.0, false)
+        PropertyClass.ASTM_A193_B16 -> if (dMm <= 63.5) ClassStrength(862.0, 724.0, 0.9 * 724.0, false) else ClassStrength(758.0, 655.0, 0.9 * 655.0, false)
+        PropertyClass.ASTM_A320_L7 -> if (dMm <= 63.5) ClassStrength(862.0, 724.0, 0.9 * 724.0, false) else ClassStrength(793.0, 655.0, 0.9 * 655.0, false)
+        PropertyClass.ASTM_A193_B8_CL1 -> ClassStrength(515.0, 205.0, 205.0, false)
+        PropertyClass.ASTM_A193_B8M_CL2 -> if (dMm <= 19.05) ClassStrength(655.0, 448.0, 448.0, false) else ClassStrength(620.0, 345.0, 345.0, false)
+        PropertyClass.ASTM_F1554_36 -> ClassStrength(400.0, 248.0, 228.0, false)
+        PropertyClass.ASTM_F1554_105 -> ClassStrength(862.0, 724.0, 0.9 * 724.0, false)
         // SAE J429 minima (ksi → MPa): Grade 2 74/57/55 ≤ 3/4", 60/36/33 above; Grade 5 120/92/85 ≤ 1", 105/81/74 above; Grade 8 150/130/120
         PropertyClass.SAE_GRADE_2 -> if (dMm <= 19.05) ClassStrength(510.0, 393.0, 379.0, false) else ClassStrength(414.0, 248.0, 228.0, false)
         PropertyClass.SAE_GRADE_5 -> if (dMm <= 25.4) ClassStrength(827.0, 634.0, 586.0, false) else ClassStrength(724.0, 558.0, 510.0, false)
@@ -108,25 +138,63 @@ object PokaYokeEngine {
         ProductStandard.ISO_4032, ProductStandard.ISO_4033, ProductStandard.DIN_6923, ProductStandard.ISO_7040,
         ProductStandard.ISO_7042, ProductStandard.DIN_935, ProductStandard.DIN_1587, ProductStandard.DIN_929, ProductStandard.ASME_B18_2_2,
         ProductStandard.ASTM_A194, ProductStandard.MS21042, ProductStandard.MS20500,
-        ProductStandard.DIN_74361_NUT, ProductStandard.HI_LOK_COLLAR_STD, ProductStandard.MS21047
+        ProductStandard.DIN_74361_NUT, ProductStandard.HI_LOK_COLLAR_STD, ProductStandard.MS21047,
+        ProductStandard.ISO_4035, ProductStandard.DIN_557, ProductStandard.DIN_6334, ProductStandard.DIN_508,
+        ProductStandard.DIN_315, ProductStandard.DIN_466, ProductStandard.OEM_RIVET_NUT, ProductStandard.IFI_100,
+        ProductStandard.OEM_CAGE_NUT, ProductStandard.ASTM_A563
     )
-    internal val WASHER_STANDARDS = setOf(ProductStandard.ISO_7089, ProductStandard.ISO_7093, ProductStandard.DIN_127, ProductStandard.ASTM_F436)
+    internal val WASHER_STANDARDS = setOf(
+        ProductStandard.ISO_7089, ProductStandard.ISO_7093, ProductStandard.DIN_127, ProductStandard.ASTM_F436,
+        ProductStandard.DIN_6797, ProductStandard.DIN_6796, ProductStandard.DIN_137, ProductStandard.DIN_434,
+        ProductStandard.ASME_B18_22_1
+    )
 
     private val FULL_THREAD_TYPES = setOf(
         FastenerType.HEX_BOLT_FULL, FastenerType.SOCKET_SET, FastenerType.SOCKET_BUTTON,
-        FastenerType.SOCKET_CSK, FastenerType.STUD, FastenerType.THREAD_FORMING_SCREW
+        FastenerType.SOCKET_CSK, FastenerType.STUD, FastenerType.THREAD_FORMING_SCREW,
+        FastenerType.SET_SCREW_CONE, FastenerType.SET_SCREW_DOG, FastenerType.SET_SCREW_CUP,
+        FastenerType.SLOTTED_SET_SCREW, FastenerType.THREADED_ROD, FastenerType.CSK_SLOT, FastenerType.CSK_CROSS,
+        FastenerType.RAISED_CSK_CROSS, FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.CHEESE_SLOT,
+        FastenerType.HEX_WASHER_SCREW, FastenerType.SEMS_SCREW, FastenerType.TAPPING_PAN, FastenerType.TAPPING_CSK,
+        FastenerType.TAPPING_HEX, FastenerType.SELF_DRILLING, FastenerType.DRYWALL_SCREW
     )
 
     fun isFullyThreaded(type: FastenerType) = type in FULL_THREAD_TYPES
 
-    internal val STAINLESS_CLASSES = setOf(PropertyClass.A2_50, PropertyClass.A2_70, PropertyClass.A4_80)
+    /** ISO 3506-1 austenitic classes (A2 = 304-type, A4 = 316-type) plus the austenitic ASTM stud / nut grades. */
+    internal val STAINLESS_CLASSES = setOf(
+        PropertyClass.A2_50, PropertyClass.A2_70, PropertyClass.A2_80,
+        PropertyClass.A4_50, PropertyClass.A4_70, PropertyClass.A4_80,
+        PropertyClass.ASTM_A193_B8_CL1, PropertyClass.ASTM_A193_B8M_CL2, PropertyClass.ASTM_A194_8
+    )
+    /** ISO 3506-1 martensitic (C) and ferritic (F) classes: not austenitic, so they need a C/F-type stainless. */
+    internal val MARTENSITIC_FERRITIC_CLASSES = setOf(
+        PropertyClass.C1_50, PropertyClass.C1_70, PropertyClass.C3_80, PropertyClass.C4_70, PropertyClass.F1_60
+    )
+    /** ISO 898-2 steel nut classes: carbon / alloy steel, specified by proof load and hardness. */
+    internal val ISO_NUT_CLASSES = setOf(
+        PropertyClass.NUT_04, PropertyClass.NUT_05, PropertyClass.NUT_5, PropertyClass.NUT_6,
+        PropertyClass.NUT_8, PropertyClass.NUT_9, PropertyClass.NUT_10, PropertyClass.NUT_12
+    )
+    /** Classes written for nuts only (ISO 898-2, SAE J995, ASTM A563 / A194). */
+    internal val NUT_ONLY_CLASSES = ISO_NUT_CLASSES + setOf(
+        PropertyClass.SAE_NUT_5, PropertyClass.SAE_NUT_8, PropertyClass.ASTM_A563_DH,
+        PropertyClass.ASTM_A194_2H, PropertyClass.ASTM_A194_8
+    )
     /** Inch steel grades: like ISO 898-1 they need carbon / alloy steel, but they are not ISO classes. */
     internal val INCH_STEEL_CLASSES = setOf(
-        PropertyClass.SAE_GRADE_2, PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574, PropertyClass.ASTM_A193_B7
+        PropertyClass.SAE_GRADE_2, PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574,
+        PropertyClass.ASTM_A193_B7, PropertyClass.ASTM_A193_B16, PropertyClass.ASTM_A320_L7,
+        PropertyClass.ASTM_A325, PropertyClass.ASTM_A490, PropertyClass.ASTM_A307_A, PropertyClass.ASTM_A307_B,
+        PropertyClass.ASTM_F1554_36, PropertyClass.ASTM_F1554_105,
+        PropertyClass.SAE_NUT_5, PropertyClass.SAE_NUT_8, PropertyClass.ASTM_A563_DH, PropertyClass.ASTM_A194_2H
     )
     internal val QT_CLASSES = setOf(
         PropertyClass.CLASS_8_8, PropertyClass.CLASS_9_8, PropertyClass.CLASS_10_9, PropertyClass.CLASS_12_9,
-        PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574, PropertyClass.ASTM_A193_B7
+        PropertyClass.SAE_GRADE_5, PropertyClass.SAE_GRADE_8, PropertyClass.ASTM_A574, PropertyClass.ASTM_A193_B7,
+        PropertyClass.ASTM_A193_B16, PropertyClass.ASTM_A320_L7, PropertyClass.ASTM_A325, PropertyClass.ASTM_A490,
+        PropertyClass.ASTM_F1554_105, PropertyClass.ASTM_A194_2H, PropertyClass.ASTM_A563_DH, PropertyClass.SAE_NUT_8,
+        PropertyClass.NUT_8, PropertyClass.NUT_9, PropertyClass.NUT_10, PropertyClass.NUT_12
     )
     internal val ALUMINIUM_ONLY_COATINGS = setOf(CoatingType.ANODIZE_II, CoatingType.HARD_ANODIZE, CoatingType.CHEM_FILM)
     internal val PHOSPHATE_COATINGS = setOf(CoatingType.PHOSPHATE, CoatingType.PHOSPHATE_MN)
@@ -139,9 +207,21 @@ object PokaYokeEngine {
         PropertyClass.CLASS_8_8 -> "8"
         PropertyClass.CLASS_10_9 -> "10"
         PropertyClass.CLASS_12_9 -> "12"
-        PropertyClass.A2_70 -> "A2-70 / A4-70 (ISO 3506-2)"
-        PropertyClass.A2_50 -> "A2-50 / A4-50 (ISO 3506-2)"
-        PropertyClass.A4_80 -> "A2-80 / A4-80 (ISO 3506-2)"
+        PropertyClass.A2_70 -> "A2-70 (ISO 3506-2)"
+        PropertyClass.A4_70 -> "A4-70 (ISO 3506-2)"
+        PropertyClass.A2_50 -> "A2-50 (ISO 3506-2)"
+        PropertyClass.A4_50 -> "A4-50 (ISO 3506-2)"
+        PropertyClass.A2_80 -> "A2-80 (ISO 3506-2)"
+        PropertyClass.A4_80 -> "A4-80 (ISO 3506-2)"
+        PropertyClass.C1_50, PropertyClass.C1_70, PropertyClass.C3_80, PropertyClass.C4_70, PropertyClass.F1_60 ->
+            "the same C / F class (ISO 3506-2)"
+        PropertyClass.ASTM_A325, PropertyClass.ASTM_F1554_105 -> "ASTM A563 Grade C or DH"
+        PropertyClass.ASTM_A490 -> "ASTM A563 Grade DH (or DH3)"
+        PropertyClass.ASTM_A307_A, PropertyClass.ASTM_A307_B, PropertyClass.ASTM_F1554_36 -> "ASTM A563 Grade A"
+        PropertyClass.ASTM_A193_B16, PropertyClass.ASTM_A320_L7 -> "ASTM A194 Grade 4 or 7"
+        PropertyClass.ASTM_A193_B8_CL1 -> "ASTM A194 Grade 8"
+        PropertyClass.ASTM_A193_B8M_CL2 -> "ASTM A194 Grade 8M"
+        in NUT_ONLY_CLASSES -> "not applicable — this is already the nut class"
         PropertyClass.SAE_GRADE_2 -> "SAE J995 Grade 2"
         PropertyClass.SAE_GRADE_5 -> "SAE J995 Grade 5"
         PropertyClass.SAE_GRADE_8 -> "SAE J995 Grade 8"
@@ -194,7 +274,18 @@ object PokaYokeEngine {
                 type == FastenerType.TWELVE_POINT -> ProductStandard.NAS624
                 type == FastenerType.HEAVY_HEX_BOLT -> ProductStandard.ASTM_A325
                 type.isStud -> ProductStandard.ASTM_A193
-                type in setOf(FastenerType.SHCS, FastenerType.SOCKET_CSK, FastenerType.SOCKET_BUTTON, FastenerType.SOCKET_SET) -> ProductStandard.ASME_B18_3
+                type == FastenerType.CLEVIS_BOLT -> ProductStandard.AN21
+                type == FastenerType.SHEAR_BOLT -> ProductStandard.AN173
+                type.category == "Machine Screws" -> ProductStandard.ASME_B18_6_3
+                type.category == "Tapping & Wood Screws" -> ProductStandard.ASME_B18_6_4
+                type.category == "Pins & Retainers" -> ProductStandard.ASME_B18_8_2
+                type == FastenerType.TAP_END_STUD -> ProductStandard.ASME_B16_5
+                type == FastenerType.ANCHOR_BOLT -> ProductStandard.ASTM_F1554
+                type in setOf(
+                    FastenerType.SHCS, FastenerType.SOCKET_CSK, FastenerType.SOCKET_BUTTON, FastenerType.SOCKET_SET,
+                    FastenerType.SET_SCREW_CONE, FastenerType.SET_SCREW_DOG, FastenerType.SET_SCREW_CUP,
+                    FastenerType.SHOULDER_BOLT
+                ) -> ProductStandard.ASME_B18_3
                 else -> ProductStandard.ASME_B18_2_1
             }
         }
@@ -239,6 +330,58 @@ object PokaYokeEngine {
             FastenerType.NUTPLATE -> ProductStandard.MS21047
             FastenerType.SOLID_RIVET -> ProductStandard.MS20470
             FastenerType.BLIND_RIVET -> ProductStandard.NAS1398
+            FastenerType.CLEVIS_BOLT -> ProductStandard.AN21
+            FastenerType.SHEAR_BOLT -> ProductStandard.AN173
+            FastenerType.SQUARE_BOLT -> ProductStandard.DIN_478
+            FastenerType.SHOULDER_BOLT -> ProductStandard.ISO_7379
+            FastenerType.SET_SCREW_CONE -> ProductStandard.ISO_4027
+            FastenerType.SET_SCREW_DOG -> ProductStandard.ISO_4028
+            FastenerType.SET_SCREW_CUP -> ProductStandard.ISO_4029
+            FastenerType.SLOTTED_SET_SCREW -> ProductStandard.DIN_438
+            FastenerType.THUMB_SCREW -> ProductStandard.DIN_464
+            FastenerType.WING_SCREW -> ProductStandard.DIN_316
+            FastenerType.HANGER_BOLT -> ProductStandard.DIN_7961
+            FastenerType.ANCHOR_BOLT -> ProductStandard.ASTM_F1554
+            FastenerType.LAG_SCREW -> ProductStandard.DIN_571
+            FastenerType.PAN_SLOT -> ProductStandard.ISO_1580
+            FastenerType.PAN_CROSS -> ProductStandard.ISO_7045
+            FastenerType.CHEESE_SLOT -> ProductStandard.ISO_1207
+            FastenerType.CSK_SLOT -> ProductStandard.ISO_2009
+            FastenerType.CSK_CROSS -> ProductStandard.ISO_7046
+            FastenerType.RAISED_CSK_CROSS -> ProductStandard.ISO_7047
+            FastenerType.HEX_WASHER_SCREW, FastenerType.SEMS_SCREW -> ProductStandard.DIN_6900
+            FastenerType.TAPPING_PAN -> ProductStandard.ISO_1481
+            FastenerType.TAPPING_CSK -> ProductStandard.ISO_7050
+            FastenerType.TAPPING_HEX -> ProductStandard.ISO_10509
+            FastenerType.SELF_DRILLING -> ProductStandard.ISO_15480
+            FastenerType.DRYWALL_SCREW -> ProductStandard.DIN_18182
+            FastenerType.CHIPBOARD_SCREW -> ProductStandard.DIN_7505
+            FastenerType.CONROD_BOLT -> ProductStandard.OEM_CONROD
+            FastenerType.THREADED_ROD -> ProductStandard.DIN_975
+            FastenerType.TAP_END_STUD -> ProductStandard.ASME_B16_5
+            FastenerType.DOWEL_PIN -> ProductStandard.ISO_2338
+            FastenerType.TAPER_PIN -> ProductStandard.ISO_2339
+            FastenerType.CLEVIS_PIN -> ProductStandard.ISO_2341
+            FastenerType.SPLIT_PIN -> ProductStandard.ISO_1234
+            FastenerType.SPRING_PIN -> ProductStandard.ISO_8752
+            FastenerType.GROOVED_PIN -> ProductStandard.ISO_8739
+            FastenerType.RETAINING_RING -> ProductStandard.DIN_471
+            FastenerType.THIN_NUT -> ProductStandard.ISO_4035
+            FastenerType.HIGH_NUT -> ProductStandard.ISO_4033
+            FastenerType.SQUARE_NUT -> ProductStandard.DIN_557
+            FastenerType.COUPLING_NUT -> ProductStandard.DIN_6334
+            FastenerType.T_SLOT_NUT -> ProductStandard.DIN_508
+            FastenerType.CAGE_NUT -> ProductStandard.OEM_CAGE_NUT
+            FastenerType.WING_NUT -> ProductStandard.DIN_315
+            FastenerType.THUMB_NUT -> ProductStandard.DIN_466
+            FastenerType.RIVET_NUT -> ProductStandard.OEM_RIVET_NUT
+            FastenerType.CLINCH_NUT -> ProductStandard.IFI_100
+            FastenerType.FENDER_WASHER -> ProductStandard.ISO_7093
+            FastenerType.STRUCT_WASHER -> ProductStandard.ASTM_F436
+            FastenerType.TOOTH_LOCK_WASHER -> ProductStandard.DIN_6797
+            FastenerType.BELLEVILLE_WASHER -> ProductStandard.DIN_6796
+            FastenerType.WAVE_WASHER -> ProductStandard.DIN_137
+            FastenerType.TAPER_WASHER -> ProductStandard.DIN_434
         }
     }
 
@@ -343,6 +486,10 @@ object PokaYokeEngine {
                 critical("Class ${pc.label.substringBefore(" (")} needs carbon/alloy steel", "ISO 898-1 classes apply only to carbon and alloy steel; ${material.name} is ${family.name.lowercase().replace('_', ' ')}.", "Use the material's own class (A2-70/A4-80 for austenitic stainless, aerospace class for Ti/Ni alloys) or change the material.")
             } else if (pc in STAINLESS_CLASSES && !isAusteniticA2A4(material)) {
                 critical("${pc.label.substringBefore(" (")} needs A2/A4 austenitic stainless", "ISO 3506-1 A2/A4 classes cover 304-type (A2) and 316-type (A4) steels only; ${material.name} is not one of them.", "Select SS304 / SS316 / SS316L, or use 'Per material spec' for martensitic, PH and other stainless grades.")
+            } else if (pc in MARTENSITIC_FERRITIC_CLASSES && family != MaterialFamily.STAINLESS) {
+                critical("${pc.label.substringBefore(" (")} needs a stainless steel", "ISO 3506-1 C and F classes are martensitic (C) and ferritic (F) stainless grades; ${material.name} is ${family.name.lowercase().replace('_', ' ')}.", "Select a martensitic / ferritic stainless (410, 1.4057, 420) or change the class.")
+            } else if (pc in MARTENSITIC_FERRITIC_CLASSES && isAusteniticA2A4(material)) {
+                critical("${pc.label.substringBefore(" (")} is not an austenitic class", "C and F classes are hardened martensitic / ferritic grades; ${material.name} is an austenitic 304/316-type steel that cannot be quenched and tempered.", "Use A2 / A4 for austenitic stainless, or select a martensitic grade.")
             } else if (pc == PropertyClass.MATERIAL_SPEC && family == MaterialFamily.CARBON_ALLOY_STEEL && !material.isAero) {
                 critical("Commercial steel needs a grade", "${material.name} fasteners are graded by ISO 898-1 (metric) or SAE J429 / ASTM (inch).", "Select the ISO / SAE property class.")
             } else if (pc == PropertyClass.AERO_AL && family != MaterialFamily.ALUMINUM) {
@@ -353,6 +500,17 @@ object PokaYokeEngine {
             val requiredRm = requiredRmMpa(pc, d, material)
             if (material.postForgingTargetUtsMpa < requiredRm * 0.98) {
                 critical("Material cannot reach the class strength", "${material.name} reaches about ${material.postForgingTargetUtsMpa.toInt()} MPa, but ${pc.label.substringBefore(" (")} needs at least ${requiredRm.toInt()} MPa.", "Select a stronger, hardenable material (e.g. 4140/42CrMo4 for 12.9, 10B21 or 4135 for 10.9).")
+            }
+            if (pc in NUT_ONLY_CLASSES && !isNut) {
+                critical("Nut class on a ${if (type.isStud) "stud" else "bolt / screw"}", "${pc.label.substringBefore(" (")} is a nut class: it is specified by proof load and hardness, with no tensile strength for a threaded shank.", "Select the bolt class (ISO 898-1 for metric, SAE J429 / ASTM for inch).")
+            }
+            if (isNut && pc !in NUT_ONLY_CLASSES && pc !in STAINLESS_CLASSES && pc != PropertyClass.MATERIAL_SPEC && !isAerospaceType(type)) {
+                warn("Bolt class on a nut", "${pc.label.substringBefore(" (")} is a bolt class; a nut is graded by ISO 898-2 (class ${nutClassFor(pc)}) or by SAE J995 / ASTM A563 / A194 in inch.", "Select the matching nut class so the proof load and hardness limits are the nut's own.")
+            }
+            if (pc == PropertyClass.NUT_04 || pc == PropertyClass.NUT_05) {
+                if (type != FastenerType.THIN_NUT) {
+                    warn("Thin-nut class on a full-height nut", "ISO 898-2 classes 04 and 05 are for thin nuts (m < 0.8 d) with a reduced proof load; ${type.label.substringBefore(" (")} is a full-height nut.", "Use class 5 / 6 / 8 / 10 / 12 for a full-height nut.")
+                }
             }
             if (pc == PropertyClass.CLASS_9_8 && d > 16.0) {
                 critical("Class 9.8 is limited to M16", "ISO 898-1 defines class 9.8 only for d ≤ 16 mm; M$d selected.", "Use class 8.8 or 10.9 for this size.")

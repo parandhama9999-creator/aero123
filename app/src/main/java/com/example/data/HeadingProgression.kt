@@ -407,7 +407,7 @@ object HeadingProgression {
             stations += HeadingStation(
                 index = stations.size,
                 title = "Head upset (round, for trimming)",
-                operation = "Upset round head Ø${f(dRound)} (1.2 × across corners) × ${f(headForged / area(dRound))} mm against die face",
+                operation = "Upset round head Ø${f(dRound)} (1.20 × across flats) × ${f(headForged / area(dRound))} mm against die face",
                 segments = shank + ProfileSegment(headForged / area(dRound), dRound),
                 inDieMm = length,
                 isPeakBlow = true
@@ -446,10 +446,19 @@ object HeadingProgression {
             ?.let { ", flange Ø${f(it.dBottomMm)} × c=${f(it.heightMm)} mm on the die face" } ?: ""
         val hex = "Close hex s=$size × k=$k mm in punch hex insert, 30° chamfer, bearing face"
         return when (part.style) {
-            HeadStyle.SOCKET_CAP -> "Socket back-extrude" to
-                ((if (type == FastenerType.HEXALOBULAR_SCREW) "Back-extrude hexalobular recess (volume modelled as hex s=${f(part.recesses.first().sizeMm, 1)})"
-                else "Back-extrude hex socket s=${f(part.recesses.first().sizeMm, 1)}") +
-                    " × t=${f(part.recesses.first().depthMm, 1)} mm; finish head Ø$size × k=$k mm")
+            HeadStyle.SOCKET_CAP -> {
+                val rec = part.recesses.firstOrNull { it.fromTop }
+                if (rec == null) {
+                    // Pan, cheese, shoulder and clevis heads: a plain cylindrical head. The slot or cross drive is
+                    // not in the modelled volume, so the blow closes the head only.
+                    "Cylindrical head form" to "Close cylindrical head Ø$size × k=$k mm in the punch cavity, bearing face and edge radius"
+                } else {
+                    "Socket back-extrude" to
+                        ((if (type == FastenerType.HEXALOBULAR_SCREW) "Back-extrude hexalobular recess (volume modelled as hex s=${f(rec.sizeMm, 1)})"
+                        else "Back-extrude hex socket s=${f(rec.sizeMm, 1)}") +
+                            " × t=${f(rec.depthMm, 1)} mm; finish head Ø$size × k=$k mm")
+                }
+            }
             HeadStyle.SOCKET_COUNTERSUNK -> {
                 val angle = 2.0 * Math.toDegrees(kotlin.math.atan((top.dTopMm - top.dBottomMm) / 2.0 / top.heightMm))
                 "Countersunk head & socket" to "Form countersunk head Ø$size × k=$k mm (${f(angle, 0)}° included) in the die countersink; back-extrude $socket"

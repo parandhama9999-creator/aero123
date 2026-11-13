@@ -399,7 +399,7 @@ object CalculationEngine {
         }?.takeIf { it.finishedVolumeMm3 != null && it.cheeseVolumeMm3 != null }
         val trimS = if (flange != null && boltForging != null) flange.s!! else drawing.acrossFlatsMm ?: s
         val trimK = if (flange != null && boltForging != null) flange.k!! else drawing.headHeightMm ?: k
-        val forgedHeadDia = boltForging?.let { if (flange != null) flange.dc!! else 1.2 * trimS / kotlin.math.cos(Math.toRadians(30.0)) }
+        val forgedHeadDia = boltForging?.let { if (flange != null) flange.dc!! else 1.2 * trimS }
 
         // One finished shape per fastener type: its volume is the part volume and its outline ends the die progression
         val part = PartGeometry.build(

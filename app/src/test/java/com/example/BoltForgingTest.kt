@@ -13,9 +13,9 @@ class BoltForgingTest {
         assertEquals(1.66, f.coneLengthMm, 0.01)
         assertEquals(23.04, f.stockToExtrudeMm, 0.01)
         assertEquals(55.38, f.lengthUnderHeadBeforeMm, 0.01)
-        assertEquals(1052.0, f.cheeseVolumeMm3!!, 1.0)
-        assertEquals(32.42, f.headStockMm!!, 0.01)
-        assertEquals(87.80, f.cutOffLengthMm!!, 0.02)
+        assertEquals(434.1, f.cheeseVolumeMm3!!, 1.0)  // cheese Ø = 1.20 × s (across flats), not 1.2 × e
+        assertEquals(24.32, f.headStockMm!!, 0.01)
+        assertEquals(79.70, f.cutOffLengthMm!!, 0.02)
         // slug volume = finished + cheese = cut-off × shank area
         assertEquals(f.cutOffLengthMm!! * Math.PI / 4 * 9.85 * 9.85, f.finishedVolumeMm3!! + f.cheeseVolumeMm3!!, 0.5)
     }

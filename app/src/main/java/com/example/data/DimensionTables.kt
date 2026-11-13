@@ -116,6 +116,20 @@ object DimensionTables {
         if (type == FastenerType.FLAT_WASHER && unit == UnitSystem.METRIC) {
             lookup(ISO_7089, dMm)?.let { return WasherDimensions(it[0], it[1], it[2], "ISO 7089", true) }
         }
+        if (type == FastenerType.FENDER_WASHER && unit == UnitSystem.METRIC)
+            return WasherDimensions(1.08 * dMm, 3.0 * dMm, 0.25 * dMm, "Estimated (ISO 7093 large washer proportions)", false)
+        if (type == FastenerType.STRUCT_WASHER)
+            return WasherDimensions(1.08 * dMm, 2.0 * dMm, 0.22 * dMm, "Estimated (ASTM F436 hardened washer proportions)", false)
+        if (type == FastenerType.TOOTH_LOCK_WASHER)
+            return WasherDimensions(1.05 * dMm, 2.0 * dMm, 0.10 * dMm, "Estimated (DIN 6797 / 6798 serrated washer; teeth not modelled)", false)
+        if (type == FastenerType.BELLEVILLE_WASHER)
+            return WasherDimensions(1.05 * dMm, 2.0 * dMm, 0.20 * dMm, "Estimated (DIN 6796 conical washer, flattened thickness)", false)
+        if (type == FastenerType.WAVE_WASHER)
+            return WasherDimensions(1.05 * dMm, 1.7 * dMm, 0.12 * dMm, "Estimated (DIN 137 wave washer, flattened thickness)", false)
+        if (type == FastenerType.TAPER_WASHER)
+            return WasherDimensions(1.10 * dMm, 2.2 * dMm, 0.45 * dMm, "Estimated (DIN 434 / 435 taper washer, mean thickness)", false)
+        if (type == FastenerType.RETAINING_RING)
+            return WasherDimensions(0.92 * dMm, 1.5 * dMm, 0.10 * dMm, "Estimated (DIN 471 / 472 circlip, lugs not modelled)", false)
         return if (type == FastenerType.SPRING_WASHER) WasherDimensions(1.02 * dMm, 1.75 * dMm, 0.22 * dMm, "Estimated (no spring washer table in the app)", false)
         else WasherDimensions(1.06 * dMm, 2.0 * dMm, 0.18 * dMm, "Estimated (no washer table for this size / standard)", false)
     }
@@ -132,7 +146,23 @@ object DimensionTables {
         // These were silently given plain hex bolt / hex nut dimensions; their own standards differ
         FastenerType.TWELVE_POINT, FastenerType.T_BOLT, FastenerType.EYE_BOLT, FastenerType.HEAVY_HEX_BOLT,
         FastenerType.HEAVY_HEX_NUT, FastenerType.FLANGE_NUT, FastenerType.NYLOC_NUT, FastenerType.METAL_LOCK_NUT,
-        FastenerType.CASTLE_NUT, FastenerType.ACORN_NUT, FastenerType.WELD_NUT
+        FastenerType.CASTLE_NUT, FastenerType.ACORN_NUT, FastenerType.WELD_NUT,
+        // Added catalogue types: proportional head geometry only, no product table in the app yet
+        FastenerType.SQUARE_BOLT, FastenerType.SHOULDER_BOLT, FastenerType.SET_SCREW_CONE, FastenerType.SET_SCREW_DOG,
+        FastenerType.SET_SCREW_CUP, FastenerType.SLOTTED_SET_SCREW, FastenerType.THUMB_SCREW, FastenerType.WING_SCREW,
+        FastenerType.HANGER_BOLT, FastenerType.ANCHOR_BOLT, FastenerType.LAG_SCREW,
+        FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.CHEESE_SLOT, FastenerType.CSK_SLOT,
+        FastenerType.CSK_CROSS, FastenerType.RAISED_CSK_CROSS, FastenerType.HEX_WASHER_SCREW, FastenerType.SEMS_SCREW,
+        FastenerType.TAPPING_PAN, FastenerType.TAPPING_CSK, FastenerType.TAPPING_HEX, FastenerType.SELF_DRILLING,
+        FastenerType.DRYWALL_SCREW, FastenerType.CHIPBOARD_SCREW, FastenerType.CONROD_BOLT,
+        FastenerType.CLEVIS_BOLT, FastenerType.SHEAR_BOLT, FastenerType.THREADED_ROD, FastenerType.TAP_END_STUD,
+        FastenerType.DOWEL_PIN, FastenerType.TAPER_PIN, FastenerType.CLEVIS_PIN, FastenerType.SPLIT_PIN,
+        FastenerType.SPRING_PIN, FastenerType.GROOVED_PIN, FastenerType.RETAINING_RING,
+        FastenerType.THIN_NUT, FastenerType.HIGH_NUT, FastenerType.SQUARE_NUT, FastenerType.COUPLING_NUT,
+        FastenerType.T_SLOT_NUT, FastenerType.CAGE_NUT, FastenerType.WING_NUT, FastenerType.THUMB_NUT,
+        FastenerType.RIVET_NUT, FastenerType.CLINCH_NUT,
+        FastenerType.FENDER_WASHER, FastenerType.STRUCT_WASHER, FastenerType.TOOTH_LOCK_WASHER,
+        FastenerType.BELLEVILLE_WASHER, FastenerType.WAVE_WASHER, FastenerType.TAPER_WASHER
     )
 
     fun forPart(type: FastenerType, unit: UnitSystem, dMm: Double): HeadDimensions {
@@ -177,6 +207,41 @@ object DimensionTables {
                     if (sFlats != null && g.k != null && g.dc != null)
                         return HeadDimensions(sFlats, g.k, 0.95 * g.dc, nutM, "DIN 6921 (1983 edition, supplier tables)", true)
                 }
+            }
+            // Machine-screw head families: ISO 1207 / 7045 / 7046 / 7047 head proportions (dk, k as a ratio of d)
+            FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.TAPPING_PAN, FastenerType.SELF_DRILLING ->
+                return estimated(2.0 * dMm, 0.60 * dMm, dMm, "pan head proportions, ISO 7045 / ISO 1481")
+            FastenerType.CHEESE_SLOT ->
+                return estimated(1.6 * dMm, 0.60 * dMm, dMm, "cheese head proportions, ISO 1207")
+            FastenerType.CSK_SLOT, FastenerType.CSK_CROSS, FastenerType.TAPPING_CSK, FastenerType.CHIPBOARD_SCREW ->
+                return estimated(1.9 * dMm, 0.55 * dMm, dMm, "90° countersunk head proportions, ISO 7046 / ISO 7050")
+            FastenerType.RAISED_CSK_CROSS ->
+                return estimated(1.9 * dMm, 0.75 * dMm, dMm, "raised countersunk head proportions, ISO 7047")
+            FastenerType.DRYWALL_SCREW ->
+                return estimated(2.2 * dMm, 0.50 * dMm, dMm, "bugle head proportions, DIN 18182")
+            FastenerType.HEX_WASHER_SCREW, FastenerType.SEMS_SCREW ->
+                return estimated(2.2 * dMm, 0.80 * dMm, dMm, "hex washer / SEMS head proportions, DIN 6900")
+            FastenerType.SHOULDER_BOLT ->
+                return estimated(1.5 * dMm, 0.70 * dMm, dMm, "shoulder screw head proportions, ISO 7379")
+            FastenerType.THUMB_SCREW, FastenerType.WING_SCREW ->
+                return estimated(2.5 * dMm, 0.90 * dMm, dMm, "knurled / wing head proportions, DIN 464 / DIN 316")
+            FastenerType.CLEVIS_BOLT, FastenerType.CLEVIS_PIN ->
+                return estimated(1.5 * dMm, 0.35 * dMm, dMm, "headed pin proportions, AN21 / ISO 2341")
+            // Set screws, studs, rod, anchor and dowel screws and plain pins have no head at all
+            FastenerType.SET_SCREW_CONE, FastenerType.SET_SCREW_DOG, FastenerType.SET_SCREW_CUP,
+            FastenerType.SLOTTED_SET_SCREW, FastenerType.HANGER_BOLT, FastenerType.ANCHOR_BOLT,
+            FastenerType.THREADED_ROD, FastenerType.TAP_END_STUD, FastenerType.DOWEL_PIN, FastenerType.TAPER_PIN,
+            FastenerType.SPLIT_PIN, FastenerType.SPRING_PIN, FastenerType.GROOVED_PIN, FastenerType.RETAINING_RING ->
+                return estimated(dMm, 0.0, dMm, "headless part — no head volume")
+            // Nut heights that are not the ISO 4032 m: thin (ISO 4035), high (ISO 4033) and coupling nuts
+            FastenerType.THIN_NUT -> lookup(ISO_HEX, dMm)?.let {
+                return HeadDimensions(it[0], 0.55 * dMm, it[3], 0.55 * dMm, "ISO 4035 thin nut (m ≈ 0.55 d)", false)
+            }
+            FastenerType.HIGH_NUT -> lookup(ISO_HEX, dMm)?.let {
+                return HeadDimensions(it[0], 0.90 * dMm, it[3], 0.90 * dMm, "ISO 4033 style 2 nut (m ≈ 0.90 d)", false)
+            }
+            FastenerType.COUPLING_NUT -> lookup(ISO_HEX, dMm)?.let {
+                return HeadDimensions(it[0], 3.0 * dMm, it[3], 3.0 * dMm, "DIN 6334 coupling nut (m = 3 d)", false)
             }
             // Universal head, MS20470 proportions: A = 2 D, H = 0.425 D
             FastenerType.SOLID_RIVET, FastenerType.BLIND_RIVET ->

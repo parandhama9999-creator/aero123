@@ -1,7 +1,6 @@
 package com.example.data
 
 import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.sqrt
 import kotlin.math.tan
 
@@ -95,12 +94,14 @@ object BoltForging {
                 note = "Needs dc and c from the drawing"
             }
         } else if (s != null && k != null) {
-            val e = s / cos(Math.toRadians(30.0))
-            val dForged = 1.2 * e
+            // Shop rule: the round cheese that is trimmed to a hex is 1.20 x the minimum across flats.
+            // That is 1.04 x the across-corners e (e = s / cos 30), i.e. just enough stock to fill the corners
+            // and leave trim material, which is what a hex trim die is set to.
+            val dForged = 1.2 * s
             headForged = PI / 4 * dForged * dForged * k
             headFinished = sqrt(3.0) / 2 * s * s * k
             cheese = headForged - headFinished
-            note = "Round head forged Ø${"%.2f".format(java.util.Locale.US, dForged)} (1.2 × e) × k $k, trimmed to hex s $s"
+            note = "Round head forged Ø${"%.2f".format(java.util.Locale.US, dForged)} (1.20 × s) × k $k, trimmed to hex s $s"
         } else {
             note = "Needs across flats and head height"
         }
