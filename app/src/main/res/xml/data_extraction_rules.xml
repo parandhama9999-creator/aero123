@@ -1,19 +1,20 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup / transfer rules for API 31 and above.
+
+    The encrypted stores are excluded from both cloud backup and device-to-device transfer: their
+    master key lives in the device keystore and is never backed up, so a restored copy cannot be
+    decrypted and opening it throws or silently resets.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="aerofast_prefs_secure.xml" />
+        <exclude domain="sharedpref" path="aerofast_scan_cache.xml" />
+        <exclude domain="sharedpref" path="aerofast_prefs.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="aerofast_prefs_secure.xml" />
+        <exclude domain="sharedpref" path="aerofast_scan_cache.xml" />
+        <exclude domain="sharedpref" path="aerofast_prefs.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

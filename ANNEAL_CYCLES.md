@@ -1,8 +1,15 @@
 # Annealing Cycles — All Catalogue Materials
 
-Generated from AeroFast Pro's own material catalogue (69 grades).
+Generated from AeroFast Pro's own material catalogue.
 Every value is either taken from the catalogue or derived from it; nothing is invented.
 Rows marked **ENTER PER GRADE** are values the catalogue does not carry.
+
+> **Titanium: use MILL_ANNEAL_CYCLES.md, not the titanium rows below.** The titanium temperatures in
+> the tables here are the catalogue's **solution-treatment** temperatures, which are roughly 200 °C
+> above the mill-anneal and are a hardening step, not an anneal. MILL_ANNEAL_CYCLES.md carries the
+> corrected, sourced mill-anneal cycles and is the one the app implements (`SoftAnnealEngine`), so
+> the app is right even where these tables are not. The titanium rows are kept only so the catalogue
+> value each grade carries can still be traced.
 
 ## Summary by route
 

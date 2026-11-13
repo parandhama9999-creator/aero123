@@ -35,7 +35,7 @@ Optional repository secret (Settings → Secrets and variables → Actions): `DE
    GEMINI_API_KEY=your_gemini_api_key_here
    ```
    See `.env.example` for the format.
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
+5. Nothing to edit in `app/build.gradle.kts`: the debug signing config is applied only when `debug.keystore` exists at the project root, so a release build already ignores it. (Older versions of this README told you to delete that line; it is now inside a file-exists guard.)
 6. Run the app on an emulator or physical device
 7. Launch the app → Settings → AI Settings → Paste your API key (if not set via .env)
 

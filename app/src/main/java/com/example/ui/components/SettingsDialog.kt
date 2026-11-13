@@ -53,10 +53,9 @@ fun SettingsDialog(
     val context = LocalContext.current
     var selectedLang by remember { mutableStateOf(AppLocalization.getSelectedLanguage(context)) }
     val customColors = LocalCustomColors.current
-    val savedUserKey = remember {
-        val prefs = context.getSharedPreferences("aerofast_prefs", android.content.Context.MODE_PRIVATE)
-        (prefs.getString("aerofast_gemini_key", null) ?: prefs.getString("user_gemini_key", null))?.trim() ?: ""
-    }
+    // Read through the service so the key comes from the encrypted store (and the legacy plaintext
+    // file is migrated once). Reading the plaintext file directly never saw an encrypted key.
+    val savedUserKey = remember { GeminiAiService.getEffectiveApiKey(context) }
     var currentKey by remember { mutableStateOf(savedUserKey) }
     var statusText by remember {
         mutableStateOf(

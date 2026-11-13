@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.example.config.AppConfig
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -156,7 +157,7 @@ object GeminiAiService {
 
     private fun getCachedExtraction(context: Context, fingerprint: String): ExtractedFastenerSpec? {
         return try {
-            val prefs = getEncryptedPrefs(context, "aerofast_scan_cache")
+            val prefs = getEncryptedPrefs(context, AppConfig.SCAN_CACHE_ENCRYPTED_NAME)
             val cachedData = prefs.getString(fingerprint, null) ?: return null
             val json = JSONObject(cachedData)
             val timestamp = json.optLong("_timestamp", 0L)
@@ -175,7 +176,7 @@ object GeminiAiService {
 
     private fun cacheExtraction(context: Context, fingerprint: String, rawJsonText: String) {
         try {
-            val prefs = getEncryptedPrefs(context, "aerofast_scan_cache")
+            val prefs = getEncryptedPrefs(context, AppConfig.SCAN_CACHE_ENCRYPTED_NAME)
             val wrapper = JSONObject()
                 .put("_timestamp", System.currentTimeMillis())
                 .put("_spec", JSONObject(rawJsonText))
@@ -185,10 +186,37 @@ object GeminiAiService {
         }
     }
 
+    /**
+     * Reads the key a build before the filename fix left in the plaintext-shared "aerofast_prefs"
+     * file and moves it into the secure store, so an existing user does not have to retype it.
+     * Returns the migrated key, or "" when there is nothing to migrate (the usual case).
+     */
+    private fun migrateLegacyApiKey(context: Context): String {
+        return try {
+            val legacy = getEncryptedPrefs(context, AppConfig.PREFERENCES_LEGACY_NAME)
+            val key = (legacy.getString(AppConfig.KEY_GEMINI_PRIMARY, null)
+                ?: legacy.getString(AppConfig.KEY_GEMINI_LEGACY, null))?.trim().orEmpty()
+            if (key.isNotBlank()) {
+                saveUserApiKey(context, key)
+                legacy.edit()
+                    .remove(AppConfig.KEY_GEMINI_PRIMARY)
+                    .remove(AppConfig.KEY_GEMINI_LEGACY)
+                    .apply()
+            }
+            key
+        } catch (e: Exception) {
+            // The legacy file is plaintext XML that the encrypted reader cannot parse, or its master
+            // key did not survive a device-to-device restore. Nothing to migrate: the user retypes it.
+            ""
+        }
+    }
+
     fun getEffectiveApiKey(context: Context): String {
         return try {
-            val prefs = getEncryptedPrefs(context, "aerofast_prefs")
-            (prefs.getString("aerofast_gemini_key", null) ?: prefs.getString("user_gemini_key", null))?.trim() ?: ""
+            val prefs = getEncryptedPrefs(context, AppConfig.PREFERENCES_ENCRYPTED_NAME)
+            val key = (prefs.getString(AppConfig.KEY_GEMINI_PRIMARY, null)
+                ?: prefs.getString(AppConfig.KEY_GEMINI_LEGACY, null))?.trim().orEmpty()
+            if (key.isBlank()) migrateLegacyApiKey(context) else key
         } catch (e: Exception) {
             ""
         }
@@ -201,10 +229,10 @@ object GeminiAiService {
 
     fun saveUserApiKey(context: Context, key: String) {
         try {
-            val prefs = getEncryptedPrefs(context, "aerofast_prefs")
+            val prefs = getEncryptedPrefs(context, AppConfig.PREFERENCES_ENCRYPTED_NAME)
             prefs.edit()
-                .putString("aerofast_gemini_key", key.trim())
-                .putString("user_gemini_key", key.trim())
+                .putString(AppConfig.KEY_GEMINI_PRIMARY, key.trim())
+                .putString(AppConfig.KEY_GEMINI_LEGACY, key.trim())
                 .apply()
         } catch (e: Exception) {
             throw RuntimeException("Failed to save API key securely: ${e.message}", e)

@@ -128,6 +128,9 @@ enum class NavigationTab(val tabIndex: Int, val defaultTitle: String, val icon: 
     }
 }
 
+/** A two-finger gesture is a zoom only once the scale has changed by more than this. */
+private const val PINCH_SLOP = 0.02f
+
 @Composable
 fun AeroFastApp() {
     val context = LocalContext.current
@@ -156,23 +159,23 @@ fun AeroFastApp() {
     }
     val scope = rememberCoroutineScope()
 
-    var themeMode by remember { mutableStateOf(AppThemeMode.INDUSTRIAL_LIGHT) }
-    var selectedFontOption by remember { mutableStateOf(com.example.ui.theme.AppFontOption.ROBOTO_MONO) }
-    var currentTab by remember { mutableStateOf(NavigationTab.SIZING) }
-    var currentLanguage by remember { mutableStateOf(com.example.util.AppLocalization.getSelectedLanguage(context)) }
+    var themeMode by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(AppThemeMode.INDUSTRIAL_LIGHT) }
+    var selectedFontOption by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.example.ui.theme.AppFontOption.ROBOTO_MONO) }
+    var currentTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(NavigationTab.SIZING) }
+    var currentLanguage by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.example.util.AppLocalization.getSelectedLanguage(context)) }
 
     // 10 Poka-Yoke Fastener Parameters
-    var selectedFastenerType by remember { mutableStateOf(FastenerType.HEX_BOLT) }
-    var selectedUnitSystem by remember { mutableStateOf(UnitSystem.METRIC) }
-    var selectedStandard by remember { mutableStateOf(ProductStandard.ISO_4014) }
-    var selectedSizeIndex by remember { mutableIntStateOf(FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)) } // M10
-    var selectedPitchValue by remember { mutableDoubleStateOf(1.50) }
-    var selectedLength by remember { mutableDoubleStateOf(60.0) }
-    var selectedPropClass by remember { mutableStateOf(PropertyClass.CLASS_10_9) }
-    var selectedMaterialKey by remember { mutableStateOf("10B21") }
-    var selectedThreadClass by remember { mutableStateOf("6g") }
-    var selectedCoating by remember { mutableStateOf(CoatingType.ZN_NI) }
-    var batchQty by remember { mutableIntStateOf(10000) }
+    var selectedFastenerType by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(FastenerType.HEX_BOLT) }
+    var selectedUnitSystem by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(UnitSystem.METRIC) }
+    var selectedStandard by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ProductStandard.ISO_4014) }
+    var selectedSizeIndex by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)) } // M10
+    var selectedPitchValue by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(1.50) }
+    var selectedLength by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(60.0) }
+    var selectedPropClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PropertyClass.CLASS_10_9) }
+    var selectedMaterialKey by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("10B21") }
+    var selectedThreadClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("6g") }
+    var selectedCoating by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(CoatingType.ZN_NI) }
+    var batchQty by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(10000) }
 
     var appliedExtractedSpec by remember { mutableStateOf<com.example.data.ExtractedFastenerSpec?>(null) }
     // null = let the part decide between a 1-die header and a progressive former
@@ -183,13 +186,13 @@ fun AeroFastApp() {
     }
 
     // Quotation Parameters
-    var currencyIsUsd by remember { mutableStateOf(false) }
-    var cncHourRate by remember { mutableDoubleStateOf(750.0) }
-    var htRatePerKg by remember { mutableDoubleStateOf(180.0) }
-    var marginPct by remember { mutableDoubleStateOf(22.0) }
+    var currencyIsUsd by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var cncHourRate by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(750.0) }
+    var htRatePerKg by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(180.0) }
+    var marginPct by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(22.0) }
 
     // Dialogs & Tier
-    var currentTier by remember { mutableStateOf("FREE") }
+    var currentTier by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("FREE") }
     var showPricingDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -363,19 +366,25 @@ fun AeroFastApp() {
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
+                        // Watched on the Initial pass so a pinch works anywhere, but a gesture is only
+                        // CLAIMED once the fingers have actually spread or closed past PINCH_SLOP. Two
+                        // fingers moving together is a scroll, and it has to reach the list underneath:
+                        // consuming every two-finger event turned every two-finger scroll into a zoom.
                         awaitEachGesture {
+                            var zooming = false
                             do {
                                 val event = awaitPointerEvent(PointerEventPass.Initial)
                                 val pressedPointers = event.changes.filter { it.pressed }
+                                val zoomChange = event.calculateZoom()
+                                val panChange = event.calculatePan()
 
                                 if (pressedPointers.size >= 2) {
-                                    val zoomChange = event.calculateZoom()
-                                    val panChange = event.calculatePan()
-
-                                    if (zoomChange != 1.0f || panChange != Offset.Zero) {
+                                    // Claim the gesture on the first real scale change, then keep it
+                                    // for the rest of the gesture so the zoom does not stutter.
+                                    if (!zooming && kotlin.math.abs(zoomChange - 1.0f) > PINCH_SLOP) zooming = true
+                                    if (zooming) {
                                         val newScale = (globalZoomScale * zoomChange).coerceIn(1.0f, 3.5f)
                                         globalZoomScale = newScale
-
                                         if (newScale > 1.0f) {
                                             globalPanX += panChange.x
                                             globalPanY += panChange.y
@@ -383,11 +392,11 @@ fun AeroFastApp() {
                                             globalPanX = 0f
                                             globalPanY = 0f
                                         }
-
                                         event.changes.forEach { it.consume() }
                                     }
                                 } else if (globalZoomScale > 1.05f && pressedPointers.size == 1) {
-                                    val panChange = event.calculatePan()
+                                    // Only drag the zoomed view once it IS zoomed; at 1x a one-finger
+                                    // drag belongs to whatever is underneath.
                                     if (panChange != Offset.Zero) {
                                         globalPanX += panChange.x
                                         globalPanY += panChange.y
