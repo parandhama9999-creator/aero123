@@ -1789,7 +1789,7 @@ private fun RawMaterialPanel(result: FastenerCalculationResult, batchQty: Int) {
                     o.role,
                     o.blows?.let { "L/D ${"%.2f".format(java.util.Locale.US, o.upsetLd)} → $it blow${if (it > 1) "s" else ""}" },
                     "die bore Ø${"%.2f".format(java.util.Locale.US, o.firstDieBoreMm)} (+${
-                        "%.2f".format(java.util.Locale.US, o.firstDieBoreMm - o.wireDiaMm)
+                        "%.3f".format(java.util.Locale.US, o.firstDieBoreMm - o.wireDiaMm)
                     } clearance)"
                 ).joinToString(" · ")
                 Text(
@@ -1812,7 +1812,7 @@ private fun RawMaterialPanel(result: FastenerCalculationResult, batchQty: Int) {
                 text = "The weight of a run does not change with the wire Ø -- the part volume is fixed. " +
                     "Only the length changes, and with it the cut-off and the number of blows. " +
                     "* marks the shortest workable cut-off. Gross weight carries the 4 % process allowance. " +
-                    "Stage clearance runs 0.2 mm on small work to 0.6 mm on large, scaled by diameter.",
+                    "Stage clearance runs 0.02 mm on small work to 0.09 mm on large, scaled by diameter.",
                 fontSize = 8.5.sp,
                 color = customColors.textMuted,
                 modifier = Modifier.padding(top = 4.dp)

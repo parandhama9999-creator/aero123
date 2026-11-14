@@ -1183,7 +1183,7 @@ fun ColdHeadingProgressionCanvas(
                     st.dieBoreMm?.let { bore ->
                         val stock = st.inDieDiaMm ?: return@let
                         Text(
-                            text = "     die bore Ø${fmt(bore, 2)} = stock Ø${fmt(stock, 2)} + ${fmt(bore - stock, 2)} stage clearance",
+                            text = "     die bore Ø${fmt(bore, 2)} = stock Ø${fmt(stock, 2)} + ${fmt(bore - stock, 3)} stage clearance",
                             fontSize = 8.5.sp,
                             fontFamily = FontFamily.Monospace,
                             color = customColors.textMuted

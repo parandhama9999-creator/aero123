@@ -160,23 +160,24 @@ class WireWindowAndStageClearanceTest {
 
     @Test
     fun stageClearanceHoldsTheStatedFloorAndCeiling() {
-        assertEquals(0.2, HeadingProgression.stageClearance(3.0), 0.001)
-        assertEquals(0.6, HeadingProgression.stageClearance(24.0), 0.001)
+        assertEquals(0.02, HeadingProgression.stageClearance(3.0), 0.0005)
+        assertEquals(0.09, HeadingProgression.stageClearance(24.0), 0.0005)
         // clamped outside the range rather than running off
-        assertEquals(0.2, HeadingProgression.stageClearance(1.0), 0.001)
-        assertEquals(0.6, HeadingProgression.stageClearance(40.0), 0.001)
+        assertEquals(0.02, HeadingProgression.stageClearance(1.0), 0.0005)
+        assertEquals(0.09, HeadingProgression.stageClearance(40.0), 0.0005)
     }
 
     @Test
     fun stageClearanceGrowsWithDiameterAndLandsOnDieShopSteps() {
-        assertEquals(0.25, HeadingProgression.stageClearance(6.0), 0.001)
-        assertEquals(0.35, HeadingProgression.stageClearance(12.0), 0.001)
-        assertEquals(0.50, HeadingProgression.stageClearance(20.0), 0.001)
+        assertEquals(0.03, HeadingProgression.stageClearance(6.0), 0.0005)
+        assertEquals(0.05, HeadingProgression.stageClearance(12.0), 0.0005)
+        assertEquals(0.08, HeadingProgression.stageClearance(20.0), 0.0005)
         var last = 0.0
         for (d in 3..24) {
             val c = HeadingProgression.stageClearance(d.toDouble())
             assertTrue("clearance must not fall as diameter rises", c >= last)
-            assertTrue("every value is a 0.05 step", abs(c / 0.05 - Math.round(c / 0.05)) < 1e-6)
+            assertTrue("every value is a 0.01 step", abs(c / 0.01 - Math.round(c / 0.01)) < 1e-6)
+            assertTrue("never outside the shop rule", c >= 0.02 - 1e-9 && c <= 0.09 + 1e-9)
             last = c
         }
     }
@@ -184,7 +185,7 @@ class WireWindowAndStageClearanceTest {
     @Test
     fun theFirstDieBoreIsTheWirePlusItsClearance() {
         val plan = RawMaterialPlanner.plan(volMm3, steel, 1000, listOf(6.0, 20.0))!!
-        assertEquals(6.25, plan.options.first { it.wireDiaMm == 6.0 }.firstDieBoreMm, 0.001)
-        assertEquals(20.50, plan.options.first { it.wireDiaMm == 20.0 }.firstDieBoreMm, 0.001)
+        assertEquals(6.03, plan.options.first { it.wireDiaMm == 6.0 }.firstDieBoreMm, 0.0005)
+        assertEquals(20.08, plan.options.first { it.wireDiaMm == 20.0 }.firstDieBoreMm, 0.0005)
     }
 }
