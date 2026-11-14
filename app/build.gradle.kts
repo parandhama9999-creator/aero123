@@ -42,6 +42,22 @@ android {
     }
   }
 
+  // Two apps, one codebase. The engineering screens are shared source; the admin panel lives only
+  // in src/admin, so it is absent from the Play Store APK rather than merely hidden inside it.
+  flavorDimensions += "audience"
+  productFlavors {
+    create("user") {
+      dimension = "audience"
+      // Keeps the existing Play Store listing's applicationId
+    }
+    create("admin") {
+      dimension = "audience"
+      applicationIdSuffix = ".admin"
+      versionNameSuffix = "-admin"
+      // The label itself comes from src/admin/res/values/strings.xml
+    }
+  }
+
   buildTypes {
     release {
       isCrunchPngs = false
@@ -139,9 +155,14 @@ dependencies {
   // implementation(libs.androidx.credentials)
   // implementation(libs.androidx.credentials.play.services)
   // implementation(libs.googleid)
-  implementation(libs.firebase.appcheck.recaptcha)
+  // App Check: Play Integrity attests that a call came from an unmodified build of this app on a
+  // genuine device. reCAPTCHA is the web provider and does nothing on Android.
+  implementation(libs.firebase.appcheck.playintegrity)
   // Debug-only AppCheck provider: never ship it in the release APK
   debugImplementation(libs.firebase.appcheck.debug)
+  implementation(libs.firebase.auth)
+  implementation(libs.firebase.database)
+  implementation(libs.firebase.functions)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)

@@ -1,0 +1,62 @@
+{
+  "rules": {
+    "licenses": {
+      ".read": "auth != null && auth.token.admin === true",
+      ".write": "auth != null && auth.token.admin === true",
+      ".indexOn": ["createdAt", "expiryDate", "boundDeviceId"]
+    },
+
+    "licenseStatus": {
+      ".read": false,
+      ".write": false
+    },
+
+    "aerofast_devices": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid && root.child('licenseStatus').child(auth.uid).child('active').val() === true && root.child('licenseStatus').child(auth.uid).child('expiry').val() > now",
+        ".write": "auth != null && auth.uid === $uid && root.child('licenseStatus').child(auth.uid).child('active').val() === true && root.child('licenseStatus').child(auth.uid).child('expiry').val() > now",
+
+        ".validate": "newData.hasChildren(['fastenerType', 'unitSystem', 'lastUpdated'])",
+
+        "fastenerType":         { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "unitSystem":           { ".validate": "newData.isString() && (newData.val() === 'METRIC' || newData.val() === 'INCH')" },
+        "standard":             { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "sizeIndex":            { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10000" },
+        "sizeDiaMm":            { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000" },
+        "pitchValue":           { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+        "lengthMm":             { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+        "propClass":            { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "materialKey":          { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "threadClass":          { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "coating":              { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "batchQty":             { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+        "currencyIsUsd":        { ".validate": "newData.isBoolean()" },
+        "cncHourRate":          { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "htRatePerKg":          { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "marginPct":            { ".validate": "newData.isNumber() && newData.val() >= -100 && newData.val() <= 1000" },
+        "fontOption":           { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "currentTier":          { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "lastScannedBlueprint": { ".validate": "newData.isString() && newData.val().length <= 512" },
+        "lastUpdated":          { ".validate": "newData.isNumber() && newData.val() > 0" },
+
+        "chatMessages": {
+          "$msg": {
+            ".validate": "newData.hasChildren(['id', 'isUser', 'text', 'timestamp'])",
+            "id":        { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "isUser":    { ".validate": "newData.isBoolean()" },
+            "text":      { ".validate": "newData.isString() && newData.val().length <= 20000" },
+            "timestamp": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "$other":    { ".validate": false }
+          }
+        },
+
+        "$other": { ".validate": false }
+      }
+    },
+
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

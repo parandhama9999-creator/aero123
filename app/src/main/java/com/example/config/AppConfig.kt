@@ -5,9 +5,6 @@ package com.example.config
  * Keep sensitive values out of source code.
  */
 object AppConfig {
-    // Firebase Configuration
-    const val FIREBASE_DB_URL = "https://aerofast-pro-default-rtdb.asia-southeast1.firebasedatabase.app"
-
     // API Configuration
     const val GEMINI_API_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
 
