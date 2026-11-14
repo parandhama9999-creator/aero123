@@ -847,8 +847,9 @@ object GeminiAiService {
                         grossVolumeMm3 = currentResult.grossWeightGrams / currentResult.material.density * 1000.0,
                         densityGPerCm3 = currentResult.material.density,
                         batchQty = currentResult.batchQty,
-                        wireDiameters = RawMaterialPlanner.suggestedDiameters(currentResult.wireDiaMm),
-                        headVolumeMm3 = currentResult.headVolumeMm3
+                        wireDiameters = RawMaterialPlanner.suggestedDiameters(currentResult.blankTargetDia, currentResult.wireDiaMm),
+                        headVolumeMm3 = currentResult.headVolumeMm3,
+                        rollingBlankDiaMm = currentResult.blankTargetDia
                     )?.let { rm ->
                         append("• **Raw Material for ${currentResult.batchQty} pcs**: ${rm.batchWeightKg.round(1)} kg ")
                         append("(${rm.piecesPerTonne} pcs/tonne). Weight is the same at any wire Ø; the length is not:\n")

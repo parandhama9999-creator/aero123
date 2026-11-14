@@ -76,6 +76,13 @@ data class HeadingStation(
 ) {
     val isCutOff: Boolean get() = index == 0
     val heightMm: Double get() = segments.sumOf { it.heightMm }
+
+    /** Diameter of the part where it sits in the die; segments run die end first. */
+    val inDieDiaMm: Double? get() = if (isCutOff) null else segments.firstOrNull()?.maxWidthMm
+
+    /** Bore this station's die is cut to: the stock it holds, plus the transfer clearance. */
+    val dieBoreMm: Double?
+        get() = inDieDiaMm?.let { it + HeadingProgression.stageClearance(it) }
     val maxWidthMm: Double get() = segments.maxOf { it.maxWidthMm }
     val volumeMm3: Double
         get() = segments.sumOf { it.volumeMm3 } - recesses.sumOf { it.volumeMm3 } -
@@ -135,6 +142,25 @@ data class HeadingPlan(
 object HeadingProgression {
     const val SINGLE_BLOW_LD = 2.3
     const val TWO_BLOW_LD = 4.5
+
+    /**
+     * Diametral clearance between the stock and the die bore, so a blank transfers into the next
+     * die instead of jamming on its lip.
+     *
+     * The 0.2 mm floor and 0.6 mm ceiling are the shop rule; the scaling between them is linear in
+     * diameter because no finer breakdown was given. Treat the figure as a starting point for the
+     * die drawing, not a toleranced dimension.
+     */
+    const val MIN_STAGE_CLEARANCE_MM = 0.2
+    const val MAX_STAGE_CLEARANCE_MM = 0.6
+    private const val CLEARANCE_MIN_DIA = 3.0
+    private const val CLEARANCE_MAX_DIA = 24.0
+
+    fun stageClearance(diaMm: Double): Double {
+        val t = ((diaMm - CLEARANCE_MIN_DIA) / (CLEARANCE_MAX_DIA - CLEARANCE_MIN_DIA)).coerceIn(0.0, 1.0)
+        val raw = MIN_STAGE_CLEARANCE_MM + t * (MAX_STAGE_CLEARANCE_MM - MIN_STAGE_CLEARANCE_MM)
+        return kotlin.math.round(raw / 0.05) * 0.05 // die shops cut to 0.05 mm
+    }
     const val THREE_BLOW_LD = 6.5
 
     fun build(

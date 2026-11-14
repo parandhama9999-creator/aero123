@@ -1672,7 +1672,9 @@ fun SelectorDropdown(
 @Composable
 private fun RawMaterialPanel(result: FastenerCalculationResult, batchQty: Int) {
     val customColors = LocalCustomColors.current
-    val suggested = remember(result.wireDiaMm) { RawMaterialPlanner.suggestedDiameters(result.wireDiaMm) }
+    val suggested = remember(result.wireDiaMm, result.blankTargetDia) {
+        RawMaterialPlanner.suggestedDiameters(result.blankTargetDia, result.wireDiaMm)
+    }
     var diaText by rememberSaveable(result.wireDiaMm) {
         mutableStateOf(suggested.joinToString(", ") { trimZeros(it) })
     }
@@ -1680,13 +1682,14 @@ private fun RawMaterialPanel(result: FastenerCalculationResult, batchQty: Int) {
 
     val dias = RawMaterialPlanner.parseDiameters(diaText).ifEmpty { suggested }
     val grossVolMm3 = if (result.material.density > 0) result.grossWeightGrams / result.material.density * 1000.0 else 0.0
-    val plan = remember(grossVolMm3, batchQty, dias, result.headVolumeMm3) {
+    val plan = remember(grossVolMm3, batchQty, dias, result.headVolumeMm3, result.blankTargetDia) {
         RawMaterialPlanner.plan(
             grossVolumeMm3 = grossVolMm3,
             densityGPerCm3 = result.material.density,
             batchQty = batchQty,
             wireDiameters = dias,
-            headVolumeMm3 = result.headVolumeMm3
+            headVolumeMm3 = result.headVolumeMm3,
+            rollingBlankDiaMm = result.blankTargetDia
         )
     } ?: return
 
@@ -1782,18 +1785,24 @@ private fun RawMaterialPanel(result: FastenerCalculationResult, batchQty: Int) {
                     Cell("%,.0f m".format(java.util.Locale.US, o.batchLengthM), 1.2f)
                     Cell(if (coilKg > 0) "${RawMaterialPlanner.coilsNeeded(o.batchWeightKg, coilKg)}" else "-", 0.8f)
                 }
-                if (!o.feasible) {
+                val detail = listOfNotNull(
+                    o.role,
+                    o.blows?.let { "L/D ${"%.2f".format(java.util.Locale.US, o.upsetLd)} → $it blow${if (it > 1) "s" else ""}" },
+                    "die bore Ø${"%.2f".format(java.util.Locale.US, o.firstDieBoreMm)} (+${
+                        "%.2f".format(java.util.Locale.US, o.firstDieBoreMm - o.wireDiaMm)
+                    } clearance)"
+                ).joinToString(" · ")
+                Text(
+                    text = detail,
+                    fontSize = 8.5.sp,
+                    color = customColors.textMuted,
+                    modifier = Modifier.padding(start = 6.dp)
+                )
+                o.cautions.forEach { c ->
                     Text(
-                        text = o.cautions.first(),
+                        text = c,
                         fontSize = 8.5.sp,
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
-                    )
-                } else if (o.blows != null) {
-                    Text(
-                        text = "L/D ${"%.2f".format(java.util.Locale.US, o.upsetLd)} -> ${o.blows} blow${if (o.blows > 1) "s" else ""}",
-                        fontSize = 8.5.sp,
-                        color = customColors.textMuted,
                         modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
                     )
                 }
@@ -1802,7 +1811,8 @@ private fun RawMaterialPanel(result: FastenerCalculationResult, batchQty: Int) {
             Text(
                 text = "The weight of a run does not change with the wire Ø -- the part volume is fixed. " +
                     "Only the length changes, and with it the cut-off and the number of blows. " +
-                    "* marks the shortest workable cut-off. Gross weight carries the 4 % process allowance.",
+                    "* marks the shortest workable cut-off. Gross weight carries the 4 % process allowance. " +
+                    "Stage clearance runs 0.2 mm on small work to 0.6 mm on large, scaled by diameter.",
                 fontSize = 8.5.sp,
                 color = customColors.textMuted,
                 modifier = Modifier.padding(top = 4.dp)

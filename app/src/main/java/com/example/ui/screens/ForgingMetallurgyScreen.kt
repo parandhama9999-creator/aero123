@@ -1179,6 +1179,16 @@ fun ColdHeadingProgressionCanvas(
                         fontFamily = FontFamily.Monospace,
                         color = if (st.isPeakBlow) Color(0xFFF59E0B) else customColors.textMuted
                     )
+                    // The bore this die is cut to, so the blank transfers in instead of jamming on the lip
+                    st.dieBoreMm?.let { bore ->
+                        val stock = st.inDieDiaMm ?: return@let
+                        Text(
+                            text = "     die bore Ø${fmt(bore, 2)} = stock Ø${fmt(stock, 2)} + ${fmt(bore - stock, 2)} stage clearance",
+                            fontSize = 8.5.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = customColors.textMuted
+                        )
+                    }
                 }
                 plan.offHeaderOps.forEach { op ->
                     Text(

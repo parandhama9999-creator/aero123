@@ -1,6 +1,7 @@
 package com.example.data
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.pow
 
@@ -18,6 +19,10 @@ data class FeedstockOption(
     val blows: Int?,
     /** Area reduction from this wire down to the shank, % — null when nothing is extruded. */
     val extrusionReductionPct: Double?,
+    /** What this diameter is for the part: the rolling blank, the shank, or neither. */
+    val role: String?,
+    /** Die bore the first station needs at this diameter: the wire plus the transfer clearance. */
+    val firstDieBoreMm: Double,
     val cautions: List<String>
 ) {
     val feasible: Boolean get() = cautions.isEmpty()
@@ -45,14 +50,24 @@ data class RawMaterialPlan(
  */
 object RawMaterialPlanner {
 
-    /** Cold-heading quality wire is drawn to order, so these are a starting set to edit, not a standard. */
-    fun suggestedDiameters(computedWireDiaMm: Double): List<Double> {
-        val base = (computedWireDiaMm * 2).toInt() / 2.0 // down to the nearest 0.5
-        return listOf(base - 0.5, base, base + 0.5, base + 1.0)
-            .filter { it >= 1.0 }
-            .map { (it * 100).toInt() / 100.0 }
-            .distinct()
+    /**
+     * The usable wire window for a part, from the thread rolling blank up to the shank.
+     *
+     * Those two ends are the real choices on the shop floor: an M6 screw runs either on shank wire
+     * near Ø5.9, or on rolling-blank wire near the pitch diameter at Ø5.35 when the whole shank is
+     * threaded. Anything between works too, so the span is filled in. Wire is drawn to order in
+     * 0.05 mm steps, so the figures are rounded to that.
+     */
+    fun suggestedDiameters(rollingBlankDiaMm: Double, shankWireDiaMm: Double): List<Double> {
+        val lo = minOf(rollingBlankDiaMm, shankWireDiaMm)
+        val hi = maxOf(rollingBlankDiaMm, shankWireDiaMm)
+        if (lo <= 0.0) return emptyList()
+        if (hi - lo < 0.1) return listOf(toStep(lo))
+        return (0..3).map { toStep(lo + (hi - lo) * it / 3.0) }.distinct()
     }
+
+    /** Wire is drawn in 0.05 mm steps. */
+    private fun toStep(v: Double): Double = kotlin.math.round(v / 0.05) * 0.05
 
     fun plan(
         grossVolumeMm3: Double,
@@ -60,7 +75,8 @@ object RawMaterialPlanner {
         batchQty: Int,
         wireDiameters: List<Double>,
         headVolumeMm3: Double = 0.0,
-        shankDiaMm: Double? = null
+        shankDiaMm: Double? = null,
+        rollingBlankDiaMm: Double? = null
     ): RawMaterialPlan? {
         if (grossVolumeMm3 <= 0.0 || densityGPerCm3 <= 0.0 || batchQty <= 0) return null
         val dias = wireDiameters.filter { it > 0.0 }.distinct().sorted()
@@ -88,7 +104,16 @@ object RawMaterialPlanner {
                 ?.takeIf { it > 0.0 && it < dw }
                 ?.let { (1.0 - (it / dw).pow(2.0)) * 100.0 }
 
+            val role = when {
+                rollingBlankDiaMm != null && abs(dw - rollingBlankDiaMm) < 0.06 -> "thread rolling blank"
+                shankDiaMm != null && abs(dw - shankDiaMm) < 0.06 -> "shank Ø"
+                else -> null
+            }
+
             val cautions = buildList {
+                if (rollingBlankDiaMm != null && dw < rollingBlankDiaMm - 0.05) {
+                    add("Ø$dw is under the Ø${fmt(rollingBlankDiaMm, 2)} thread rolling blank: the thread section has to be upset back up, or the thread rolls undersize.")
+                }
                 if (ld != null && ld > HeadingProgression.THREE_BLOW_LD) {
                     add("Head stock L/D ${fmt(ld)} is past the 3-blow limit of ${HeadingProgression.THREE_BLOW_LD}: this diameter is too thin to gather the head.")
                 }
@@ -110,6 +135,8 @@ object RawMaterialPlanner {
                 upsetLd = ld,
                 blows = blows,
                 extrusionReductionPct = reduction,
+                role = role,
+                firstDieBoreMm = dw + HeadingProgression.stageClearance(dw),
                 cautions = cautions
             )
         }

@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.data.HeadingProgression
 import com.example.data.RawMaterialPlanner
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -109,5 +110,81 @@ class RawMaterialPlannerTest {
         assertEquals(null, RawMaterialPlanner.plan(0.0, steel, 100, listOf(6.0)))
         assertEquals(null, RawMaterialPlanner.plan(volMm3, steel, 0, listOf(6.0)))
         assertEquals(null, RawMaterialPlanner.plan(volMm3, steel, 100, emptyList()))
+    }
+}
+
+class WireWindowAndStageClearanceTest {
+
+    private val steel = 7.85
+    private val volMm3 = 1400.0            // about an M6 x 30 screw
+    private val m6RollingBlank = 5.35      // pitch dia of M6 x 1.0 is 5.3505
+    private val m6ShankWire = 5.90
+
+    @Test
+    fun theWireWindowRunsFromRollingBlankToShank() {
+        val w = RawMaterialPlanner.suggestedDiameters(m6RollingBlank, m6ShankWire)
+        assertEquals(4, w.size)
+        assertEquals("the pitch-diameter end", 5.35, w.first(), 0.001)
+        assertEquals("the shank end", 5.90, w.last(), 0.001)
+        assertTrue("wire is drawn in 0.05 steps", w.all { abs(it / 0.05 - Math.round(it / 0.05)) < 1e-6 })
+    }
+
+    @Test
+    fun aDiameterBelowTheRollingBlankStillGivesACutOffButIsFlagged() {
+        // The shop wants to run Ø5.20 on an M6: the length is needed either way, the risk is named.
+        val plan = RawMaterialPlanner.plan(
+            grossVolumeMm3 = volMm3, densityGPerCm3 = steel, batchQty = 50_000,
+            wireDiameters = listOf(5.20, 5.35, 5.90), rollingBlankDiaMm = m6RollingBlank
+        )!!
+        val thin = plan.options.first { it.wireDiaMm == 5.20 }
+        assertEquals(volMm3 / (PI / 4.0 * 5.20 * 5.20), thin.cutOffLengthMm, 0.01)
+        assertTrue("a length must still be given", thin.cutOffLengthMm > 0.0)
+        assertTrue(thin.cautions.any { it.contains("rolling blank") })
+
+        assertTrue("Ø5.35 is the blank itself", plan.options.first { it.wireDiaMm == 5.35 }.feasible)
+        assertEquals("thread rolling blank", plan.options.first { it.wireDiaMm == 5.35 }.role)
+    }
+
+    @Test
+    fun theShortestCutOffIsTheThickestWire() {
+        val plan = RawMaterialPlanner.plan(
+            grossVolumeMm3 = volMm3, densityGPerCm3 = steel, batchQty = 10_000,
+            wireDiameters = listOf(5.35, 5.90), rollingBlankDiaMm = m6RollingBlank
+        )!!
+        val onBlank = plan.options.first { it.wireDiaMm == 5.35 }
+        val onShank = plan.options.first { it.wireDiaMm == 5.90 }
+        assertTrue("blank wire runs longer per piece", onBlank.cutOffLengthMm > onShank.cutOffLengthMm)
+        assertEquals("but the run weighs the same", onBlank.batchWeightKg, onShank.batchWeightKg, 0.001)
+        assertTrue("and needs more metres", onBlank.batchLengthM > onShank.batchLengthM)
+    }
+
+    @Test
+    fun stageClearanceHoldsTheStatedFloorAndCeiling() {
+        assertEquals(0.2, HeadingProgression.stageClearance(3.0), 0.001)
+        assertEquals(0.6, HeadingProgression.stageClearance(24.0), 0.001)
+        // clamped outside the range rather than running off
+        assertEquals(0.2, HeadingProgression.stageClearance(1.0), 0.001)
+        assertEquals(0.6, HeadingProgression.stageClearance(40.0), 0.001)
+    }
+
+    @Test
+    fun stageClearanceGrowsWithDiameterAndLandsOnDieShopSteps() {
+        assertEquals(0.25, HeadingProgression.stageClearance(6.0), 0.001)
+        assertEquals(0.35, HeadingProgression.stageClearance(12.0), 0.001)
+        assertEquals(0.50, HeadingProgression.stageClearance(20.0), 0.001)
+        var last = 0.0
+        for (d in 3..24) {
+            val c = HeadingProgression.stageClearance(d.toDouble())
+            assertTrue("clearance must not fall as diameter rises", c >= last)
+            assertTrue("every value is a 0.05 step", abs(c / 0.05 - Math.round(c / 0.05)) < 1e-6)
+            last = c
+        }
+    }
+
+    @Test
+    fun theFirstDieBoreIsTheWirePlusItsClearance() {
+        val plan = RawMaterialPlanner.plan(volMm3, steel, 1000, listOf(6.0, 20.0))!!
+        assertEquals(6.25, plan.options.first { it.wireDiaMm == 6.0 }.firstDieBoreMm, 0.001)
+        assertEquals(20.50, plan.options.first { it.wireDiaMm == 20.0 }.firstDieBoreMm, 0.001)
     }
 }
