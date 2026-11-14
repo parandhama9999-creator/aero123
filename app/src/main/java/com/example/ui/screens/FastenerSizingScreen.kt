@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -33,6 +34,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -56,6 +59,7 @@ import com.example.data.FastenerCalculationResult
 import com.example.data.FastenerCatalog
 import com.example.data.FastenerType
 import com.example.data.ProductStandard
+import com.example.data.RawMaterialPlanner
 import com.example.data.PropertyClass
 import com.example.data.ClassGroup
 import com.example.data.MaterialGroup
@@ -1245,6 +1249,11 @@ fun FastenerSizingScreen(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Raw material for the run, across the diameters this shop stocks
+                RawMaterialPanel(result = result, batchQty = batchQty)
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // 3 Bottom Stats: Part Wt, Slug L0, Upset L/D
@@ -1651,3 +1660,156 @@ fun SelectorDropdown(
         }
     }
 }
+
+
+/**
+ * Raw material for the whole run.
+ *
+ * The kilograms do not change with the wire diameter -- the part's volume is fixed, and upsetting
+ * moves metal rather than making it. What changes is the length those kilograms arrive as, and the
+ * cut-off each piece is sheared to, which is what the purchase order and the machine setting need.
+ */
+@Composable
+private fun RawMaterialPanel(result: FastenerCalculationResult, batchQty: Int) {
+    val customColors = LocalCustomColors.current
+    val suggested = remember(result.wireDiaMm) { RawMaterialPlanner.suggestedDiameters(result.wireDiaMm) }
+    var diaText by rememberSaveable(result.wireDiaMm) {
+        mutableStateOf(suggested.joinToString(", ") { trimZeros(it) })
+    }
+    var coilKgText by rememberSaveable { mutableStateOf("1000") }
+
+    val dias = RawMaterialPlanner.parseDiameters(diaText).ifEmpty { suggested }
+    val grossVolMm3 = if (result.material.density > 0) result.grossWeightGrams / result.material.density * 1000.0 else 0.0
+    val plan = remember(grossVolMm3, batchQty, dias, result.headVolumeMm3) {
+        RawMaterialPlanner.plan(
+            grossVolumeMm3 = grossVolMm3,
+            densityGPerCm3 = result.material.density,
+            batchQty = batchQty,
+            wireDiameters = dias,
+            headVolumeMm3 = result.headVolumeMm3
+        )
+    } ?: return
+
+    val coilKg = coilKgText.toDoubleOrNull() ?: 0.0
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(6.dp),
+        color = customColors.bgElevated
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Text(
+                text = "RAW MATERIAL FOR %,d PIECES".format(java.util.Locale.US, batchQty),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Black,
+                color = customColors.accentSecondary
+            )
+
+            // Weight is one number for the run, whichever diameter is bought
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                listOf(
+                    "TOTAL WEIGHT" to "%,.1f kg".format(java.util.Locale.US, plan.batchWeightKg),
+                    "PER PIECE" to "%,.2f g".format(java.util.Locale.US, plan.grossWeightPerPieceG),
+                    "PIECES / TONNE" to "%,d".format(java.util.Locale.US, plan.piecesPerTonne)
+                ).forEach { (title, value) ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(title, fontSize = 8.5.sp, fontWeight = FontWeight.Black, color = customColors.textMuted)
+                        Text(
+                            text = value,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (title == "TOTAL WEIGHT") customColors.accentPrimary else customColors.textMain
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OutlinedTextField(
+                    value = diaText,
+                    onValueChange = { diaText = it },
+                    label = { Text("Wire Ø stocked (mm)", fontSize = 9.sp) },
+                    singleLine = true,
+                    textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(2f)
+                )
+                OutlinedTextField(
+                    value = coilKgText,
+                    onValueChange = { coilKgText = it.filter { c -> c.isDigit() }.take(5) },
+                    label = { Text("Coil kg", fontSize = 9.sp) },
+                    singleLine = true,
+                    textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(Modifier.height(6.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                listOf("Ø mm" to 0.9f, "CUT-OFF" to 1.1f, "kg/m" to 0.9f, "LENGTH" to 1.2f, "COILS" to 0.8f).forEach { (h, w) ->
+                    Text(h, fontSize = 8.sp, fontWeight = FontWeight.Black, color = customColors.textMuted, modifier = Modifier.weight(w))
+                }
+            }
+
+            plan.options.forEach { o ->
+                val isBest = o.wireDiaMm == plan.recommended?.wireDiaMm
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val tint = when {
+                        !o.feasible -> customColors.textMuted
+                        isBest -> customColors.accentPrimary
+                        else -> customColors.textMain
+                    }
+                    @Composable fun Cell(t: String, w: Float, bold: Boolean = false) = Text(
+                        text = t, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
+                        fontWeight = if (bold) FontWeight.Black else FontWeight.Normal,
+                        color = tint, modifier = Modifier.weight(w)
+                    )
+                    Cell(trimZeros(o.wireDiaMm) + (if (isBest) " *" else ""), 0.9f, isBest)
+                    Cell("%.1f".format(java.util.Locale.US, o.cutOffLengthMm), 1.1f)
+                    Cell("%.3f".format(java.util.Locale.US, o.kgPerMetre), 0.9f)
+                    Cell("%,.0f m".format(java.util.Locale.US, o.batchLengthM), 1.2f)
+                    Cell(if (coilKg > 0) "${RawMaterialPlanner.coilsNeeded(o.batchWeightKg, coilKg)}" else "-", 0.8f)
+                }
+                if (!o.feasible) {
+                    Text(
+                        text = o.cautions.first(),
+                        fontSize = 8.5.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+                    )
+                } else if (o.blows != null) {
+                    Text(
+                        text = "L/D ${"%.2f".format(java.util.Locale.US, o.upsetLd)} -> ${o.blows} blow${if (o.blows > 1) "s" else ""}",
+                        fontSize = 8.5.sp,
+                        color = customColors.textMuted,
+                        modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = "The weight of a run does not change with the wire Ø -- the part volume is fixed. " +
+                    "Only the length changes, and with it the cut-off and the number of blows. " +
+                    "* marks the shortest workable cut-off. Gross weight carries the 4 % process allowance.",
+                fontSize = 8.5.sp,
+                color = customColors.textMuted,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+    }
+}
+
+private fun trimZeros(v: Double): String =
+    if (v == v.toLong().toDouble()) v.toLong().toString() else "%.2f".format(java.util.Locale.US, v).trimEnd('0').trimEnd('.')

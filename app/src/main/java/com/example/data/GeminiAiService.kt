@@ -842,6 +842,21 @@ object GeminiAiService {
                     append("💰 **Manufacturing Quotation & Cost Breakdown (${currentResult.threadLabel}):**\n")
                     append("• **Batch Quantity**: ${currentResult.batchQty} pcs\n")
                     append("• **Net Weight**: ${currentResult.netWeightGrams.round(2)} g | **Gross Weight**: ${currentResult.grossWeightGrams.round(2)} g\n")
+                    // Raw material for the run: the kilograms are fixed by volume, the metres are not
+                    RawMaterialPlanner.plan(
+                        grossVolumeMm3 = currentResult.grossWeightGrams / currentResult.material.density * 1000.0,
+                        densityGPerCm3 = currentResult.material.density,
+                        batchQty = currentResult.batchQty,
+                        wireDiameters = RawMaterialPlanner.suggestedDiameters(currentResult.wireDiaMm),
+                        headVolumeMm3 = currentResult.headVolumeMm3
+                    )?.let { rm ->
+                        append("• **Raw Material for ${currentResult.batchQty} pcs**: ${rm.batchWeightKg.round(1)} kg ")
+                        append("(${rm.piecesPerTonne} pcs/tonne). Weight is the same at any wire Ø; the length is not:\n")
+                        rm.options.forEach { o ->
+                            append("   - Ø${o.wireDiaMm} mm: cut-off ${o.cutOffLengthMm.round(1)} mm, ${o.kgPerMetre.round(3)} kg/m, ${o.batchLengthM.round(0)} m for the run")
+                            append(if (o.feasible) "\n" else " — NOT WORKABLE: ${o.cautions.first()}\n")
+                        }
+                    }
                     append("• **Raw Material Sourcing Grade**: ${currentResult.rawMaterialSourcingUts}\n")
                     append("• **Proof Load**: ${currentResult.proofLoadKn.round(1)} kN | **Tensile Breaking Load**: ${currentResult.tensileBreakingLoadKn.round(1)} kN\n")
                     append("• **Estimated Unit Price**: **${currentResult.currencySymbol}${currentResult.finalUnitPrice.round(2)} / pc**\n")
