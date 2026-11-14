@@ -95,7 +95,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.AeroFastState
 import com.example.data.ChatMessageData
-import com.example.data.FirebaseStorageManager
+import com.example.data.AppStateStore
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -199,7 +199,7 @@ fun AeroFastApp() {
     // Chat History State
     var savedChatMessages by remember { mutableStateOf<List<ChatMessageData>>(emptyList()) }
 
-    fun triggerFirebaseSync(
+    fun saveAppState(
         scannedBlueprintTag: String? = null,
         chatMsgs: List<ChatMessageData>? = null
     ) {
@@ -227,15 +227,15 @@ fun AeroFastApp() {
             chatMessages = msgs
         )
         scope.launch {
-            FirebaseStorageManager.syncAppData(context, state)
+            AppStateStore.save(context, state)
         }
     }
 
-    // Startup restoration from Firebase Realtime Database with 2-second timeout fallback to local storage
+    // Startup restoration from the phone's own storage
     LaunchedEffect(Unit) {
         // Custom alloys first, so a saved part never falls back to a different material
         com.example.data.CustomMaterialStore.restoreInto(context)
-        val loadedState = FirebaseStorageManager.fetchAppDataOnStartup(context)
+        val loadedState = AppStateStore.load(context)
         if (loadedState != null) {
             try { selectedFastenerType = FastenerType.valueOf(loadedState.fastenerType) } catch (_: Exception) {}
             try { selectedUnitSystem = UnitSystem.valueOf(loadedState.unitSystem) } catch (_: Exception) {}
@@ -321,9 +321,9 @@ fun AeroFastApp() {
         )
     }
 
-    fun reloadStateFromFirebase() {
+    fun reloadAppState() {
         scope.launch {
-            val loadedState = FirebaseStorageManager.fetchAppDataOnStartup(context)
+            val loadedState = AppStateStore.load(context)
             if (loadedState != null) {
                 try { selectedFastenerType = FastenerType.valueOf(loadedState.fastenerType) } catch (_: Exception) {}
                 try { selectedUnitSystem = UnitSystem.valueOf(loadedState.unitSystem) } catch (_: Exception) {}
@@ -421,22 +421,22 @@ fun AeroFastApp() {
                     themeMode = themeMode,
                     onThemeChanged = {
                         themeMode = it
-                        triggerFirebaseSync()
+                        saveAppState()
                     },
                     fontOption = selectedFontOption,
                     onFontChanged = {
                         selectedFontOption = it
-                        triggerFirebaseSync()
+                        saveAppState()
                     },
                     currencyIsUsd = currencyIsUsd,
                     onCurrencyToggled = {
                         currencyIsUsd = it
-                        triggerFirebaseSync()
+                        saveAppState()
                     },
                     currentTier = currentTier,
                     onOpenPricing = { showPricingDialog = true },
                     onOpenSettings = { showSettingsDialog = true },
-                    onRefresh = { reloadStateFromFirebase() },
+                    onRefresh = { reloadAppState() },
                     currentLanguage = currentLanguage
                 )
             }
@@ -465,7 +465,7 @@ fun AeroFastApp() {
                                     appliedExtractedSpec = null
                                     selectedStandard = com.example.data.PokaYokeEngine.defaultStandard(newType, selectedUnitSystem)
                                     selectedThreadClass = SelectionFilter.threadClasses(selectedUnitSystem, newType, selectedStandard).first()
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 selectedUnitSystem = selectedUnitSystem,
                                 onUnitSystemSelected = { newUnit ->
@@ -477,13 +477,13 @@ fun AeroFastApp() {
                                     selectedStandard = com.example.data.PokaYokeEngine.defaultStandard(selectedFastenerType, newUnit)
                                     selectedThreadClass = SelectionFilter.threadClasses(newUnit, selectedFastenerType, selectedStandard).first()
                                     appliedExtractedSpec = null
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 selectedStandard = selectedStandard,
                                 onStandardSelected = {
                                     selectedStandard = it
                                     appliedExtractedSpec = null
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 selectedSizeIndex = selectedSizeIndex,
                                 onSizeIndexSelected = { idx ->
@@ -496,51 +496,51 @@ fun AeroFastApp() {
                                         selectedPitchValue = inc.tpis.first().toDouble()
                                     }
                                     appliedExtractedSpec = null
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 selectedPitchValue = selectedPitchValue,
                                 onPitchSelected = {
                                     selectedPitchValue = it
                                     appliedExtractedSpec = null
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 selectedLength = selectedLength,
                                 onLengthSelected = {
                                     selectedLength = it
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 selectedPropClass = selectedPropClass,
                                 onPropClassSelected = {
                                     selectedPropClass = it
                                     appliedExtractedSpec = null
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 selectedMaterialKey = selectedMaterialKey,
                                 onMaterialSelected = {
                                     selectedMaterialKey = it
                                     appliedExtractedSpec = null
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 selectedThreadClass = selectedThreadClass,
                                 onThreadClassSelected = {
                                     selectedThreadClass = it
                                     appliedExtractedSpec = null
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 selectedCoating = selectedCoating,
                                 onCoatingSelected = {
                                     selectedCoating = it
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 batchQty = batchQty,
                                 onBatchQtyChanged = {
                                     batchQty = it
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 },
                                 appliedExtractedSpec = appliedExtractedSpec,
                                 onClearCustomScan = {
                                     appliedExtractedSpec = null
-                                    triggerFirebaseSync()
+                                    saveAppState()
                                 }
                             )
                         }
@@ -579,7 +579,7 @@ fun AeroFastApp() {
                                     selectedCoating = spec.coating
                                     selectedStandard = com.example.data.PokaYokeEngine.defaultStandard(spec.fastenerType, spec.unitSystem)
                                     currentTab = NavigationTab.SIZING
-                                    triggerFirebaseSync(scannedBlueprintTag = "${spec.fastenerType.label} (${spec.materialKey}, M${spec.nominalDiaMm}mm)")
+                                    saveAppState(scannedBlueprintTag = "${spec.fastenerType.label} (${spec.materialKey}, M${spec.nominalDiaMm}mm)")
                                 }
                             )
                         }
@@ -594,7 +594,7 @@ fun AeroFastApp() {
                                 initialMessages = savedChatMessages,
                                 onChatMessageSent = { updatedMsgs ->
                                     savedChatMessages = updatedMsgs
-                                    triggerFirebaseSync(chatMsgs = updatedMsgs)
+                                    saveAppState(chatMsgs = updatedMsgs)
                                 }
                             )
                         }
