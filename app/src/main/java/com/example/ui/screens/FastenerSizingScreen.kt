@@ -727,6 +727,21 @@ fun FastenerSizingScreen(
                             fontFamily = FontFamily.Monospace,
                             color = customColors.accentSecondary
                         )
+                        if (result.threadClass.contains("MJ", true) || result.threadClass.contains("UNJ", true)) {
+                            // The J root is blunter, so it gives the crest less metal: the blank carries a
+                            // correction, and how much depends on the radius ground on the die.
+                            val dRange = com.example.data.ThreadRollingBlank.controlledRootDeltaRange(result.pitchMm)
+                            Text(
+                                text = "incl. +%.3f mm J-root blank correction (%.3f–%.3f over the R band)".format(
+                                    java.util.Locale.US,
+                                    com.example.data.ThreadRollingBlank.controlledRootDelta(result.pitchMm),
+                                    dRange.start, dRange.endInclusive
+                                ),
+                                fontSize = 8.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = customColors.accentPrimary
+                            )
+                        }
                         Text(
                             text = "${result.threadLabel} • ±${result.blankTolHalf} mm",
                             fontSize = 10.sp,

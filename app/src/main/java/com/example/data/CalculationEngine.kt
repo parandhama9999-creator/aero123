@@ -286,7 +286,10 @@ object CalculationEngine {
                 }
 
                 val d2Target = d2Min + (0.55 * td2)
-                blankDia = d2Target - (0.014 * p) + (material.km * p)
+                // The MJ root is blunter and so shallower: it yields less metal to the crest, and the
+                // blank has to make up the difference. Plain-form blanks are unchanged.
+                blankDia = d2Target - (0.014 * p) + (material.km * p) +
+                    (if (cls.isMj) ThreadRollingBlank.controlledRootDelta(p) else 0.0)
                 blankTolHalf = 0.22 * td2
             }
         } else {
@@ -367,7 +370,9 @@ object CalculationEngine {
                 }
 
                 val d2Target = d2Min + (0.55 * td2)
-                blankDia = d2Target - (0.014 * p) + (material.km * p)
+                // Same correction as MJ: the UNJ controlled root displaces less metal than UNR.
+                blankDia = d2Target - (0.014 * p) + (material.km * p) +
+                    (if (isUnj) ThreadRollingBlank.controlledRootDelta(p) else 0.0)
                 blankTolHalf = 0.22 * td2
             }
         }
