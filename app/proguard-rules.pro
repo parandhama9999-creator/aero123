@@ -39,22 +39,3 @@
     public static int d(...);
     public static int i(...);
 }
-
-# --- Licence system hardening ---
-# Obfuscation raises the cost of reading the licence flow; it does not prevent it, and it is not
-# what the system rests on. Authority lives in the Cloud Functions and the database rules, where a
-# patched client cannot reach it. These rules keep R8 from breaking Firebase, and strip the
-# names an attacker would grep for first.
--keepattributes Signature, InnerClasses, EnclosingMethod, *Annotation*
-
-# Firebase and Play Services reflect over these
--keep class com.google.firebase.** { *; }
--keep class com.google.android.gms.** { *; }
--dontwarn com.google.firebase.**
--dontwarn com.google.android.gms.**
-
-# Callable function payloads are plain maps, so no model classes need keeping. The licence classes
-# themselves carry no secret and are deliberately left fully obfuscated and inlinable.
--assumenosideeffects class android.util.Log {
-    public static int w(...);
-}

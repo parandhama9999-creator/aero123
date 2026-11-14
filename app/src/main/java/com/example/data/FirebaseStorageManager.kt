@@ -2,17 +2,16 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
-import com.google.android.gms.tasks.Task
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.FirebaseDatabase
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeout
+import com.example.config.AppConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 
 data class ChatMessageData(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -82,37 +81,6 @@ data class AeroFastState(
         return obj
     }
 
-    /**
-     * The shape written to Firebase. Types here must match the .validate rules in
-     * database.rules.json exactly — a Long where the rule expects a number is fine, a null is not,
-     * and any extra key is rejected outright by the "$other": false guard.
-     */
-    fun toMap(): Map<String, Any?> = mapOf(
-        "fastenerType" to fastenerType,
-        "unitSystem" to unitSystem,
-        "standard" to standard,
-        "sizeIndex" to sizeIndex,
-        "sizeDiaMm" to sizeDiaMm,
-        "pitchValue" to pitchValue,
-        "lengthMm" to lengthMm,
-        "propClass" to propClass,
-        "materialKey" to materialKey,
-        "threadClass" to threadClass,
-        "coating" to coating,
-        "batchQty" to batchQty,
-        "currencyIsUsd" to currencyIsUsd,
-        "cncHourRate" to cncHourRate,
-        "htRatePerKg" to htRatePerKg,
-        "marginPct" to marginPct,
-        "fontOption" to fontOption,
-        "currentTier" to currentTier,
-        "lastScannedBlueprint" to (lastScannedBlueprint ?: ""),
-        "lastUpdated" to System.currentTimeMillis(),
-        "chatMessages" to chatMessages.map {
-            mapOf("id" to it.id, "isUser" to it.isUser, "text" to it.text, "timestamp" to it.timestamp)
-        }
-    )
-
     companion object {
         fun fromJson(jsonStr: String): AeroFastState? {
             return try {
@@ -167,68 +135,99 @@ object FirebaseStorageManager {
     private const val TAG = "FirebaseStorageManager"
     private const val PREFS_NAME = "aerofast_local_storage"
     private const val KEY_APP_DATA = "aerofast_app_data"
-    private const val NETWORK_TIMEOUT_MS = 2500L
+    private const val KEY_DEVICE_ID = "aerofast_device_id"
 
-    /**
-     * The node for the signed-in licence, or null when the app is not activated.
-     *
-     * The key is the Firebase uid rather than a self-chosen device id, because the security rules
-     * compare it against auth.uid: a client cannot name a node it does not own. Going through the
-     * SDK rather than REST is what attaches the auth and App Check tokens to every request.
-     */
-    private fun deviceRef(): DatabaseReference? {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return null
-        return FirebaseDatabase.getInstance().getReference("aerofast_devices").child(uid)
+    // Random per-install ID so each device syncs to its own record instead of one shared node
+    private fun getDeviceId(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.getString(KEY_DEVICE_ID, null)?.let { return it }
+        val newId = java.util.UUID.randomUUID().toString()
+        prefs.edit().putString(KEY_DEVICE_ID, newId).apply()
+        return newId
     }
+
+    private fun deviceDataUrl(context: Context): URL =
+        URL("${AppConfig.FIREBASE_DB_URL}/aerofast_devices/${getDeviceId(context)}.json")
 
     suspend fun syncAppData(context: Context, state: AeroFastState) {
         val jsonString = state.toJson().toString()
         saveToLocalStorage(context, jsonString)
 
-        val ref = deviceRef() ?: return // not activated: local only
-        try {
-            withTimeout(NETWORK_TIMEOUT_MS) { ref.setValue(state.toMap()).awaitUnit() }
-        } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Sync timed out; local copy is saved.")
-        } catch (e: Exception) {
-            Log.w(TAG, "Sync to Firebase failed: ${e.message}")
+        withContext(Dispatchers.IO) {
+            try {
+                val url = deviceDataUrl(context)
+                val connection = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "PUT"
+                    connectTimeout = 3000
+                    readTimeout = 3000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                }
+
+                OutputStreamWriter(connection.outputStream, "UTF-8").use { writer ->
+                    writer.write(jsonString)
+                    writer.flush()
+                }
+
+                val responseCode = connection.responseCode
+                Log.d(TAG, "Firebase REST sync PUT response code: $responseCode")
+                connection.disconnect()
+            } catch (e: Exception) {
+                Log.e(TAG, "Background sync to Firebase RTDB failed: ${e.message}")
+            }
         }
     }
 
     suspend fun fetchAppDataOnStartup(context: Context): AeroFastState? {
-        val ref = deviceRef()
-        if (ref != null) {
-            val remote = try {
-                withTimeout(NETWORK_TIMEOUT_MS) { ref.get().awaitResult() }
+        val remoteJsonStr = withContext(Dispatchers.IO) {
+            try {
+                val url = deviceDataUrl(context)
+                val connection = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 2000
+                    readTimeout = 2000
+                }
+
+                if (connection.responseCode == 200) {
+                    val reader = BufferedReader(InputStreamReader(connection.inputStream, "UTF-8"))
+                    val sb = StringBuilder()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        sb.append(line)
+                    }
+                    reader.close()
+                    connection.disconnect()
+                    val result = sb.toString().trim()
+                    if (result != "null" && result.isNotBlank()) result else null
+                } else {
+                    connection.disconnect()
+                    null
+                }
             } catch (e: Exception) {
-                Log.w(TAG, "Startup fetch failed or timed out, using local storage: ${e.message}")
+                Log.w(TAG, "Network fetch from Firebase RTDB timed out (2s limit) or failed, falling back to local storage: ${e.message}")
                 null
             }
-            val value = remote?.value
-            if (value != null) {
-                val json = JSONObject(value as? Map<*, *> ?: emptyMap<String, Any?>()).toString()
-                AeroFastState.fromJson(json)?.let {
-                    saveToLocalStorage(context, json)
-                    return it
-                }
+        }
+
+        if (!remoteJsonStr.isNullOrBlank()) {
+            val remoteState = AeroFastState.fromJson(remoteJsonStr)
+            if (remoteState != null) {
+                saveToLocalStorage(context, remoteJsonStr)
+                return remoteState
             }
         }
-        return getFromLocalStorage(context)?.let { AeroFastState.fromJson(it) }
+
+        val localJsonStr = getFromLocalStorage(context)
+        return localJsonStr?.let { AeroFastState.fromJson(it) }
     }
 
     private fun saveToLocalStorage(context: Context, jsonStr: String) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putString(KEY_APP_DATA, jsonStr).apply()
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_APP_DATA, jsonStr).apply()
     }
 
-    private fun getFromLocalStorage(context: Context): String? =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_APP_DATA, null)
+    private fun getFromLocalStorage(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_APP_DATA, null)
+    }
 }
-
-private suspend fun <T> Task<T>.awaitResult(): T = suspendCancellableCoroutine { cont ->
-    addOnSuccessListener { cont.resume(it) }
-    addOnFailureListener { cont.resumeWithException(it) }
-    addOnCanceledListener { cont.cancel() }
-}
-
-private suspend fun Task<Void>.awaitUnit() { awaitResult() }

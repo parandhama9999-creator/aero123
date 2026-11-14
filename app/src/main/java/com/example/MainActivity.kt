@@ -106,9 +106,7 @@ class MainActivity : ComponentActivity() {
             // The app composes behind the intro, so it is ready the moment the intro ends
             var showIntro by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
             Box(modifier = Modifier.fillMaxSize()) {
-                // Supplied per flavour: a licence key in the Play build, an admin sign-in in the
-                // private one. Neither APK contains the other's path.
-                com.example.gate.AppGate { AeroFastApp() }
+                AeroFastApp()
                 if (showIntro) com.example.ui.components.ForgeIntro(onFinished = { showIntro = false })
             }
             androidx.compose.runtime.LaunchedEffect(showIntro) {
