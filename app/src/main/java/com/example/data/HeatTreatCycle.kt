@@ -50,6 +50,10 @@ object HeatTreatCycleEngine {
      */
     fun quenchTemper(material: MaterialInfo, sectionMm: Double): FurnaceCycle? {
         if (PokaYokeEngine.materialFamily(material) != MaterialFamily.CARBON_ALLOY_STEEL) return null
+        // Maraging steel is never quenched and tempered: it air-cools to a soft nickel martensite
+        // and is hardened by ageing. The quench-and-temper stages and their cautions — transfer
+        // without delay, untempered martensite cracks — are simply false for it.
+        if (!SteelCompositions.canSpheroidise(material)) return solutionTreatAndAge(material, sectionMm)
         val ht = material.heatTreatmentSpec
         val aust = ht.austenitizingOrSolutionTempC
         if (aust.isBlank() || aust.contains("N/A", true) || aust.contains("Not applicable", true)) return null
@@ -156,9 +160,155 @@ object HeatTreatCycleEngine {
         return when (family) {
             MaterialFamily.ALUMINUM -> aluminium(material)
             MaterialFamily.COPPER_ALLOY -> copper(material)
-            MaterialFamily.STAINLESS -> solutionAnneal(material, sectionMm)
+            MaterialFamily.STAINLESS -> when (PokaYokeEngine.stainlessType(material)) {
+                // Quenching a martensitic from temperature is its hardening treatment, so the
+                // solution-anneal cycle would harden the wire it is meant to soften.
+                PokaYokeEngine.StainlessType.MARTENSITIC,
+                PokaYokeEngine.StainlessType.FERRITIC -> subCriticalStainlessAnneal(material, sectionMm)
+                else -> solutionAnneal(material, sectionMm)
+            }
+            // Maraging steel heads in the solution-annealed state; there is no spheroidize cycle
+            // because at 0.02 % carbon there is nothing to ball up.
+            MaterialFamily.CARBON_ALLOY_STEEL ->
+                if (!SteelCompositions.canSpheroidise(material)) maragingSolutionAnneal(material, sectionMm) else null
             else -> null
         }
+    }
+
+    /**
+     * The soft anneal for a martensitic or ferritic stainless.
+     *
+     * The temperature in these grades' heat-treatment spec — 970 to 1020 °C with an oil quench and
+     * a temper — is the HARDENING treatment, run after forming. Annealing is the opposite leg:
+     * a martensitic holds below the critical range and cools slowly so carbide precipitates and
+     * coarsens; a ferritic only recrystallises, and is cooled briskly through 540 – 400 °C to miss
+     * 475 °C embrittlement.
+     */
+    private fun subCriticalStainlessAnneal(material: MaterialInfo, sectionMm: Double): FurnaceCycle {
+        val type = PokaYokeEngine.stainlessType(material)
+        val soak = soakHours(sectionMm)
+        val id = (material.key + " " + material.name).uppercase()
+        // 431-type carries 1.5 – 2.5 % nickel, which keeps austenite stable: a full anneal does not
+        // soften it properly, so the sub-critical hold is the published route and the floor is higher.
+        val nickelBearing = id.contains("431")
+        return if (type == PokaYokeEngine.StainlessType.FERRITIC) FurnaceCycle(
+            title = "Ferritic anneal — complete cycle",
+            stages = listOf(
+                AnnealStage("1. Charge & heat", "Ramp to 705 – 790 °C under protective atmosphere", 0.5, 1.5),
+                AnnealStage(
+                    "2. Anneal soak",
+                    "${f(soak)} h = 1 h per 25 mm of ${f(sectionMm)} mm section, minimum 1 h — " +
+                        "recrystallises the cold work; a ferritic does not transformation-harden",
+                    soak, soak
+                ),
+                AnnealStage(
+                    "3. Air cool",
+                    "Cool briskly through 540 – 400 °C: holding or creeping through that band causes " +
+                        "475 °C embrittlement in a 17 % Cr ferritic",
+                    0.5, 1.0
+                )
+            ),
+            basis = "Ferritic stainless anneal for a ${f(sectionMm)} mm section",
+            sources = listOf(
+                "AISI 430 anneal: 705 – 790 °C, air cool; the grade does not harden by quenching",
+                "475 °C embrittlement: 17 % Cr ferritics embrittle on slow cooling or holding at 400 – 540 °C"
+            ),
+            cautions = listOf(
+                "Do not furnace-cool slowly through 540 – 400 °C — that is the 475 °C embrittlement band.",
+                "The spec card's 970 – 1000 °C figure is not for this grade's softening: a ferritic gains " +
+                    "nothing there but grain growth."
+            )
+        ) else FurnaceCycle(
+            title = "Martensitic soft anneal — complete cycle",
+            stages = if (nickelBearing) listOf(
+                AnnealStage("1. Charge & heat", "Ramp to 620 – 660 °C under protective atmosphere", 0.5, 1.5),
+                AnnealStage(
+                    "2. Sub-critical soak",
+                    "${f(soak + 1)} – ${f(soak + 3)} h — the nickel keeps austenite stable, so a 431-type " +
+                        "never anneals fully soft: expect about 230 – 270 HB, not a carbon-steel softness",
+                    soak + 1, soak + 3
+                ),
+                AnnealStage("3. Air cool", "Still air; the sub-critical hold does not re-austenitise", 0.5, 1.0)
+            ) else listOf(
+                AnnealStage("1. Charge & heat", "Ramp to 845 – 885 °C under protective atmosphere", 0.5, 1.5),
+                AnnealStage(
+                    "2. Anneal soak",
+                    "${f(soak)} h = 1 h per 25 mm of ${f(sectionMm)} mm section, minimum 1 h",
+                    soak, soak
+                ),
+                AnnealStage(
+                    "3. Furnace cool ≤ 30 °C/h to 600 °C",
+                    "The slow leg IS the anneal: carbide precipitates and coarsens on the way down. " +
+                        "Air cooling from temperature re-hardens the wire instead",
+                    (865.0 - 600.0) / 30.0, (865.0 - 600.0) / 20.0
+                ),
+                AnnealStage("4. Air cool below 600 °C", "The rate no longer matters", 0.5, 1.5)
+            ),
+            basis = (if (nickelBearing) "Sub-critical anneal for a nickel-bearing martensitic (431-type)"
+            else "Full anneal for a 410/420-type martensitic") + ", ${f(sectionMm)} mm section",
+            sources = listOf(
+                "AISI 410 / 420 full anneal: 830 – 885 °C, furnace cool not over about 30 °C/h to roughly 600 °C, then air — lowest hardness",
+                "Process (sub-critical) anneal: 650 – 760 °C air cool where partial softening is enough",
+                "AISI 431: full annealing is not effective because of the nickel; sub-critical treatment is the published route"
+            ),
+            cautions = listOf(
+                "The 970 – 1020 °C + oil quench on this grade's spec card is the HARDENING treatment, run " +
+                    "after forming. Quenching from temperature is how this grade is made hard, not soft.",
+                "Do not confuse this with an austenitic solution anneal: here the slow cool softens, and a " +
+                    "rapid quench hardens — the exact opposite."
+            )
+        )
+    }
+
+    /**
+     * Maraging steel, both as wire preparation and after forming. It is solution annealed and
+     * AIR cooled — the nickel martensite that forms is soft and headable, about 30 HRC — and all
+     * of its strength comes from ageing at 480 °C after the part is formed.
+     */
+    private fun maragingSolutionAnneal(material: MaterialInfo, sectionMm: Double): FurnaceCycle {
+        val soak = soakHours(sectionMm)
+        return FurnaceCycle(
+            title = "Solution anneal — complete cycle",
+            stages = listOf(
+                AnnealStage("1. Charge & heat", "Ramp to 815 – 830 °C, protective atmosphere or vacuum", 0.5, 1.5),
+                AnnealStage(
+                    "2. Solution soak",
+                    "${f(soak)} h = 1 h per 25 mm of ${f(sectionMm)} mm section, minimum 1 h",
+                    soak, soak
+                ),
+                AnnealStage(
+                    "3. Air cool",
+                    "No quench. The steel air-cools to a soft, tough nickel martensite around 30 HRC — " +
+                        "that IS the headable condition",
+                    0.5, 1.5
+                ),
+                AnnealStage(
+                    "4. Age AFTER forming",
+                    "${material.heatTreatmentSpec.temperingOrAgingTempC.ifBlank { "480 °C, 3 – 6 h" }} — " +
+                        "ageing is where all the strength comes from, and it is done to the finished part",
+                    3.0, 6.0
+                )
+            ),
+            basis = "Maraging solution treatment for a ${f(sectionMm)} mm section; the age is listed because it belongs after forming",
+            sources = listOf(
+                "AMS 6512 / maraging practice: solution anneal about 815 °C for 1 h per 25 mm, air cool; age 480 °C for 3 – 6 h",
+                "Maraging martensite is soft and ductile as cooled — hardening is entirely by precipitation during the age"
+            ),
+            cautions = listOf(
+                "There is no quench and no tempering. The quench-and-temper stage list for the other steels " +
+                    "does not apply to a maraging grade.",
+                "Head and machine in the solution-annealed state; age only the finished part."
+            )
+        )
+    }
+
+    /** The post-forming cycle for maraging steel: the same solution treat, then the age itself. */
+    private fun solutionTreatAndAge(material: MaterialInfo, sectionMm: Double): FurnaceCycle {
+        val base = maragingSolutionAnneal(material, sectionMm)
+        return base.copy(
+            title = "Solution treat & age — complete cycle",
+            basis = "Maraging post-forming treatment for a ${f(sectionMm)} mm section — ageing replaces quench and temper"
+        )
     }
 
     private val SOLUTION_SOURCES = listOf(

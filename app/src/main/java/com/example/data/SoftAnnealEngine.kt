@@ -245,25 +245,81 @@ object SoftAnnealEngine {
             }
 
             AnnealRoute.SOLUTION_ANNEAL -> {
-                notes += "Austenitic grades are solution annealed, not spheroidised — the goal is the opposite: " +
-                    "dissolve carbides and cool fast enough to keep them in solution."
-                SoftAnnealSpec(
-                    route = route,
-                    inHouseAnnealNeeded = true,
-                    suppliedCondition = supplied,
-                    temperatureC = solutionTemp,
-                    soakTime = "Hold until fully solutioned, then cool without delay",
-                    coolingRate = "Rapid — water quench or forced gas; slow cooling sensitises the grain boundaries",
-                    atmosphere = "Bright-anneal (H₂/N₂) or vacuum to avoid scaling",
-                    targetUtsMpa = supplied,
-                    targetHardnessHb = hbText,
-                    targetHardnessHrb = hrbText,
-                    structureTarget = "Carbide-free austenite, uniform grain size",
-                    standardReference = material.heatTreatmentSpec.standardReference,
-                    softeningRatio = softening,
-                    unsourced = unsourced,
-                    notes = notes
-                )
+                val ssType = PokaYokeEngine.stainlessType(material)
+                when (ssType) {
+                    // The spec card's high temperature on these grades is the HARDENING treatment;
+                    // their softening is a sub-critical hold, and the cooling logic is the reverse.
+                    PokaYokeEngine.StainlessType.MARTENSITIC -> {
+                        val is431 = (material.key + " " + material.name).uppercase().contains("431")
+                        notes += "Martensitic stainless: the $solutionTemp on the spec card is the hardening " +
+                            "treatment, run after forming. The anneal holds below the critical range and cools " +
+                            "slowly — quenching from temperature makes this grade HARD, not soft."
+                        if (is431) notes += "A 431-type never anneals fully soft: its nickel keeps austenite " +
+                            "stable, so expect about 230 – 270 HB from the sub-critical treatment."
+                        SoftAnnealSpec(
+                            route = route,
+                            inHouseAnnealNeeded = true,
+                            suppliedCondition = supplied,
+                            temperatureC = if (is431) "620 – 660 °C (sub-critical; full anneal is not effective on a 431-type)"
+                            else "845 – 885 °C (full anneal; hardening at $solutionTemp comes after forming)",
+                            soakTime = "See the full cycle below",
+                            coolingRate = if (is431) "Still air — the sub-critical hold does not re-austenitise"
+                            else "Furnace cool ≤ 30 °C/h to 600 °C, then air — the slow leg is the anneal",
+                            atmosphere = "Protective atmosphere or vacuum to avoid scaling",
+                            targetUtsMpa = supplied,
+                            targetHardnessHb = hbText,
+                            targetHardnessHrb = hrbText,
+                            structureTarget = "Ferrite with coarse spheroidal carbide — the soft, headable structure",
+                            standardReference = material.heatTreatmentSpec.standardReference,
+                            softeningRatio = softening,
+                            unsourced = unsourced,
+                            notes = notes
+                        )
+                    }
+                    PokaYokeEngine.StainlessType.FERRITIC -> {
+                        notes += "Ferritic stainless does not transformation-harden: the anneal only " +
+                            "recrystallises the cold work. Cool briskly through 540 – 400 °C — creeping " +
+                            "through that band causes 475 °C embrittlement in a 17 % Cr ferritic."
+                        SoftAnnealSpec(
+                            route = route,
+                            inHouseAnnealNeeded = true,
+                            suppliedCondition = supplied,
+                            temperatureC = "705 – 790 °C (recrystallisation anneal)",
+                            soakTime = "See the full cycle below",
+                            coolingRate = "Air cool; pass 540 – 400 °C briskly (475 °C embrittlement)",
+                            atmosphere = "Protective atmosphere to keep the surface bright",
+                            targetUtsMpa = supplied,
+                            targetHardnessHb = hbText,
+                            targetHardnessHrb = hrbText,
+                            structureTarget = "Recrystallised ferrite, fine equiaxed grain",
+                            standardReference = material.heatTreatmentSpec.standardReference,
+                            softeningRatio = softening,
+                            unsourced = unsourced,
+                            notes = notes
+                        )
+                    }
+                    else -> {
+                        notes += "Austenitic grades are solution annealed, not spheroidised — the goal is the opposite: " +
+                            "dissolve carbides and cool fast enough to keep them in solution."
+                        SoftAnnealSpec(
+                            route = route,
+                            inHouseAnnealNeeded = true,
+                            suppliedCondition = supplied,
+                            temperatureC = solutionTemp,
+                            soakTime = "Hold until fully solutioned, then cool without delay",
+                            coolingRate = "Rapid — water quench or forced gas; slow cooling sensitises the grain boundaries",
+                            atmosphere = "Bright-anneal (H₂/N₂) or vacuum to avoid scaling",
+                            targetUtsMpa = supplied,
+                            targetHardnessHb = hbText,
+                            targetHardnessHrb = hrbText,
+                            structureTarget = "Carbide-free austenite, uniform grain size",
+                            standardReference = material.heatTreatmentSpec.standardReference,
+                            softeningRatio = softening,
+                            unsourced = unsourced,
+                            notes = notes
+                        )
+                    }
+                }
             }
 
             AnnealRoute.O_TEMPER -> {

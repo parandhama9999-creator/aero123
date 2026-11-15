@@ -46,6 +46,27 @@ object PokaYokeEngine {
         }
     }
 
+    /**
+     * What kind of stainless a grade is, because the softening treatment is different for each.
+     * An austenitic is solution annealed and quenched; quenching a martensitic from temperature is
+     * its HARDENING treatment, and its anneal is a sub-critical hold with a slow cool instead.
+     */
+    enum class StainlessType { AUSTENITIC, DUPLEX, PRECIPITATION_HARDENING, MARTENSITIC, FERRITIC }
+
+    fun stainlessType(m: MaterialInfo): StainlessType? {
+        if (materialFamily(m) != MaterialFamily.STAINLESS) return null
+        val id = (m.key + " " + m.name).uppercase()
+        return when {
+            id.contains("DUPLEX") -> StainlessType.DUPLEX
+            m.key.uppercase().contains("PH") || m.key.uppercase() == "CUSTOM_455" ||
+                m.key.uppercase() == "AM350" || id.contains("PRECIPITATION") -> StainlessType.PRECIPITATION_HARDENING
+            id.contains("FERRITIC") || id.contains("430") -> StainlessType.FERRITIC
+            id.contains("MARTENSITIC") || id.contains("410") || id.contains("420") ||
+                id.contains("431") -> StainlessType.MARTENSITIC
+            else -> StainlessType.AUSTENITIC
+        }
+    }
+
     /** ISO 3506-1 A2/A4 classes cover only austenitic A2 (304-type) and A4 (316-type) stainless. */
     fun isAusteniticA2A4(m: MaterialInfo): Boolean {
         if (materialFamily(m) != MaterialFamily.STAINLESS) return false
