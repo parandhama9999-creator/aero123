@@ -166,6 +166,10 @@ object SoftAnnealEngine {
         val route = when {
             suppliedHard && family == MaterialFamily.CARBON_ALLOY_STEEL -> AnnealRoute.ANNEAL_REQUIRED
             suppliedHard -> AnnealRoute.ANNEAL_REQUIRED
+            // Maraging steel is iron-nickel martensite at about 0.02 % C. There is no cementite to
+            // ball up, so a spheroidize anneal is meaningless: it is solution annealed instead.
+            family == MaterialFamily.CARBON_ALLOY_STEEL && !SteelCompositions.canSpheroidise(material) ->
+                AnnealRoute.SOLUTION_ANNEAL
             family == MaterialFamily.CARBON_ALLOY_STEEL -> AnnealRoute.SPHEROIDIZE
             family == MaterialFamily.STAINLESS -> AnnealRoute.SOLUTION_ANNEAL
             family == MaterialFamily.ALUMINUM || cond.contains("CONDITION O") -> AnnealRoute.O_TEMPER
@@ -204,15 +208,26 @@ object SoftAnnealEngine {
 
         val spec = when (route) {
             AnnealRoute.SPHEROIDIZE -> {
-                notes += "A1 baseline is ${fmt(A1_PLAIN_CARBON_C)} °C for plain carbon steel. Cr, Mo and Si raise A1; " +
-                    "Mn and Ni lower it — confirm A1 for this grade before setting the furnace."
-                unsourced += "Exact A1 for this grade"
+                val comp = SteelCompositions.forMaterial(material)
+                val ac1 = comp?.let { SteelCompositions.ac1(it) }
+                if (ac1 != null) {
+                    notes += "A1 = ${fmt(ac1)} °C for this grade, from its nominal composition by Andrews " +
+                        "(Mn ${comp.manganese}, Ni ${comp.nickel}, Si ${comp.silicon}, Cr ${comp.chromium} %). " +
+                        "Plain carbon sits at ${fmt(A1_PLAIN_CARBON_C)} °C: nickel and manganese pull A1 down, " +
+                        "silicon and chromium push it up. Confirm against the mill certificate — a heat at the far " +
+                        "end of its range moves A1 by a few degrees."
+                } else {
+                    notes += "A1 baseline is ${fmt(A1_PLAIN_CARBON_C)} °C for plain carbon steel; this grade's " +
+                        "composition is not on file. Cr, Mo and Si raise A1; Mn and Ni lower it — confirm A1 " +
+                        "for this grade before setting the furnace."
+                    unsourced += "Exact A1 for this grade"
+                }
+                val a1 = ac1 ?: A1_PLAIN_CARBON_C
                 SoftAnnealSpec(
                     route = route,
                     inHouseAnnealNeeded = true,
                     suppliedCondition = supplied,
-                    temperatureC = "${fmt(A1_PLAIN_CARBON_C - 25)} – ${fmt(A1_PLAIN_CARBON_C - 5)} °C " +
-                        "(just below A1; baseline A1 = ${fmt(A1_PLAIN_CARBON_C)} °C)",
+                    temperatureC = "${fmt(a1 - 25)} – ${fmt(a1 - 5)} °C (just below A1; A1 = ${fmt(a1)} °C)",
                     soakTime = "See the full cycle below — soak is coil-mass driven, not part Ø",
                     coolingRate = "Slow furnace cool through the transformation range, then still air",
                     atmosphere = "Protective N₂ or endothermic gas — prevent decarburisation of the wire surface",
@@ -413,19 +428,15 @@ object AnnealCycleEngine {
         "Bell-furnace practice: a coil stack takes 13 – 25 h to reach 720 °C depending on coil weight, height and position in the stack"
     )
 
-    /** Cr, Mo and high carbon spheroidise more slowly, so they hold longer. */
-    private fun soakHours(material: MaterialInfo): Pair<Double, Double> {
-        val id = (material.key + " " + material.name).uppercase()
-        val alloy = listOf("CRMO", "CR-MO", "4140", "4135", "42CRMO", "SCM", "34CR", "4340", "8740", "EN24", "35NCD")
-            .any { id.contains(it) }
-        val boronOrMedium = listOf("10B", "20MN", "23MN", "30MN", "32CR", "36CR", "41CR", "1035", "1045", "EN8", "EN16")
-            .any { id.contains(it) }
-        return when {
-            alloy -> 8.0 to 10.0          // SCM435 advanced cycle soaks 10 h
-            boronOrMedium -> 6.0 to 8.0   // 1022 Taguchi optimum sits in this band
-            else -> 5.0 to 7.0            // plain low carbon spheroidises fastest
-        }
-    }
+    /**
+     * Cr, Mo and high carbon spheroidise more slowly, so they hold longer.
+     *
+     * This used to match on the grade's name, which quietly dropped 300M, H11/H13, 30KHGSA and
+     * 16KHGSN into the plain-low-carbon bucket because their names carry no "CrMo" spelling.
+     * Carbide-former content decides it now.
+     */
+    private fun soakHours(material: MaterialInfo): Pair<Double, Double> =
+        SteelCompositions.soakHours(material)
 
     /**
      * Heat-up and unload scale with the charge: a bell furnace takes 13 – 25 h to bring a coil stack
@@ -444,9 +455,14 @@ object AnnealCycleEngine {
      */
     fun spheroidize(material: MaterialInfo, chargeTonnes: Double = DEFAULT_CHARGE_TONNES): AnnealCycle? {
         if (PokaYokeEngine.materialFamily(material) != MaterialFamily.CARBON_ALLOY_STEEL) return null
+        // Maraging steel is iron-nickel martensite with almost no carbon: nothing to spheroidise.
+        if (!SteelCompositions.canSpheroidise(material)) return null
 
-        val soakLo = 698.0
-        val soakHi = 718.0
+        // Just below THIS grade's A1. Nickel and manganese depress it, silicon and chromium raise
+        // it, and across these grades that spans more than 140 °C.
+        val ac1 = SteelCompositions.ac1For(material) ?: SteelCompositions.A1_PLAIN_CARBON_C
+        val soakLo = ac1 - 25.0
+        val soakHi = ac1 - 5.0
         val (heatLo, heatHi) = heatUpHours(chargeTonnes)
         val (holdLo, holdHi) = soakHours(material)
 
@@ -513,8 +529,9 @@ object AnnealCycleEngine {
                     "load thermocouple before running production.",
                 "Soak and ramp are set by coil mass, stack height and position in the stack — not by the part " +
                     "diameter. Two coils in one stack do not see the same cycle.",
-                "Set the soak against the A1 of THIS grade. The 698 – 718 °C band is the plain-carbon baseline; " +
-                    "Cr, Mo and Si raise A1, Mn and Ni lower it. Soaking above A1 austenitises and undoes the anneal."
+                "The soak band is set 25 to 5 °C under this grade's own A1, worked out from its nominal " +
+                    "composition. A mill certificate at the far end of the range shifts A1 by a few degrees, so " +
+                    "check it: soaking above A1 austenitises and undoes the anneal."
             )
         )
     }

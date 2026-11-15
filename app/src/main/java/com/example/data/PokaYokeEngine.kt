@@ -32,10 +32,16 @@ object PokaYokeEngine {
             k.startsWith("BRASS") || k.contains("BRONZE") || k.startsWith("CUNI") || k == "CUBE2" ||
                 n.contains("BRASS") || n.contains("BRONZE") || n.contains("COPPER") || n.contains("CUSN") ||
                 n.contains("CUSI") || n.contains("CUNI") -> MaterialFamily.COPPER_ALLOY
-            listOf("INCONEL", "WASPALOY", "RENE", "MP35N", "MP159", "HASTELLOY", "MONEL", "NIMONIC", "A286", "10KH11N23T3MR", "INVAR")
+            // A453 Grade 660 is an A286-type iron-nickel-chromium alloy; Incoloy is a nickel-iron alloy.
+            // Both were falling through to carbon steel and being offered a spheroidize anneal.
+            listOf("INCONEL", "INCOLOY", "WASPALOY", "RENE", "MP35N", "MP159", "HASTELLOY", "MONEL", "NIMONIC",
+                "A286", "A453", "10KH11N23T3MR", "INVAR")
                 .any { k.contains(it) } -> MaterialFamily.NICKEL_SUPERALLOY
-            k.startsWith("SS") || k.contains("PH") || k.contains("X13") || k == "NITRONIC60" || k == "CUSTOM_455" ||
-                k == "AM350" || k == "14KH17N2" || k == "12KH18N10T" || n.contains("STAINLESS") -> MaterialFamily.STAINLESS
+            // Duplex grades name neither "SS" nor "stainless", so they were classed as carbon steel
+            // and offered a 700 °C hold — squarely in the sigma-phase embrittlement range.
+            k.startsWith("SS") || k.contains("DUPLEX") || k.contains("PH") || k.contains("X13") ||
+                k == "NITRONIC60" || k == "CUSTOM_455" || k == "AM350" || k == "14KH17N2" ||
+                k == "12KH18N10T" || n.contains("STAINLESS") || n.contains("DUPLEX") -> MaterialFamily.STAINLESS
             else -> MaterialFamily.CARBON_ALLOY_STEEL
         }
     }

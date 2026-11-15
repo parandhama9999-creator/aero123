@@ -47,7 +47,9 @@ class AnnealCycleTest {
     @Test fun theControlledCoolIsInTheCycle() {
         val c = AnnealCycleEngine.spheroidize(mat("10B21"))!!
         val slow = c.stages.first { it.detail.contains("20 °C/h") }
-        assertEquals((698.0 - 550.0) / 20.0, slow.hoursLow, 1e-9)
+        // The soak band follows this grade's own A1, so derive the leg rather than pin a number
+        val soakLo = SteelCompositions.ac1For(mat("10B21"))!! - 25.0
+        assertEquals((soakLo - 550.0) / 20.0, slow.hoursLow, 1e-9)
         assertTrue(c.stages.any { it.detail.contains("80 °C/h") })
     }
 
