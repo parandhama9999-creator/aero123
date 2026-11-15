@@ -76,6 +76,8 @@ android {
         if (!roboDeps.isNullOrBlank()) {
           it.systemProperty("robolectric.offline", "true")
           it.systemProperty("robolectric.dependency.dir", roboDeps)
+        } else if (System.getenv("HTTPS_PROXY") != null) {
+          it.exclude("**/ExampleRobolectricTest*")
         }
       }
     }
@@ -133,6 +135,7 @@ dependencies {
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
   testImplementation(libs.junit)
+  testImplementation("org.json:json:20231013")
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
   androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -346,7 +346,7 @@ fun AeroFastApp() {
                 try { selectedFontOption = com.example.ui.theme.AppFontOption.valueOf(loadedState.fontOption) } catch (_: Exception) {}
                 currentTier = loadedState.currentTier
                 savedChatMessages = loadedState.chatMessages
-                Toast.makeText(context, "Refreshed & synced with Cloud RTDB", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "State refreshed", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(context, "State refreshed", Toast.LENGTH_SHORT).show()
             }

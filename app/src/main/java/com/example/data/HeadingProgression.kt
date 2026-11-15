@@ -617,6 +617,7 @@ object HeadingProgression {
     /** Large-end diameter D of a frustum of height h with small end d holding volume v. */
     private fun coneLargeEnd(v: Double, d: Double, h: Double): Double {
         val c = 12.0 * v / (PI * h)
-        return (-d + sqrt(d * d - 4.0 * (d * d - c))) / 2.0
+        val disc = (4.0 * c - 3.0 * d * d).coerceAtLeast(0.0)
+        return (-d + sqrt(disc)) / 2.0
     }
 }

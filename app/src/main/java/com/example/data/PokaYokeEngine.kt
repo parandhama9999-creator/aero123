@@ -60,9 +60,8 @@ object PokaYokeEngine {
             id.contains("DUPLEX") -> StainlessType.DUPLEX
             m.key.uppercase().contains("PH") || m.key.uppercase() == "CUSTOM_455" ||
                 m.key.uppercase() == "AM350" || id.contains("PRECIPITATION") -> StainlessType.PRECIPITATION_HARDENING
-            id.contains("FERRITIC") || id.contains("430") -> StainlessType.FERRITIC
-            id.contains("MARTENSITIC") || id.contains("410") || id.contains("420") ||
-                id.contains("431") -> StainlessType.MARTENSITIC
+            id.contains("FERRITIC") || Regex("\\b430\\b").containsMatchIn(id) -> StainlessType.FERRITIC
+            id.contains("MARTENSITIC") || Regex("\\b4(10|20|31|40C)\\b").containsMatchIn(id) -> StainlessType.MARTENSITIC
             else -> StainlessType.AUSTENITIC
         }
     }

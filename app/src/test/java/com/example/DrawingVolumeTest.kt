@@ -4,12 +4,9 @@ import com.example.data.*
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 import kotlin.math.PI
 
 /** One finished shape per fastener type: volume, breakdown, die progression and the scanned-drawing volume. */
-@RunWith(RobolectricTestRunner::class)
 class DrawingVolumeTest {
     private val cat = FastenerCatalog.MATERIALS
 

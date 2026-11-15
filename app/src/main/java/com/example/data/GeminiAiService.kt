@@ -101,14 +101,14 @@ object GeminiAiService {
         .build()
 
     // Rate limiting: max 1 request per 500ms
-    private var lastApiCallTime = 0L
+    @Volatile private var lastApiCallTime = 0L
     private val API_CALL_MIN_INTERVAL = 500L
 
-    private fun checkRateLimit() {
+    private suspend fun checkRateLimit() {
         val now = System.currentTimeMillis()
         val timeSinceLastCall = now - lastApiCallTime
         if (timeSinceLastCall < API_CALL_MIN_INTERVAL) {
-            Thread.sleep(API_CALL_MIN_INTERVAL - timeSinceLastCall)
+            kotlinx.coroutines.delay(API_CALL_MIN_INTERVAL - timeSinceLastCall)
         }
         lastApiCallTime = System.currentTimeMillis()
     }
@@ -353,7 +353,7 @@ object GeminiAiService {
                     .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
                     .build()
                 val response = httpClient.newCall(request).execute()
-                val responseBody = response.body?.string() ?: ""
+                val responseBody = response.use { it.body?.string() ?: "" }
                 if (!response.isSuccessful) {
                     lastError = describeHttpError(model, response.code, responseBody)
                     continue
@@ -844,7 +844,7 @@ object GeminiAiService {
                     append("• **Net Weight**: ${currentResult.netWeightGrams.round(2)} g | **Gross Weight**: ${currentResult.grossWeightGrams.round(2)} g\n")
                     // Raw material for the run: the kilograms are fixed by volume, the metres are not
                     RawMaterialPlanner.plan(
-                        grossVolumeMm3 = currentResult.grossWeightGrams / currentResult.material.density * 1000.0,
+                        grossVolumeMm3 = if (currentResult.material.density > 0) currentResult.grossWeightGrams / currentResult.material.density * 1000.0 else 0.0,
                         densityGPerCm3 = currentResult.material.density,
                         batchQty = currentResult.batchQty,
                         wireDiameters = RawMaterialPlanner.suggestedDiameters(currentResult.blankTargetDia, currentResult.wireDiaMm),
@@ -1015,7 +1015,7 @@ object GeminiAiService {
                     .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
                     .build()
                 val response = httpClient.newCall(request).execute()
-                val responseBody = response.body?.string() ?: ""
+                val responseBody = response.use { it.body?.string() ?: "" }
                 if (!response.isSuccessful) {
                     lastError = describeHttpError(model, response.code, responseBody)
                     continue

@@ -171,6 +171,7 @@ object CalculationEngine {
         /** Geometry read from a scanned drawing; a null field means the standard / table value is used. */
         drawing: DrawingGeometry = DrawingGeometry()
     ): FastenerCalculationResult {
+        val safeBatchQty = batchQty.coerceAtLeast(1)
         val d: Double = customNominalDiaMm ?: if (unitSystem == UnitSystem.METRIC) {
             val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
             metric.d
@@ -428,12 +429,12 @@ object CalculationEngine {
         val headArea = when {
             forgedHeadDia != null -> (PI / 4.0) * forgedHeadDia.pow(2.0)
             part.style == HeadStyle.HEADLESS || part.style == HeadStyle.WASHER -> hexHeadArea
-            else -> part.headSegments.maxOf { it.crossSectionMm2 }
+            else -> part.headSegments.maxOfOrNull { it.crossSectionMm2 } ?: hexHeadArea
         }
 
         val netWeightG = max(0.05, (totalVolMm3 / 1000.0) * material.density)
         val grossWeightG = netWeightG * 1.04
-        val wireAreaMm2 = (PI / 4.0) * dw.pow(2.0)
+        val wireAreaMm2 = ((PI / 4.0) * dw.pow(2.0)).coerceAtLeast(1e-6)
         val headingPlan = HeadingProgression.build(
             type = fastenerType, wireDiaMm = dw, part = part, lengthMm = lengthMm, threadLabel = threadLabel,
             forging = boltForging, forgedHeadDiaMm = forgedHeadDia, trimmedHexS = trimS, trimmedHexK = trimK,
@@ -603,12 +604,12 @@ object CalculationEngine {
         val currencySymbol = if (currencyIsUsd) "$" else "₹"
         val matRate = material.rateInr * fx
         val cRawMat = ((grossWeightG / 1000.0) * matRate) - (((grossWeightG - netWeightG) / 1000.0) * matRate * 0.35)
-        val cForging = (((if (material.isAero) 1800.0 else 850.0) * fx) / (material.headingSpm * 60.0 * 0.75)) + (((if (material.isAero) 24000.0 else 6500.0) * fx) / batchQty)
+        val cForging = (((if (material.isAero) 1800.0 else 850.0) * fx) / (material.headingSpm * 60.0 * 0.75)) + (((if (material.isAero) 24000.0 else 6500.0) * fx) / safeBatchQty)
         val cCnc = if (fastenerType.isUnthreaded) 0.0
             else ((totalCncSec / 3600.0) * (cncHourRateInr * fx)) + ((if (material.isAero) 3.8 else 0.75) * fx)
         val cRoll = if (fastenerType.isUnthreaded) 0.0 else (if (material.isAero) 4.8 else 0.65) * fx
         val cHt = ((netWeightG / 1000.0) * (htRatePerKgInr * fx)) + ((if (material.isAero) 5.5 else 0.45) * fx)
-        val cNdt = (if (material.isAero) (3.8 + (7500.0 / batchQty)) else 0.30) * fx
+        val cNdt = (if (material.isAero) (3.8 + (7500.0 / safeBatchQty)) else 0.30) * fx
 
         val unitSubtotal = cRawMat + cForging + cCnc + cRoll + cHt + cNdt
         val finalUnit = unitSubtotal * (1.0 + marginPct / 100.0)
