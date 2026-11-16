@@ -121,10 +121,10 @@ object SteelCompositions {
         forMaterial(m)?.let { it.carbon >= MIN_CARBON_TO_SPHEROIDISE } ?: true
 
     /**
-     * Soak length, from alloy content rather than from the grade's name. Chromium and molybdenum
-     * carbides are slower to break up and ball, so those grades hold longer; carbon adds to it.
+     * Soak length from alloy content alone (grade factor). Chromium and molybdenum carbides are
+     * slower to break up and ball, so those grades hold longer; carbon adds to it.
      */
-    fun soakHours(m: MaterialInfo): Pair<Double, Double> {
+    fun soakHoursForGrade(m: MaterialInfo): Pair<Double, Double> {
         val c = forMaterial(m) ?: return 6.0 to 8.0
         val carbideFormers = c.chromium + c.molybdenum
         return when {
@@ -132,5 +132,30 @@ object SteelCompositions {
             carbideFormers >= 0.30 || c.carbon >= 0.18 -> 6.0 to 8.0   // the 1022 Taguchi optimum sits here
             else -> 5.0 to 7.0
         }
+    }
+
+    /**
+     * Soak length from wire diameter alone (thermal penetration). Thicker wire needs longer for
+     * the core to reach temperature and for carbon to diffuse to the carbide particles.
+     */
+    fun soakHoursForDiameter(wireDiaMm: Double): Pair<Double, Double> = when {
+        wireDiaMm <= 4.0  -> 6.0 to 7.0
+        wireDiaMm <= 8.0  -> 7.0 to 9.0
+        wireDiaMm <= 16.0 -> 9.0 to 12.0
+        wireDiaMm <= 25.0 -> 12.0 to 16.0
+        else              -> 16.0 to 20.0
+    }
+
+    /**
+     * Combined soak: the longer of grade factor and diameter factor at each end. Small Cr-Mo wire
+     * is grade-limited (carbide dissolution); large plain-carbon wire is diameter-limited (thermal
+     * penetration). When [wireDiaMm] is zero or negative the diameter factor is skipped and the
+     * result is grade-only, for backward compatibility.
+     */
+    fun soakHours(m: MaterialInfo, wireDiaMm: Double = 0.0): Pair<Double, Double> {
+        val (gLo, gHi) = soakHoursForGrade(m)
+        if (wireDiaMm <= 0.0) return gLo to gHi
+        val (dLo, dHi) = soakHoursForDiameter(wireDiaMm)
+        return maxOf(gLo, dLo) to maxOf(gHi, dHi)
     }
 }

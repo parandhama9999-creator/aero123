@@ -491,8 +491,8 @@ object AnnealCycleEngine {
      * 16KHGSN into the plain-low-carbon bucket because their names carry no "CrMo" spelling.
      * Carbide-former content decides it now.
      */
-    private fun soakHours(material: MaterialInfo): Pair<Double, Double> =
-        SteelCompositions.soakHours(material)
+    private fun soakHours(material: MaterialInfo, wireDiaMm: Double = 0.0): Pair<Double, Double> =
+        SteelCompositions.soakHours(material, wireDiaMm)
 
     /**
      * Heat-up and unload scale with the charge: a bell furnace takes 13 – 25 h to bring a coil stack
@@ -509,7 +509,7 @@ object AnnealCycleEngine {
      * The cycle for a grade that is spheroidize annealed. Returns null for any other route: a
      * solution anneal or a non-ferrous O temper is a different cycle and is not modelled here.
      */
-    fun spheroidize(material: MaterialInfo, chargeTonnes: Double = DEFAULT_CHARGE_TONNES): AnnealCycle? {
+    fun spheroidize(material: MaterialInfo, chargeTonnes: Double = DEFAULT_CHARGE_TONNES, wireDiaMm: Double = 0.0): AnnealCycle? {
         if (PokaYokeEngine.materialFamily(material) != MaterialFamily.CARBON_ALLOY_STEEL) return null
         // Maraging steel is iron-nickel martensite with almost no carbon: nothing to spheroidise.
         if (!SteelCompositions.canSpheroidise(material)) return null
@@ -520,7 +520,7 @@ object AnnealCycleEngine {
         val soakLo = ac1 - 25.0
         val soakHi = ac1 - 5.0
         val (heatLo, heatHi) = heatUpHours(chargeTonnes)
-        val (holdLo, holdHi) = soakHours(material)
+        val (holdLo, holdHi) = soakHours(material, wireDiaMm)
 
         // Controlled cool: 20 °C/h through the transformation range, then 80 °C/h to 400 °C.
         val slowCoolTo = 550.0
@@ -552,7 +552,8 @@ object AnnealCycleEngine {
             AnnealStage(
                 "4. Soak (spheroidise)",
                 "Hold just below A1 to break the lamellar pearlite into globular cementite. This is the " +
-                    "stage that decides the structure: too short leaves lamellae, too long coarsens the carbide",
+                    "stage that decides the structure: too short leaves lamellae, too long coarsens the carbide" +
+                    if (wireDiaMm > 0.0) ". Soak adjusted for Ø ${String.format(java.util.Locale.US, "%.1f", wireDiaMm)} mm wire" else "",
                 holdLo, holdHi
             ),
             AnnealStage(

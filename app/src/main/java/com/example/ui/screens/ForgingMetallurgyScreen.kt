@@ -1839,7 +1839,7 @@ private fun SoftAnnealCard(result: FastenerCalculationResult) {
             }
 
             // Complete furnace cycle: every stage with its hours, so the anneal can be booked and costed
-            val cycle = com.example.data.AnnealCycleEngine.spheroidize(result.material, chargeTonnes)
+            val cycle = com.example.data.AnnealCycleEngine.spheroidize(result.material, chargeTonnes, result.wireDiaMm)
             if (cycle != null && spec.inHouseAnnealNeeded) {
                 CycleStagesBlock(
                     title = "COMPLETE CYCLE \u2014 DOOR TO DOOR",
