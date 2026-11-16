@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "com.aistudio.aerofast.trmst"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
@@ -41,6 +41,7 @@ android {
 
   buildTypes {
     release {
+      isDebuggable = false
       isCrunchPngs = false
       // R8: shrink, optimize and obfuscate the Play build so decompiled code is hard to read or reuse
       isMinifyEnabled = true
@@ -113,8 +114,9 @@ dependencies {
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.core.ktx)
   implementation("androidx.security:security-crypto:1.1.0")
-  // On-device text recognition for the scanner when no Gemini key is set (model bundled, works offline)
-  implementation("com.google.mlkit:text-recognition:16.0.1")
+  // On-device text recognition: unbundled variant downloads the model via Play Services on first use,
+  // saving ~16 MB in the APK. Requires Google Play Services on the device.
+  implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
   // implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)

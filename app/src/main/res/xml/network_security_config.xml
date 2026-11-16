@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config>
+        <domain includeSubdomains="true">generativelanguage.googleapis.com</domain>
+        <pin-set expiration="2027-06-01">
+            <!-- GTS Root R1 (Google Trust Services) -->
+            <pin digest="SHA-256">hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=</pin>
+            <!-- GTS Root R2 -->
+            <pin digest="SHA-256">Vfd95BwDeSQo+NUYxVEEb0lDsPgN3RqC8kBOyOWGyMY=</pin>
+            <!-- GlobalSign Root CA (backup) -->
+            <pin digest="SHA-256">iie1VXtL7HzAMF+/PVPR9xzT80kQxdZeJ+zduCB3uj0=</pin>
+        </pin-set>
+    </domain-config>
+</network-security-config>

@@ -13,4 +13,7 @@
     <exclude domain="sharedpref" path="aerofast_scan_cache.xml" />
     <!-- Older builds kept the API key here before the encrypted store got its own filename -->
     <exclude domain="sharedpref" path="aerofast_prefs.xml" />
+    <exclude domain="database" path="." />
+    <exclude domain="external" path="." />
+    <exclude domain="root" path="cache/" />
 </full-backup-content>
