@@ -21,6 +21,8 @@ data class AeroFastState(
     var sizeDiaMm: Double = 0.0,
     var pitchValue: Double = 1.50,
     var lengthMm: Double = 60.0,
+    /** Customer thread length b in mm; 0 = use the drawing or the standard rule. */
+    var customThreadLengthMm: Double = 0.0,
     var propClass: String = PropertyClass.CLASS_10_9.name,
     var materialKey: String = "10B21",
     var threadClass: String = "6g",
@@ -45,6 +47,7 @@ data class AeroFastState(
         obj.put("sizeDiaMm", sizeDiaMm)
         obj.put("pitchValue", pitchValue)
         obj.put("lengthMm", lengthMm)
+        obj.put("customThreadLengthMm", customThreadLengthMm)
         obj.put("propClass", propClass)
         obj.put("materialKey", materialKey)
         obj.put("threadClass", threadClass)
@@ -100,6 +103,7 @@ data class AeroFastState(
                     sizeDiaMm = obj.optDouble("sizeDiaMm", 0.0),
                     pitchValue = obj.optDouble("pitchValue", 1.50),
                     lengthMm = obj.optDouble("lengthMm", 60.0),
+                    customThreadLengthMm = obj.optDouble("customThreadLengthMm", 0.0).takeIf { it.isFinite() } ?: 0.0,
                     propClass = obj.optString("propClass", PropertyClass.CLASS_10_9.name),
                     materialKey = obj.optString("materialKey", "10B21"),
                     threadClass = obj.optString("threadClass", "6g"),

@@ -94,6 +94,8 @@ fun FastenerSizingScreen(
     onPitchSelected: (Double) -> Unit,
     selectedLength: Double,
     onLengthSelected: (Double) -> Unit,
+    customThreadLengthMm: Double? = null,
+    onCustomThreadLengthChanged: (Double?) -> Unit = {},
     selectedPropClass: PropertyClass,
     onPropClassSelected: (PropertyClass) -> Unit,
     selectedMaterialKey: String,
@@ -404,6 +406,71 @@ fun FastenerSizingScreen(
                         )
                     }
 
+                    // Customer length and thread length: any value, not only the catalogue series
+                    val threadedShank = SelectionFilter.hasThread(selectedFastenerType) && !selectedFastenerType.isNut && !selectedFastenerType.isStud &&
+                        !com.aistudio.aerofast.trmst.data.PokaYokeEngine.isFullyThreaded(selectedFastenerType)
+                    val inchUnit = selectedUnitSystem == UnitSystem.INCH
+                    val unitTag = if (inchUnit) "in" else "mm"
+                    fun toMm(v: Double) = if (inchUnit) v * 25.4 else v
+                    fun fromMm(v: Double) = if (inchUnit) v / 25.4 else v
+                    fun fmtInput(mm: Double) = if (inchUnit) "%.3f".format(java.util.Locale.US, mm / 25.4).trimEnd('0').trimEnd('.')
+                        else "%.2f".format(java.util.Locale.US, mm).trimEnd('0').trimEnd('.')
+                    var lenText by remember(selectedUnitSystem) { mutableStateOf("") }
+                    LaunchedEffect(selectedLength) {
+                        val typed = lenText.toDoubleOrNull()
+                        if (typed == null || kotlin.math.abs(toMm(typed) - selectedLength) > 1e-6) lenText = ""
+                    }
+                    var bText by remember(selectedUnitSystem) { mutableStateOf(customThreadLengthMm?.let { fmtInput(it) } ?: "") }
+                    LaunchedEffect(customThreadLengthMm) {
+                        val typed = bText.toDoubleOrNull()
+                        if (customThreadLengthMm == null) {
+                            if (typed != null && typed > 0.0) bText = ""
+                        } else if (typed == null || kotlin.math.abs(toMm(typed) - customThreadLengthMm) > 1e-6) {
+                            bText = fmtInput(customThreadLengthMm)
+                        }
+                    }
+                    val autoB = appliedExtractedSpec?.threadLengthMm
+                        ?: com.aistudio.aerofast.trmst.data.PokaYokeEngine.threadLengthB(selectedFastenerType, selectedUnitSystem, result.nominalDiaMm, selectedLength)
+                    val inputStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                    val inputColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = customColors.accentPrimary, unfocusedBorderColor = customColors.border)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = lenText,
+                            onValueChange = { t ->
+                                lenText = t
+                                val v = t.toDoubleOrNull()
+                                if (v != null && v > 0.0 && toMm(v) <= 2000.0) onLengthSelected(toMm(v))
+                            },
+                            singleLine = true,
+                            label = { Text("Custom L ($unitTag)", fontSize = 10.sp) },
+                            placeholder = { Text(fmtInput(selectedLength), fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            textStyle = inputStyle, colors = inputColors,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (threadedShank) {
+                            OutlinedTextField(
+                                value = bText,
+                                onValueChange = { t ->
+                                    bText = t
+                                    val v = t.toDoubleOrNull()
+                                    onCustomThreadLengthChanged(if (v != null && v > 0.0) toMm(v) else null)
+                                },
+                                singleLine = true,
+                                label = { Text("Thread length b ($unitTag)", fontSize = 10.sp) },
+                                placeholder = { Text("auto ${fmtInput(autoB)}", fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                textStyle = inputStyle, colors = inputColors,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (threadedShank) "Type the customer's L and b from the drawing. Leave b blank to use the ${if (appliedExtractedSpec?.threadLengthMm != null) "scanned drawing" else "standard rule"}."
+                            else "Type any length from the customer drawing, or pick one from the list.",
+                        fontSize = 10.sp, color = customColors.textMuted
+                    )
+
                     // Row 4: Property Class & Material Alloy
                     val allMaterials = FastenerCatalog.MATERIALS.values.toList()
                     val graded = SelectionFilter.usesPropertyClass(selectedFastenerType)
@@ -575,9 +642,9 @@ fun FastenerSizingScreen(
             val dMm = result.nominalDiaMm
             val pitchMm = if (selectedUnitSystem == UnitSystem.METRIC) selectedPitchValue else 25.4 / selectedPitchValue
             val scan = appliedExtractedSpec
-            val bMin = scan?.threadLengthMm ?: com.aistudio.aerofast.trmst.data.PokaYokeEngine.threadLengthB(selectedFastenerType, selectedUnitSystem, dMm, selectedLength)
+            val bMin = customThreadLengthMm ?: scan?.threadLengthMm ?: com.aistudio.aerofast.trmst.data.PokaYokeEngine.threadLengthB(selectedFastenerType, selectedUnitSystem, dMm, selectedLength)
             val fullThread = com.aistudio.aerofast.trmst.data.PokaYokeEngine.isFullyThreaded(selectedFastenerType) || bMin + 2 * pitchMm >= selectedLength
-            val bRule = if (scan?.threadLengthMm != null) "drawing (AI scan)" else when {
+            val bRule = if (customThreadLengthMm != null) "customer value (typed)" else if (scan?.threadLengthMm != null) "drawing (AI scan)" else when {
                 selectedUnitSystem == UnitSystem.INCH && (selectedFastenerType == FastenerType.SHCS || selectedFastenerType == FastenerType.HEXALOBULAR_SCREW) -> "2D + 1/2\" (ASME B18.3)"
                 selectedUnitSystem == UnitSystem.INCH -> if (selectedLength <= 152.4) "2D + 1/4\" (L ≤ 6\")" else "2D + 1/2\" (L > 6\")"
                 selectedFastenerType == FastenerType.SHCS || selectedFastenerType == FastenerType.HEXALOBULAR_SCREW -> "2d + 12 (ISO 4762)"
@@ -678,6 +745,13 @@ fun FastenerSizingScreen(
                                 Text(text = "The die progression (HT & Forging) uses the b-min value: ${n(result.headingPlan?.slugLengthMm ?: 0.0)} mm.", fontSize = 10.sp, color = customColors.textMuted)
                             }
                         }
+                    }
+                    if (com.aistudio.aerofast.trmst.data.JointGrip.appliesTo(selectedFastenerType)) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        AerospaceGripCheck(
+                            unit = selectedUnitSystem, lengthMm = selectedLength,
+                            threadLengthMm = minOf(bMin, selectedLength), runoutMm = 2 * pitchMm, onSetLength = onLengthSelected
+                        )
                     }
                 }
             }
@@ -1838,3 +1912,53 @@ private fun RawMaterialPanel(result: FastenerCalculationResult, batchQty: Int) {
 
 private fun trimZeros(v: Double): String =
     if (v == v.toLong().toDouble()) v.toLong().toString() else "%.2f".format(java.util.Locale.US, v).trimEnd('0').trimEnd('.')
+
+/** Joint stack vs plain shank for aerospace bolts: no thread may sit in shear or bearing. */
+@Composable
+private fun AerospaceGripCheck(unit: UnitSystem, lengthMm: Double, threadLengthMm: Double, runoutMm: Double, onSetLength: (Double) -> Unit) {
+    val customColors = LocalCustomColors.current
+    val inch = unit == UnitSystem.INCH
+    fun len(mm: Double) = if (inch) "%.3f\" (%.1f mm)".format(java.util.Locale.US, mm / 25.4, mm) else "%.1f mm".format(java.util.Locale.US, mm)
+    var stackText by androidx.compose.runtime.saveable.rememberSaveable(unit) { mutableStateOf("") }
+    Text(text = "AEROSPACE GRIP CHECK", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
+    Text(text = "Enter the joint stack (total material thickness the bolt clamps, without washers).", fontSize = 10.sp, color = customColors.textMuted)
+    OutlinedTextField(
+        value = stackText,
+        onValueChange = { stackText = it },
+        singleLine = true,
+        label = { Text("Joint stack (${if (inch) "in" else "mm"})", fontSize = 10.sp) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain),
+        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = customColors.accentPrimary, unfocusedBorderColor = customColors.border),
+        modifier = Modifier.fillMaxWidth()
+    )
+    val stackMm = stackText.toDoubleOrNull()?.takeIf { it > 0.0 }?.let { if (inch) it * 25.4 else it } ?: return
+    val g = com.aistudio.aerofast.trmst.data.JointGrip.check(unit, lengthMm, threadLengthMm, runoutMm, stackMm)
+    val rowStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+    Text(text = "Grip min (L − b − 2P): ${len(g.gripMinMm)}", style = rowStyle)
+    Text(text = "Joint stack         : ${len(g.stackMm)}", style = rowStyle)
+    val (color, msg) = when (g.status) {
+        com.aistudio.aerofast.trmst.data.GripStatus.THREADS_IN_JOINT -> AlertRed to
+            "✗ Threads enter the joint by ${len(g.threadsInJointMm)}. Threads must not carry shear or bearing; use a longer grip."
+        com.aistudio.aerofast.trmst.data.GripStatus.EXCESS_GRIP -> customColors.accentSecondary to
+            "⚠ Grip is ${len(g.excessMm)} longer than the stack. The nut would run onto the shank before clamping; add washers under the nut or use a shorter grip."
+        com.aistudio.aerofast.trmst.data.GripStatus.OK -> SuccessGreen to
+            "✓ The plain shank carries the whole stack. Take up the ${len(g.excessMm)} extra grip with a washer under the nut."
+    }
+    Text(text = msg, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
+    if (g.status != com.aistudio.aerofast.trmst.data.GripStatus.OK) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = customColors.accentPrimary.copy(alpha = 0.12f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, customColors.accentPrimary.copy(alpha = 0.6f)),
+            modifier = Modifier.clickable { onSetLength(g.suggestedLengthMm) }
+        ) {
+            Text(
+                text = "Set L = ${len(g.suggestedLengthMm)} (grip in ${if (inch) "1/16\"" else "1 mm"} steps + b + 2P)",
+                fontSize = 11.sp, fontWeight = FontWeight.Bold, color = customColors.accentPrimary,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        }
+    }
+    Text(text = "Uses the shortest plain shank (b max = b + 2P runout), so no incomplete thread sits in the joint. Check enough thread protrudes for washer + nut + at least one full thread beyond the nut (AC 43.13-1B).", fontSize = 10.sp, color = customColors.textMuted)
+}

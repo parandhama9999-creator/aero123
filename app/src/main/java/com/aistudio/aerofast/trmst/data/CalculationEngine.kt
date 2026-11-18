@@ -727,7 +727,8 @@ object CalculationEngine {
                 pitchDiaMaxMm = d2Max,
                 isCustomScan = customNominalDiaMm != null,
                 stressAreaMm2 = stressAreaAsMm2,
-                headDims = dims
+                headDims = dims,
+                threadLengthMm = drawing.threadLengthMm
             )
         )
     }

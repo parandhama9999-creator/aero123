@@ -171,6 +171,8 @@ fun AeroFastApp() {
     var selectedSizeIndex by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)) } // M10
     var selectedPitchValue by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(1.50) }
     var selectedLength by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(60.0) }
+    // Customer thread length b in mm; 0 = take it from the applied drawing or the standard rule
+    var customThreadLengthMm by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
     var selectedPropClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PropertyClass.CLASS_10_9) }
     var selectedMaterialKey by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("10B21") }
     var selectedThreadClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("6g") }
@@ -212,6 +214,7 @@ fun AeroFastApp() {
             sizeDiaMm = FastenerCatalog.diameterMm(selectedUnitSystem, selectedSizeIndex),
             pitchValue = selectedPitchValue,
             lengthMm = selectedLength,
+            customThreadLengthMm = customThreadLengthMm,
             propClass = selectedPropClass.name,
             materialKey = selectedMaterialKey,
             threadClass = selectedThreadClass,
@@ -246,6 +249,7 @@ fun AeroFastApp() {
             }
             selectedPitchValue = loadedState.pitchValue
             selectedLength = loadedState.lengthMm
+            customThreadLengthMm = loadedState.customThreadLengthMm
             try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
             selectedMaterialKey = loadedState.materialKey
             selectedThreadClass = loadedState.threadClass
@@ -277,6 +281,7 @@ fun AeroFastApp() {
         selectedSizeIndex,
         selectedPitchValue,
         selectedLength,
+        customThreadLengthMm,
         selectedThreadClass,
         activeMaterial,
         selectedCoating,
@@ -313,6 +318,9 @@ fun AeroFastApp() {
             propertyClass = selectedPropClass,
             // Dimensions from the applied drawing; a flange bolt can also take its head sizes typed on the Sizing card
             drawing = (appliedExtractedSpec?.geometry() ?: com.aistudio.aerofast.trmst.data.DrawingGeometry()).let { g ->
+                // A thread length typed on the Sizing card overrides the scanned one
+                if (customThreadLengthMm > 0.0) g.copy(threadLengthMm = customThreadLengthMm) else g
+            }.let { g ->
                 if (!flange) g else g.copy(
                     acrossFlatsMm = g.acrossFlatsMm ?: mf.sFor(sizingD), headHeightMm = g.headHeightMm ?: mf.kFor(sizingD),
                     flangeDiaMm = g.flangeDiaMm ?: mf.dcFor(sizingD), flangeThicknessMm = g.flangeThicknessMm ?: mf.cFor(sizingD)
@@ -334,6 +342,7 @@ fun AeroFastApp() {
             }
                 selectedPitchValue = loadedState.pitchValue
                 selectedLength = loadedState.lengthMm
+                customThreadLengthMm = loadedState.customThreadLengthMm
                 try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
                 selectedMaterialKey = loadedState.materialKey
                 selectedThreadClass = loadedState.threadClass
@@ -463,6 +472,7 @@ fun AeroFastApp() {
                                 onFastenerTypeSelected = { newType ->
                                     selectedFastenerType = newType
                                     appliedExtractedSpec = null
+                                    customThreadLengthMm = 0.0
                                     selectedStandard = com.aistudio.aerofast.trmst.data.PokaYokeEngine.defaultStandard(newType, selectedUnitSystem)
                                     selectedThreadClass = SelectionFilter.threadClasses(selectedUnitSystem, newType, selectedStandard).first()
                                     saveAppState()
@@ -473,6 +483,7 @@ fun AeroFastApp() {
                                     selectedSizeIndex = FastenerCatalog.defaultSizeIndex(newUnit)
                                     selectedPitchValue = if (newUnit == UnitSystem.METRIC) 1.50 else 16.0
                                     selectedLength = if (newUnit == UnitSystem.METRIC) 60.0 else 50.8
+                                    customThreadLengthMm = 0.0
                                     // Metric ↔ inch also changes the governing standard (ISO/DIN ↔ ASME/ASTM)
                                     selectedStandard = com.aistudio.aerofast.trmst.data.PokaYokeEngine.defaultStandard(selectedFastenerType, newUnit)
                                     selectedThreadClass = SelectionFilter.threadClasses(newUnit, selectedFastenerType, selectedStandard).first()
@@ -488,6 +499,7 @@ fun AeroFastApp() {
                                 selectedSizeIndex = selectedSizeIndex,
                                 onSizeIndexSelected = { idx ->
                                     selectedSizeIndex = idx
+                                    customThreadLengthMm = 0.0
                                     if (selectedUnitSystem == UnitSystem.METRIC) {
                                         val m = FastenerCatalog.METRIC_SIZES.getOrElse(idx) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
                                         selectedPitchValue = m.pitches.first()
@@ -507,6 +519,11 @@ fun AeroFastApp() {
                                 selectedLength = selectedLength,
                                 onLengthSelected = {
                                     selectedLength = it
+                                    saveAppState()
+                                },
+                                customThreadLengthMm = customThreadLengthMm.takeIf { it > 0.0 },
+                                onCustomThreadLengthChanged = {
+                                    customThreadLengthMm = it ?: 0.0
                                     saveAppState()
                                 },
                                 selectedPropClass = selectedPropClass,
@@ -569,6 +586,8 @@ fun AeroFastApp() {
                                         tpis.minByOrNull { kotlin.math.abs(it - tpi) }?.toDouble() ?: tpi
                                     } else spec.pitchValue
                                     selectedLength = spec.lengthMm
+                                    // The drawing's own thread length takes over from any typed value
+                                    customThreadLengthMm = 0.0
                                     selectedPropClass = spec.propertyClass
                                     selectedMaterialKey = spec.materialKey
                                     // Keep a scanned thread class only if it is valid for this unit and internal/external thread

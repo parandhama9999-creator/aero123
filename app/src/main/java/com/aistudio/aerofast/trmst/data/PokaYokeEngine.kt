@@ -449,7 +449,9 @@ object PokaYokeEngine {
         pitchDiaMaxMm: Double,
         isCustomScan: Boolean,
         stressAreaMm2: Double = 0.0,
-        headDims: HeadDimensions? = null
+        headDims: HeadDimensions? = null,
+        /** Thread length b from the customer drawing or typed by the user; null = standard rule. */
+        threadLengthMm: Double? = null
     ): List<PokaYokeIssue> {
         val issues = mutableListOf<PokaYokeIssue>()
         fun critical(t: String, det: String, fix: String) = issues.add(PokaYokeIssue(PokaYokeSeverity.CRITICAL, t, det, fix))
@@ -673,8 +675,15 @@ object PokaYokeEngine {
         } else if (!isWasher && headDims != null && !headDims.isTable) {
             warn("Head/nut size estimated", "M$d is outside the ISO/ASME dimension tables, so head and nut dimensions are proportional estimates.", "Take head dimensions from the drawing before releasing weights, tooling or G-code.")
         }
+        val threadedShank = !isNut && !isWasher && !type.isUnthreaded && !type.isStud
+        if (threadedShank && threadLengthMm != null && lengthMm > 0 && threadLengthMm > lengthMm) {
+            warn("Thread length longer than the part", "Thread length b = ${"%.1f".format(java.util.Locale.US, threadLengthMm)} mm is more than L = ${"%.1f".format(java.util.Locale.US, lengthMm)} mm.", "Check b and L against the customer drawing; the part is calculated as fully threaded.")
+        }
+        if (threadedShank && threadLengthMm == null && isAerospaceType(type) && !isFullyThreaded(type)) {
+            warn("Aerospace thread length not from the drawing", "Thread length b uses the commercial ISO/ASME rule. NAS, AN, MS and OEM bolts take a fixed thread length per diameter from their standard sheet, or the customer's value.", "Type the thread length b from the customer drawing or the NAS/AN sheet on the Sizing card.")
+        }
         if (!isNut && !isWasher && type == FastenerType.HEX_BOLT) {
-            val b = threadLengthB(type, unit, d, lengthMm)
+            val b = threadLengthMm ?: threadLengthB(type, unit, d, lengthMm)
             if (lengthMm < b + d) {
                 val std = if (unit == UnitSystem.METRIC) "ISO 4014" else "ASME B18.2.1"
                 val full = if (unit == UnitSystem.METRIC) "ISO 4017 (fully threaded)" else "a fully threaded hex tap bolt"
