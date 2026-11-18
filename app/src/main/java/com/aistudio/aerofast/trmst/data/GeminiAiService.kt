@@ -165,6 +165,9 @@ object GeminiAiService {
         return "w${bitmap.width}_h${bitmap.height}_crc${crc.value}"
     }
 
+    /** The encrypted store, for other modules that keep secrets (AI provider keys). */
+    internal fun encryptedPrefs(context: Context, name: String): EncryptedSharedPreferences = getEncryptedPrefs(context, name)
+
     private fun getEncryptedPrefs(context: Context, name: String): EncryptedSharedPreferences {
         val masterKey = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
         return EncryptedSharedPreferences.create(context, name, masterKey, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM) as EncryptedSharedPreferences
@@ -326,15 +329,29 @@ object GeminiAiService {
         }
 
         val apiKey = getEffectiveApiKey(context)
-        if (!hasLiveApiKey(context)) {
+        val provider = AiSettings.load(context)
+        if (!AiSettings.isConfigured(context)) {
             // Without a key nothing reads the drawing: never show invented values as "detected"
             return@withContext Result.failure(IllegalStateException(
-                "No Gemini API key: the drawing was NOT read. Tap the Key button, add your Gemini API key, then analyze again. " +
+                "No AI provider set up: the drawing was NOT read. Tap the Key button, add a Gemini key (or a vision-capable provider), then analyze again. " +
                     "(The sample drawings above work without a key.)"))
         }
 
         val base64Image = bitmapToBase64(imageBitmap)
         val extractionPrompt = buildExtractionPrompt()
+
+        if (provider.provider != AiProvider.GEMINI) {
+            // Another provider reads the drawing only if its model takes images; its own error is passed on otherwise
+            return@withContext OpenAiCompatClient.chat(provider, extractionPrompt, base64Image, maxTokens = 8192, temperature = 0.1).mapCatching { raw ->
+                var text = raw.removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+                val a = text.indexOf('{'); val b = text.lastIndexOf('}')
+                if (a == -1 || b <= a) throw IllegalStateException("${provider.provider.label} (${provider.model}) did not return drawing data. Choose a vision model or use Gemini.")
+                text = text.substring(a, b + 1)
+                val spec = parseSpecFromJson(JSONObject(text), "${provider.provider.label}: ${provider.model}")
+                cacheExtraction(context, fingerprint, text)
+                spec
+            }
+        }
 
         fun buildJsonBody(): JSONObject {
             return JSONObject().apply {
@@ -665,7 +682,9 @@ object GeminiAiService {
 
     /** One text-only request through the model chain; null when no model answered. JSON mode returns the raw JSON text. */
     internal suspend fun generateText(context: Context, prompt: String, json: Boolean, maxTokens: Int = 1024): String? = withContext(Dispatchers.IO) {
-        if (!hasLiveApiKey(context)) return@withContext null
+        if (!AiSettings.isConfigured(context)) return@withContext null
+        val cfg = AiSettings.load(context)
+        if (cfg.provider != AiProvider.GEMINI) return@withContext OpenAiCompatClient.chat(cfg, prompt, null, maxTokens, 0.1).getOrNull()
         val apiKey = getEffectiveApiKey(context)
         val body = JSONObject().apply {
             put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
@@ -984,7 +1003,8 @@ object GeminiAiService {
         val trimmedPrompt = prompt.trim()
 
         val apiKey = getEffectiveApiKey(context)
-        val hasLiveKey = hasLiveApiKey(context)
+        val aiConfig = AiSettings.load(context)
+        val hasLiveKey = AiSettings.isConfigured(context)
 
         // Fast response for simple greetings only
         val qLower = trimmedPrompt.lowercase()
@@ -1084,6 +1104,15 @@ object GeminiAiService {
             } else {
                 append("\nUser Query: \"$trimmedPrompt\"\n")
             }
+        }
+
+        if (aiConfig.provider != AiProvider.GEMINI) {
+            val answer = OpenAiCompatClient.chat(aiConfig, promptText, imageBitmap?.let { bitmapToBase64(it) })
+            answer.getOrNull()?.let { return@withContext it.trim() }
+            val why = answer.exceptionOrNull()?.message ?: "no response"
+            val offlineNote = "\n\n_⚠️ Offline answer — ${aiConfig.provider.label} unavailable ($why)._"
+            return@withContext (tryAnswerLocally(trimmedPrompt, currentResult, extractedSpec)?.let { it + offlineNote }
+                ?: "⚠️ ${aiConfig.provider.label} did not answer: $why")
         }
 
         val jsonBody = JSONObject().apply {

@@ -38,7 +38,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.aistudio.aerofast.trmst.data.GeminiAiService
+import com.aistudio.aerofast.trmst.data.AiConfig
+import com.aistudio.aerofast.trmst.data.AiProvider
+import com.aistudio.aerofast.trmst.data.AiSettings
+import com.aistudio.aerofast.trmst.data.OpenAiCompatClient
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import kotlinx.coroutines.launch
 import com.aistudio.aerofast.trmst.ui.theme.AlertRed
 import com.aistudio.aerofast.trmst.ui.theme.LocalCustomColors
 import com.aistudio.aerofast.trmst.util.AppLanguage
@@ -51,18 +58,24 @@ fun SettingsDialog(
     onLanguageChanged: (AppLanguage) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var selectedLang by remember { mutableStateOf(AppLocalization.getSelectedLanguage(context)) }
     val customColors = LocalCustomColors.current
-    // Read through the service so the key comes from the encrypted store (and the legacy plaintext
-    // file is migrated once). Reading the plaintext file directly never saw an encrypted key.
-    val savedUserKey = remember { GeminiAiService.getEffectiveApiKey(context) }
-    var currentKey by remember { mutableStateOf(savedUserKey) }
-    var statusText by remember {
-        mutableStateOf(
-            if (GeminiAiService.hasLiveApiKey(context)) "✅ Live Gemini API Key Configured"
-            else "⚡ Default Permanent AI Engine Active (Zero Configuration Needed)"
-        )
+    // Keys come from the encrypted store; one key is kept per provider so switching does not lose them
+    var provider by remember { mutableStateOf(AiSettings.load(context).provider) }
+    var baseUrl by remember { mutableStateOf("") }
+    var model by remember { mutableStateOf("") }
+    var currentKey by remember { mutableStateOf("") }
+    var models by remember { mutableStateOf<List<com.aistudio.aerofast.trmst.data.AiModelInfo>>(emptyList()) }
+    var loadingModels by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(provider) {
+        val c = AiSettings.loadFor(context, provider)
+        baseUrl = c.baseUrl; model = c.model; currentKey = c.apiKey; models = emptyList()
     }
+    fun honestStatus(): String = if (AiSettings.isConfigured(context)) "✅ AI active: ${AiSettings.describe(context)}"
+        else "No AI provider set up. All engineering calculations work offline; AI chat, drawing reading and Jarvis's free questions need a key."
+    var statusText by remember { mutableStateOf(honestStatus()) }
+    val fieldColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = customColors.accentPrimary, unfocusedBorderColor = customColors.border)
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -71,52 +84,91 @@ fun SettingsDialog(
             border = androidx.compose.foundation.BorderStroke(1.dp, customColors.border),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
+            Column(modifier = Modifier.padding(18.dp).verticalScroll(rememberScrollState())) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Key,
-                            contentDescription = "Key",
-                            tint = customColors.accentSecondary,
-                            modifier = Modifier.padding(end = 6.dp)
-                        )
-                        Text(
-                            text = "GEMINI API KEY SETTINGS",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Black,
-                            color = customColors.textMain
-                        )
+                        Icon(Icons.Default.Key, contentDescription = "Key", tint = customColors.accentSecondary, modifier = Modifier.padding(end = 6.dp))
+                        Text(text = "AI PROVIDER & KEYS", fontSize = 13.sp, fontWeight = FontWeight.Black, color = customColors.textMain)
                     }
-
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = customColors.textMuted)
                     }
                 }
 
-                Text(
-                    text = "AeroFast Pro uses Gemini AI (Gemini 3.5 / 3.8 Flash) for multimodal drawing OCR scanning and AI metallurgy assistance. Intelligent zero-quota deterministic engineering engines run automatically.",
-                    fontSize = 11.sp,
-                    color = customColors.textMuted,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                    AiProvider.values().forEach { p ->
+                        val sel = p == provider
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (sel) customColors.accentPrimary else customColors.bgElevated,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, if (sel) customColors.accentPrimary else customColors.border),
+                            modifier = Modifier.clickable { provider = p }
+                        ) {
+                            Text(p.label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (sel) Color.White else customColors.textMain,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
+                        }
+                    }
+                }
+                Text(text = provider.note, fontSize = 11.sp, color = customColors.textMuted, modifier = Modifier.padding(vertical = 6.dp))
+
+                if (provider != AiProvider.GEMINI) {
+                    OutlinedTextField(
+                        value = baseUrl, onValueChange = { baseUrl = it }, singleLine = true,
+                        label = { Text("Base address", fontSize = 10.sp) }, colors = fieldColors, modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = model, onValueChange = { model = it }, singleLine = true,
+                            label = { Text("Model", fontSize = 10.sp) }, colors = fieldColors, modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = {
+                                loadingModels = true
+                                scope.launch {
+                                    OpenAiCompatClient.listModels(AiConfig(provider, baseUrl, model, currentKey))
+                                        .onSuccess { models = it; statusText = "${it.size} models from ${provider.label}" + if (it.any { m -> m.free }) " (${it.count { m -> m.free }} free, listed first)" else "" }
+                                        .onFailure { statusText = "Could not load the model list: ${it.message}" }
+                                    loadingModels = false
+                                }
+                            },
+                            enabled = !loadingModels,
+                            colors = ButtonDefaults.buttonColors(containerColor = customColors.accentSecondary),
+                            shape = RoundedCornerShape(8.dp)
+                        ) { Text(if (loadingModels) "…" else "Load models", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    }
+                    if (models.isNotEmpty()) {
+                        Column(modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState())) {
+                            models.take(200).forEach { m ->
+                                Text(
+                                    text = (if (m.free) "FREE  " else "") + m.id,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (m.id == model) FontWeight.Black else FontWeight.Normal,
+                                    color = if (m.free) customColors.accentPrimary else customColors.textMain,
+                                    modifier = Modifier.fillMaxWidth().clickable { model = m.id }.padding(vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = currentKey,
                     onValueChange = { currentKey = it },
-                    placeholder = { Text("Paste custom Gemini API key or leave default", fontSize = 11.sp, color = customColors.textMuted) },
+                    label = { Text(if (provider == AiProvider.GEMINI) "Gemini API key" else "${provider.label} API key${if (provider == AiProvider.CUSTOM) " (if the gateway needs one)" else ""}", fontSize = 10.sp) },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = customColors.accentPrimary,
-                        unfocusedBorderColor = customColors.border
-                    ),
+                    colors = fieldColors,
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Text(
+                    text = "Your questions, and drawings sent to the scanner, go to the provider you choose. Keys are stored encrypted on this phone only.",
+                    fontSize = 10.sp, color = customColors.textMuted, modifier = Modifier.padding(top = 6.dp)
+                )
                 Text(
                     text = statusText,
                     fontSize = 10.sp,
@@ -131,26 +183,30 @@ fun SettingsDialog(
                 ) {
                     Button(
                         onClick = {
-                            GeminiAiService.saveUserApiKey(context, currentKey)
-                            statusText = if (currentKey.isNotBlank()) "✅ Custom API Key Saved!" else "⚡ Default AI Key Active"
+                            val cfg = AiConfig(provider, if (provider == AiProvider.GEMINI) provider.defaultBaseUrl else baseUrl, model, currentKey)
+                            val problem = if (provider == AiProvider.GEMINI) null else OpenAiCompatClient.baseUrlProblem(baseUrl)
+                            statusText = if (problem != null) problem else {
+                                AiSettings.save(context, cfg)
+                                honestStatus()
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = customColors.accentPrimary),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Save API Key", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Save & use", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Button(
                         onClick = {
-                            GeminiAiService.saveUserApiKey(context, "")
                             currentKey = ""
-                            statusText = "Reverted to permanent default AI engine."
+                            AiSettings.save(context, AiConfig(provider, if (provider == AiProvider.GEMINI) provider.defaultBaseUrl else baseUrl, model, ""))
+                            statusText = "${provider.label} key removed. " + honestStatus()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AlertRed),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Reset", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Remove key", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 

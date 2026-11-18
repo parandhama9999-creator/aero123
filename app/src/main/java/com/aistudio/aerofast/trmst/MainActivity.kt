@@ -421,7 +421,7 @@ fun AeroFastApp() {
                 val local = com.aistudio.aerofast.trmst.data.JarvisParser.parse(spoken, selectedUnitSystem)
                 // Gemini reads what the offline parser cannot: number words, other scripts, free phrasing
                 val nonLatin = spoken.any { it.isLetter() && it.code > 0x24F }
-                val ai = if (com.aistudio.aerofast.trmst.data.GeminiAiService.hasLiveApiKey(context) && (local.isEmpty || nonLatin))
+                val ai = if (com.aistudio.aerofast.trmst.data.AiSettings.isConfigured(context) && (local.isEmpty || nonLatin))
                     com.aistudio.aerofast.trmst.data.GeminiAiService.jarvisInterpret(context, spoken) else null
                 val intent = ai?.orElse(local) ?: local
                 if (intent.isEmpty) {

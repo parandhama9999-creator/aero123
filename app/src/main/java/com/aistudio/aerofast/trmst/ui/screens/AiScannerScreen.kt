@@ -165,7 +165,7 @@ fun AiScannerScreen(
         isAnalyzing = true
         extractionError = null
         ocrValues = null
-        if (!GeminiAiService.hasLiveApiKey(context)) {
+        if (!com.aistudio.aerofast.trmst.data.AiSettings.isConfigured(context)) {
             // No AI key: read the numbers on the phone and let the user say what each one is
             CoroutineScope(Dispatchers.Main).launch {
                 runCatching { com.aistudio.aerofast.trmst.util.OcrDimensionReader.read(bitmap) }
@@ -186,6 +186,13 @@ fun AiScannerScreen(
                 onScanned(spec)
             }.onFailure { err ->
                 extractionError = err.message ?: "AI Extraction failed"
+                // A text-only provider cannot read the image: offer the on-phone reading so the user can still assign the values
+                if (com.aistudio.aerofast.trmst.data.AiSettings.load(context).provider != com.aistudio.aerofast.trmst.data.AiProvider.GEMINI) {
+                    runCatching { com.aistudio.aerofast.trmst.util.OcrDimensionReader.read(bitmap) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let {
+                        ocrValues = it
+                        extractionError = (err.message ?: "AI reading failed") + " — the numbers below were read on the phone instead; assign what each one is."
+                    }
+                }
             }
         }
     }
@@ -290,7 +297,7 @@ fun AiScannerScreen(
                         Icon(
                             Icons.Default.Key,
                             contentDescription = "API Key",
-                            tint = if (GeminiAiService.hasLiveApiKey(context)) SuccessGreen else AlertRed,
+                            tint = if (com.aistudio.aerofast.trmst.data.AiSettings.isConfigured(context)) SuccessGreen else AlertRed,
                             modifier = Modifier.size(18.dp)
                         )
                     }
