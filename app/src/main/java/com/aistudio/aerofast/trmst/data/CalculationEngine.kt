@@ -433,15 +433,15 @@ object CalculationEngine {
         }
 
         val netWeightG = max(0.05, (totalVolMm3 / 1000.0) * material.density)
-        val grossWeightG = netWeightG * 1.04
         val wireAreaMm2 = ((PI / 4.0) * dw.pow(2.0)).coerceAtLeast(1e-6)
         val headingPlan = HeadingProgression.build(
             type = fastenerType, wireDiaMm = dw, part = part, lengthMm = lengthMm, threadLabel = threadLabel,
             forging = boltForging, forgedHeadDiaMm = forgedHeadDia, trimmedHexS = trimS, trimmedHexK = trimK,
             flangeDiaMm = flange?.dc?.takeIf { boltForging != null }, flangeThicknessMm = flange?.c?.takeIf { boltForging != null }
         )
-        // Slug also carries material removed during heading (pierced nut web)
+        // Slug also carries material removed during heading (pierced nut web, trim cheese): weigh what is cut off the coil
         val cutOffLenMm = headingPlan?.slugLengthMm ?: (totalVolMm3 / wireAreaMm2)
+        val grossWeightG = headingPlan?.let { max(netWeightG, it.slugVolumeMm3 / 1000.0 * material.density) } ?: (netWeightG * 1.04)
         val ldRatio = boltForging?.headStockMm?.let { it / (boltForging.shankDiaMm) }
             ?: if (volHead > 0) ((volHead / wireAreaMm2) / dw) else 0.0
 
@@ -662,7 +662,8 @@ object CalculationEngine {
             rootRadiusMinMm = rootRMin?.round(4),
             rootRadiusMaxMm = rootRMax?.round(4),
             prePlatePitchAllowanceUm = prePlateOffsetUm.round(1),
-            coatingSpecText = "${coating.specStandard} (${coating.thicknessMinUm.toInt()}–${coating.thicknessMaxUm.toInt()} µm)",
+            coatingSpecText = if ("µm" in coating.specStandard) coating.specStandard
+                else "${coating.specStandard} (${coating.thicknessMinUm.toInt()}–${coating.thicknessMaxUm.toInt()} µm)",
             wireDiaMm = dw,
             netWeightGrams = netWeightG.round(2),
             grossWeightGrams = grossWeightG.round(2),

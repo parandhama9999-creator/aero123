@@ -101,6 +101,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.aistudio.aerofast.trmst.data.ShopDefaults.load(this)
         enableEdgeToEdge()
         setContent {
             // The app composes behind the intro, so it is ready the moment the intro ends
@@ -173,11 +174,11 @@ fun AeroFastApp() {
     var selectedLength by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(60.0) }
     // Customer thread length b in mm; 0 = take it from the applied drawing or the standard rule
     var customThreadLengthMm by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
-    var selectedPropClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(PropertyClass.CLASS_10_9) }
-    var selectedMaterialKey by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("10B21") }
+    var selectedPropClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.ShopDefaults.propertyClass) }
+    var selectedMaterialKey by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.ShopDefaults.materialKey) }
     var selectedThreadClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("6g") }
-    var selectedCoating by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(CoatingType.ZN_NI) }
-    var batchQty by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(10000) }
+    var selectedCoating by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.ShopDefaults.coating) }
+    var batchQty by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(com.aistudio.aerofast.trmst.data.ShopDefaults.batchQty) }
 
     var appliedExtractedSpec by remember { mutableStateOf<com.aistudio.aerofast.trmst.data.ExtractedFastenerSpec?>(null) }
     // null = let the part decide between a 1-die header and a progressive former

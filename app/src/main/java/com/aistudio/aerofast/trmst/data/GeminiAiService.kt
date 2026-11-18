@@ -523,13 +523,14 @@ object GeminiAiService {
             rawMat
         } else {
             FastenerCatalog.MATERIALS.keys.find { rawMat.isNotBlank() && rawMat.contains(it) }
-                ?: "10B21".also { assumed += if (rawMat.isBlank()) "material (not on the drawing: 10B21 used)" else "material ('$rawMat' is not in the catalogue: 10B21 used)" }
+                ?: ShopDefaults.material.key.also { assumed += if (rawMat.isBlank()) "material (not on the drawing: $it used)" else "material ('$rawMat' is not in the catalogue: $it used)" }
         }
 
         val rawPropText = parsedJson.optString("propertyClass", "")
-        if (rawPropText.isBlank() && !fastenerType.isWasher) assumed += "property class (not on the drawing: 10.9 used)"
-        val rawProp = rawPropText.ifBlank { "10.9" }.uppercase()
+        if (rawPropText.isBlank() && !fastenerType.isWasher) assumed += "property class (not on the drawing: ${ShopDefaults.propertyClass.label} used)"
+        val rawProp = rawPropText.uppercase()
         val matchedPropClass = when {
+            rawProp.isBlank() -> ShopDefaults.propertyClass
             // Longest / most specific patterns first: "9.8" must not fall into "8.8", "A4-80" not into "A2-70"
             rawProp.contains("B7") -> PropertyClass.ASTM_A193_B7
             rawProp.contains("A574") -> PropertyClass.ASTM_A574
@@ -550,7 +551,7 @@ object GeminiAiService {
             rawProp.contains("A2") || rawProp.contains("A4") || rawProp.contains("70") -> PropertyClass.A2_70
             rawProp.contains("1100") || rawProp.contains("TI") -> PropertyClass.AERO_1100
             rawProp.contains("1380") || rawProp.contains("INCONEL") || rawProp.contains("WASP") -> PropertyClass.AERO_1380
-            else -> PropertyClass.CLASS_10_9
+            else -> ShopDefaults.propertyClass.also { assumed += "property class ('$rawPropText' not recognised: ${it.label} used)" }
         }
 
         // No class on the drawing: the governing standard's own class for this part, not 6g on everything
@@ -560,7 +561,7 @@ object GeminiAiService {
         val rawCoating = normEnum(parsedJson.optString("coating", ""))
         val matchedCoating = (if (rawCoating.isBlank()) null else CoatingType.values().find { it.name == rawCoating }
             ?: CoatingType.values().find { normEnum(it.label).contains(rawCoating) || rawCoating.contains(it.name) })
-            ?: CoatingType.ZN_NI.also { assumed += "coating (not on the drawing: Zn-Ni used)" }
+            ?: ShopDefaults.coating.also { assumed += "coating (not on the drawing: ${it.label} used)" }
         val summary = parsedJson.optString("summary", "Successfully extracted blueprint features.")
 
         val dimensionsList = mutableListOf<DetectedDimension>()

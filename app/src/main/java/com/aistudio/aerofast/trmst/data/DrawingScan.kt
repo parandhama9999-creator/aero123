@@ -85,7 +85,7 @@ object DrawingScan {
             fastenerType = spec.fastenerType, unitSystem = spec.unitSystem,
             standard = PokaYokeEngine.defaultStandard(spec.fastenerType, spec.unitSystem),
             nominalSizeIndex = spec.nominalSizeIndex, pitchValue = spec.pitchValue, lengthMm = spec.lengthMm,
-            threadClass = spec.threadClass, material = material, coating = spec.coating, batchQty = 1,
+            threadClass = spec.threadClass, material = material, coating = spec.coating, batchQty = ShopDefaults.batchQty,
             customNominalDiaMm = spec.nominalDiaMm, extractedRadius = spec.radius, propertyClass = spec.propertyClass,
             drawing = spec.geometry()
         )

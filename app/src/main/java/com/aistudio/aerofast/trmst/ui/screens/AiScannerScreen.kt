@@ -53,6 +53,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -301,6 +303,9 @@ fun AiScannerScreen(
                     color = customColors.textMuted
                 )
 
+                Spacer(modifier = Modifier.height(10.dp))
+                ShopDefaultsCard()
+
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
@@ -494,9 +499,12 @@ fun AiScannerScreen(
 
                 extractedSpec?.let { spec ->
                     // One calculation of the scanned part: the volume card, the forging data and the Co-Pilot all read it
-                    val scanResult = remember(spec, FastenerCatalog.MATERIALS.size) { com.aistudio.aerofast.trmst.data.DrawingScan.calculate(spec) }
+                    val batch = com.aistudio.aerofast.trmst.data.ShopDefaults.batchQty
+                    val scanResult = remember(spec, FastenerCatalog.MATERIALS.size, batch) { com.aistudio.aerofast.trmst.data.DrawingScan.calculate(spec) }
                     val volume = remember(spec, scanResult) { com.aistudio.aerofast.trmst.data.DrawingScan.volume(spec, scanResult) }
                     Spacer(modifier = Modifier.height(14.dp))
+                    ProductionSummaryCard(spec = spec, result = scanResult)
+                    Spacer(modifier = Modifier.height(10.dp))
                     DrawingVolumeCard(spec = spec, volume = volume, materialName = scanResult.material.name)
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -982,9 +990,10 @@ private fun OcrAssignPanel(
                         nominalSizeIndex = FastenerCatalog.sizeIndexFor(unit, dMm), nominalDiaMm = dMm,
                         pitchValue = d?.pitch ?: current.pitchMm,
                         lengthMm = pick("Length L")?.value ?: current.lengthMm,
-                        propertyClass = current.propertyClass ?: PropertyClass.CLASS_8_8,
-                        materialKey = current.material.key, threadClass = current.threadClass, coating = current.coating,
-                        technicalSummary = "Read on phone (OCR); ${assigned.size} value(s) assigned by you. Type, material, class and coating from your Sizing selection.",
+                        propertyClass = com.aistudio.aerofast.trmst.data.ShopDefaults.propertyClass,
+                        materialKey = com.aistudio.aerofast.trmst.data.ShopDefaults.material.key, threadClass = current.threadClass,
+                        coating = com.aistudio.aerofast.trmst.data.ShopDefaults.coating,
+                        technicalSummary = "Read on phone (OCR); ${assigned.size} value(s) assigned by you. Type from your Sizing selection; material, class and coating from your shop defaults.",
                         detectedDimensions = assigned.map { (i, role) -> DetectedDimension(role, "${values[i].value} mm", values[i].source.take(30)) },
                         isAiVisionExtracted = false,
                         modelUsed = "On-phone OCR + your assignment",
@@ -1009,3 +1018,142 @@ private fun OcrAssignPanel(
     }
 }
 
+/** The plant's standing requirement, applied to anything the drawing does not state. */
+@Composable
+private fun ShopDefaultsCard() {
+    val context = LocalContext.current
+    val customColors = LocalCustomColors.current
+    val d = com.aistudio.aerofast.trmst.data.ShopDefaults
+    var editing by remember { mutableStateOf(false) }
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = customColors.bgElevated,
+        border = BorderStroke(1.dp, customColors.accentSecondary.copy(alpha = 0.6f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "OUR REQUIREMENT (when the drawing does not say)", fontSize = 10.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
+                    Text(
+                        text = "${d.material.key} · ${d.propertyClass.label} · ${d.coating.label} · ${d.batchQty} pcs",
+                        fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, color = customColors.textMain
+                    )
+                }
+                TextButton(onClick = { editing = !editing }) {
+                    Text(if (editing) "Done" else "Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            if (editing) {
+                val materials = FastenerCatalog.MATERIALS.values.toList()
+                SelectorDropdown(
+                    label = "Material",
+                    selectedText = "${d.material.key} — ${d.material.name}",
+                    items = materials.map { "${it.key} — ${it.name}" },
+                    onItemSelected = { d.materialKey = materials[it].key; d.save(context) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    val classes = PropertyClass.values().toList()
+                    SelectorDropdown(
+                        label = "Property class",
+                        selectedText = d.propertyClass.label,
+                        items = classes.map { it.label },
+                        onItemSelected = { d.propertyClass = classes[it]; d.save(context) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    val coatings = CoatingType.values().toList()
+                    SelectorDropdown(
+                        label = "Coating",
+                        selectedText = d.coating.label,
+                        items = coatings.map { it.label },
+                        onItemSelected = { d.coating = coatings[it]; d.save(context) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                var batchText by remember { mutableStateOf(d.batchQty.toString()) }
+                OutlinedTextField(
+                    value = batchText,
+                    onValueChange = { t ->
+                        batchText = t
+                        t.toIntOrNull()?.takeIf { it > 0 }?.let { d.batchQty = it; d.save(context) }
+                    },
+                    singleLine = true,
+                    label = { Text("Batch quantity (pcs)", fontSize = 10.sp) },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = "Material, class and coating apply to the next scan. A value printed on the drawing always wins. Batch quantity updates the report straight away.",
+                    fontSize = 10.sp, color = customColors.textMuted
+                )
+            }
+        }
+    }
+}
+
+/** Headline production numbers for the scanned drawing, and the full report to share. */
+@Composable
+private fun ProductionSummaryCard(spec: ExtractedFastenerSpec, result: com.aistudio.aerofast.trmst.data.FastenerCalculationResult) {
+    val context = LocalContext.current
+    val customColors = LocalCustomColors.current
+    val s = remember(result) { com.aistudio.aerofast.trmst.data.ProductionReport.summary(result) }
+    fun n(v: Double, dp: Int = 2) = "%,.${dp}f".format(java.util.Locale.US, v)
+    val critical = result.criticalIssues.size
+    val mandatory = result.pokaYokeIssues.count { it.severity == com.aistudio.aerofast.trmst.data.PokaYokeSeverity.MANDATORY }
+    val warnings = result.pokaYokeIssues.count { it.severity == com.aistudio.aerofast.trmst.data.PokaYokeSeverity.WARNING }
+    val statusColor = when {
+        critical > 0 -> AlertRed
+        mandatory > 0 -> customColors.accentSecondary
+        else -> SuccessGreen
+    }
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = customColors.bgCard,
+        border = BorderStroke(1.5.dp, customColors.accentPrimary),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(text = "PRODUCTION SUMMARY — ${result.threadLabel} x ${n(result.lengthMm, 1)} mm", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentPrimary)
+            Text(
+                text = "${result.material.key} · ${result.propertyClass?.label ?: "material spec"} · ${result.coating.label} · ${s.batchQty} pcs",
+                fontSize = 10.sp, color = customColors.textMuted
+            )
+            val rowStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, color = customColors.textMain)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = "Wire Ø          : ${n(s.wireDiaMm)} mm", style = rowStyle)
+            Text(text = "Cut-off length  : ${n(s.cutOffLengthMm)} mm", style = rowStyle.copy(color = customColors.accentPrimary))
+            Text(text = "Finished weight : ${n(s.finishedWeightG, 3)} g", style = rowStyle)
+            Text(text = "Slug weight     : ${n(s.slugWeightG, 3)} g (scrap ${n(s.scrapPct, 1)} %)", style = rowStyle)
+            Text(text = "Per 1000 pcs    : ${n(s.finishedKgPer1000)} kg", style = rowStyle)
+            Text(text = "Batch finished  : ${n(s.batchFinishedKg, 1)} kg", style = rowStyle)
+            Text(text = "Raw material    : ${n(s.batchRawMaterialKg, 1)} kg", style = rowStyle)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = when {
+                    critical > 0 -> "✗ Standard check: $critical critical item(s) — not releasable as drawn"
+                    mandatory > 0 -> "⚠ Standard check: $mandatory mandatory control(s), $warnings warning(s)"
+                    warnings > 0 -> "✓ Standard check passed with $warnings warning(s) to review"
+                    else -> "✓ Standard check: all rules passed"
+                },
+                fontSize = 11.sp, fontWeight = FontWeight.Bold, color = statusColor
+            )
+            if (spec.assumed.isNotEmpty()) {
+                Text(text = "Defaults used (not on the drawing): ${spec.assumed.joinToString("; ")}", fontSize = 10.sp, color = customColors.textMuted)
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Button(
+                onClick = { com.aistudio.aerofast.trmst.util.ProductionReportShare.share(context, result, spec) },
+                colors = ButtonDefaults.buttonColors(containerColor = customColors.accentPrimary),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().height(46.dp)
+            ) {
+                Text("Share Full Production Report", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(
+                text = "Cut-off, weights, wire options, anneal, heading stations, thread rolling, heat treatment, Zn-Ni baking, mechanical limits, standard check and recommendations.",
+                fontSize = 9.5.sp, color = customColors.textMuted
+            )
+        }
+    }
+}
