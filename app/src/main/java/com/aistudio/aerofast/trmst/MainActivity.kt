@@ -178,6 +178,8 @@ fun AeroFastApp() {
     var tensileMinMpa by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
     var tensileMaxMpa by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
     var threadLockPatch by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    // Heading machine: the die design, wire and cut-off follow it everywhere (Sizing, HT & Forging, scanner, report)
+    var headerChoice by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO) }
     val tensileRange = com.aistudio.aerofast.trmst.data.TensileRange.of(tensileMinMpa.takeIf { it > 0 }, tensileMaxMpa.takeIf { it > 0 })
     var selectedPropClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.ShopDefaults.propertyClass) }
     var selectedMaterialKey by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.ShopDefaults.materialKey) }
@@ -189,8 +191,8 @@ fun AeroFastApp() {
     // null = let the part decide between a 1-die header and a progressive former
     // The last scanned drawing: kept across tabs, and the Co-Pilot's primary input
     var scannedSpec by remember { mutableStateOf<com.aistudio.aerofast.trmst.data.ExtractedFastenerSpec?>(null) }
-    val scanCalculation = remember(scannedSpec, FastenerCatalog.MATERIALS.size) {
-        scannedSpec?.let { runCatching { com.aistudio.aerofast.trmst.data.DrawingScan.calculate(it) }.getOrNull() }
+    val scanCalculation = remember(scannedSpec, FastenerCatalog.MATERIALS.size, headerChoice) {
+        scannedSpec?.let { runCatching { com.aistudio.aerofast.trmst.data.DrawingScan.calculate(it, headerChoice) }.getOrNull() }
     }
 
     // Quotation Parameters
@@ -224,6 +226,7 @@ fun AeroFastApp() {
             tensileMinMpa = tensileMinMpa,
             tensileMaxMpa = tensileMaxMpa,
             threadLockPatch = threadLockPatch,
+            headerChoice = headerChoice.name,
             propClass = selectedPropClass.name,
             materialKey = selectedMaterialKey,
             threadClass = selectedThreadClass,
@@ -262,6 +265,7 @@ fun AeroFastApp() {
             tensileMinMpa = loadedState.tensileMinMpa
             tensileMaxMpa = loadedState.tensileMaxMpa
             threadLockPatch = loadedState.threadLockPatch
+            headerChoice = runCatching { com.aistudio.aerofast.trmst.data.HeaderChoice.valueOf(loadedState.headerChoice) }.getOrDefault(com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO)
             try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
             selectedMaterialKey = loadedState.materialKey
             selectedThreadClass = loadedState.threadClass
@@ -296,6 +300,7 @@ fun AeroFastApp() {
         customThreadLengthMm,
         tensileRange,
         threadLockPatch,
+        headerChoice,
         selectedThreadClass,
         activeMaterial,
         selectedCoating,
@@ -332,6 +337,7 @@ fun AeroFastApp() {
             propertyClass = selectedPropClass,
             tensileRange = tensileRange,
             threadLockPatch = threadLockPatch,
+            headerChoice = headerChoice,
             // Dimensions from the applied drawing; a flange bolt can also take its head sizes typed on the Sizing card
             drawing = (appliedExtractedSpec?.geometry() ?: com.aistudio.aerofast.trmst.data.DrawingGeometry()).let { g ->
                 // A thread length typed on the Sizing card overrides the scanned one
@@ -362,6 +368,7 @@ fun AeroFastApp() {
                 tensileMinMpa = loadedState.tensileMinMpa
                 tensileMaxMpa = loadedState.tensileMaxMpa
                 threadLockPatch = loadedState.threadLockPatch
+                headerChoice = runCatching { com.aistudio.aerofast.trmst.data.HeaderChoice.valueOf(loadedState.headerChoice) }.getOrDefault(com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO)
                 try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
                 selectedMaterialKey = loadedState.materialKey
                 selectedThreadClass = loadedState.threadClass
@@ -552,6 +559,11 @@ fun AeroFastApp() {
                                     threadLockPatch = it
                                     saveAppState()
                                 },
+                                headerChoice = headerChoice,
+                                onHeaderChoice = {
+                                    headerChoice = it
+                                    saveAppState()
+                                },
                                 onCustomThreadLengthChanged = {
                                     customThreadLengthMm = it ?: 0.0
                                     saveAppState()
@@ -594,7 +606,12 @@ fun AeroFastApp() {
 
                         NavigationTab.FORGING -> {
                             ForgingMetallurgyScreen(
-                                result = currentCalculation
+                                result = currentCalculation,
+                                headerChoice = headerChoice,
+                                onHeaderChoice = {
+                                    headerChoice = it
+                                    saveAppState()
+                                }
                             )
                         }
 
@@ -604,6 +621,7 @@ fun AeroFastApp() {
                                 scannedSpec = scannedSpec,
                                 onScanned = { scannedSpec = it },
                                 onAskCoPilot = { currentTab = NavigationTab.COPILOT },
+                                headerChoice = headerChoice,
                                 onApplyExtractedSpec = { spec ->
                                     appliedExtractedSpec = spec
                                     selectedFastenerType = spec.fastenerType

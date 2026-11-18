@@ -79,7 +79,7 @@ object DrawingScan {
     private fun n(v: Double, dp: Int = 2) = String.format(java.util.Locale.US, "%.${dp}f", v)
 
     /** The full engineering calculation for the scanned part, with every drawing dimension applied. */
-    fun calculate(spec: ExtractedFastenerSpec): FastenerCalculationResult {
+    fun calculate(spec: ExtractedFastenerSpec, headerChoice: HeaderChoice = HeaderChoice.AUTO): FastenerCalculationResult {
         val material = FastenerCatalog.MATERIALS[spec.materialKey] ?: FastenerCatalog.MATERIALS.getValue("10B21")
         return CalculationEngine.calculate(
             fastenerType = spec.fastenerType, unitSystem = spec.unitSystem,
@@ -87,7 +87,8 @@ object DrawingScan {
             nominalSizeIndex = spec.nominalSizeIndex, pitchValue = spec.pitchValue, lengthMm = spec.lengthMm,
             threadClass = spec.threadClass, material = material, coating = spec.coating, batchQty = spec.batchQty ?: ShopDefaults.batchQty,
             customNominalDiaMm = spec.nominalDiaMm, extractedRadius = spec.radius, propertyClass = spec.propertyClass,
-            drawing = spec.geometry(), tensileRange = spec.tensileRange, threadLockPatch = spec.threadLockPatch
+            drawing = spec.geometry(), tensileRange = spec.tensileRange, threadLockPatch = spec.threadLockPatch,
+            headerChoice = headerChoice
         )
     }
 

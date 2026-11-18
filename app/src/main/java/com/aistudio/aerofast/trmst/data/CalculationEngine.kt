@@ -177,7 +177,9 @@ object CalculationEngine {
         drawing: DrawingGeometry = DrawingGeometry(),
         /** Tensile band from the drawing (e.g. 1000–1240 MPa): replaces the property class for loads, hardness and checks. */
         tensileRange: TensileRange? = null,
-        threadLockPatch: Boolean = false
+        threadLockPatch: Boolean = false,
+        /** Machine asked for: Auto, 1-die 2-blow header or multi-station former. The die design follows it. */
+        headerChoice: HeaderChoice = HeaderChoice.AUTO
     ): FastenerCalculationResult {
         @Suppress("NAME_SHADOWING")
         val propertyClass = if (tensileRange != null) PropertyClass.MATERIAL_SPEC else propertyClass
@@ -459,12 +461,17 @@ object CalculationEngine {
         val headingPlan = HeadingProgression.build(
             type = fastenerType, wireDiaMm = dw, part = part, lengthMm = lengthMm, threadLabel = threadLabel,
             forging = boltForging, forgedHeadDiaMm = forgedHeadDia, trimmedHexS = trimS, trimmedHexK = trimK,
-            flangeDiaMm = flange?.dc?.takeIf { boltForging != null }, flangeThicknessMm = flange?.c?.takeIf { boltForging != null }
+            flangeDiaMm = flange?.dc?.takeIf { boltForging != null }, flangeThicknessMm = flange?.c?.takeIf { boltForging != null },
+            choice = headerChoice
         )
+        // The 1-die 2-blow design picks its own wire (blank, shank, or enlarged for two blows) and forms the head untrimmed
+        val twoBlow = headingPlan?.route == HeaderRoute.TWO_BLOW
+        if (twoBlow) dw = headingPlan!!.slugDiaMm
         // Slug also carries material removed during heading (pierced nut web, trim cheese): weigh what is cut off the coil
         val cutOffLenMm = headingPlan?.slugLengthMm ?: (totalVolMm3 / wireAreaMm2)
         val grossWeightG = headingPlan?.let { max(netWeightG, it.slugVolumeMm3 / 1000.0 * material.density) } ?: (netWeightG * 1.04)
-        val ldRatio = boltForging?.headStockMm?.let { it / (boltForging.shankDiaMm) }
+        val ldRatio = if (twoBlow) part.headVolumeMm3 / ((PI / 4.0) * dw * dw) / dw
+            else boltForging?.headStockMm?.let { it / (boltForging.shankDiaMm) }
             ?: if (volHead > 0) ((volHead / wireAreaMm2) / dw) else 0.0
 
         // Forging Mechanics & UTS Calculations
@@ -760,7 +767,10 @@ object CalculationEngine {
                 stressAreaMm2 = stressAreaAsMm2,
                 headDims = dims,
                 threadLengthMm = drawing.threadLengthMm
-            )
+            ) + listOfNotNull(headingPlan?.feasibilityIssue?.let {
+                PokaYokeIssue(PokaYokeSeverity.CRITICAL, "1-die 2-blow cannot make this part", "On a 1-die 2-blow header: $it.",
+                    "Choose Multi-station, or change the head size / wire so the head gathers in two blows.")
+            })
         )
     }
 

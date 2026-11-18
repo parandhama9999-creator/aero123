@@ -100,6 +100,8 @@ fun FastenerSizingScreen(
     onTensileRangeChanged: (com.aistudio.aerofast.trmst.data.TensileRange?) -> Unit = {},
     threadLockPatch: Boolean = false,
     onThreadLockPatchChanged: (Boolean) -> Unit = {},
+    headerChoice: com.aistudio.aerofast.trmst.data.HeaderChoice = com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO,
+    onHeaderChoice: (com.aistudio.aerofast.trmst.data.HeaderChoice) -> Unit = {},
     selectedPropClass: PropertyClass,
     onPropClassSelected: (PropertyClass) -> Unit,
     selectedMaterialKey: String,
@@ -709,6 +711,17 @@ fun FastenerSizingScreen(
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(text = "THREAD & SHANK LENGTH (L = ${mm(selectedLength)} mm)", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
+                    val plan2 = result.headingPlan
+                    val twoBlowPlan = plan2?.route == com.aistudio.aerofast.trmst.data.HeaderRoute.TWO_BLOW
+                    com.aistudio.aerofast.trmst.ui.components.HeaderChoiceSelector(headerChoice, onHeaderChoice, plan2)
+                    if (twoBlowPlan && plan2 != null) {
+                        val rs = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                        fun n2(v: Double, dp: Int = 2) = "%.${dp}f".format(java.util.Locale.US, v)
+                        Text(text = "Wire Ø          : ${n2(plan2.slugDiaMm)} mm", style = rs)
+                        Text(text = "Cut-off length  : ${n2(plan2.slugLengthMm)} mm", style = rs.copy(color = customColors.accentPrimary))
+                        Text(text = "Slug = finished : ${n2(plan2.slugVolumeMm3, 0)} mm³ = ${n2(result.grossWeightGrams)} g (formed head, no trim cheese)", style = rs)
+                        plan2.stations.drop(1).forEach { Text(text = "${it.title}: ${it.operation}", fontSize = 10.sp, color = customColors.textMuted) }
+                    }
                     if (fullThread) {
                         Text(text = "Full thread: ${mm(selectedLength)} mm (no plain shank)", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
                         if (!com.aistudio.aerofast.trmst.data.PokaYokeEngine.isFullyThreaded(selectedFastenerType)) {
@@ -753,7 +766,7 @@ fun FastenerSizingScreen(
                         val f2 = forging(bMin + 2 * pitchMm)
                         fun n(v: Double, dp: Int = 2) = "%.${dp}f".format(java.util.Locale.US, v)
                         val rowStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
-                        if (f1.shankDiaMm > f1.blankDiaMm) {
+                        if (f1.shankDiaMm > f1.blankDiaMm && !twoBlowPlan) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(text = "BEFORE EXTRUSION (Ø${n(f1.shankDiaMm)} → Ø${n(f1.blankDiaMm, 3)}, 15°/side)", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
                             Text(text = "Cone length     : ${n(f1.coneLengthMm)} mm", style = rowStyle)
@@ -763,7 +776,7 @@ fun FastenerSizingScreen(
                         }
                         if (headModel) {
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(text = "HEAD STOCK & TRIM CHEESE", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
+                            Text(text = if (twoBlowPlan) "HEAD (formed in the punch on the 1-die 2-blow header: no trim)" else "HEAD STOCK & TRIM CHEESE", fontSize = 11.sp, fontWeight = FontWeight.Black, color = customColors.accentSecondary)
                             if (isFlange) {
                                 Text(text = "dc, k, s pre-filled from the drawing or DIN 6921 (1983, supplier tables). Enter flange thickness c from the drawing; the die progression uses these values.", fontSize = 10.sp, color = customColors.textMuted)
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
@@ -782,9 +795,9 @@ fun FastenerSizingScreen(
                                     }
                                 }
                             }
-                            Text(text = f1.headNote, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                            if (!twoBlowPlan) Text(text = f1.headNote, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = customColors.textMain)
                             val dens = f1.densityGPerMm3
-                            if (f1.finishedVolumeMm3 != null && f1.cheeseVolumeMm3 != null) {
+                            if (f1.finishedVolumeMm3 != null && f1.cheeseVolumeMm3 != null && !twoBlowPlan) {
                                 Text(text = "Finished volume : ${n(f1.finishedVolumeMm3!!, 0)} mm³ = ${n(f1.finishedVolumeMm3!! * dens)} g", style = rowStyle)
                                 Text(text = "Slug (+ cheese) : ${n(f1.finishedVolumeMm3!! + f1.cheeseVolumeMm3!!, 0)} mm³ = ${n((f1.finishedVolumeMm3!! + f1.cheeseVolumeMm3!!) * dens)} g", style = rowStyle)
                                 Text(text = "Head stock      : ${n(f1.headStockMm!!)} mm of Ø${n(f1.shankDiaMm)}", style = rowStyle)

@@ -98,7 +98,8 @@ fun AiScannerScreen(
     /** The last scan, kept by the caller so it survives tab changes and feeds the Co-Pilot. */
     scannedSpec: ExtractedFastenerSpec? = null,
     onScanned: (ExtractedFastenerSpec?) -> Unit = {},
-    onAskCoPilot: () -> Unit = {}
+    onAskCoPilot: () -> Unit = {},
+    headerChoice: com.aistudio.aerofast.trmst.data.HeaderChoice = com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO
 ) {
     val context = LocalContext.current
     val customColors = LocalCustomColors.current
@@ -500,7 +501,7 @@ fun AiScannerScreen(
                 extractedSpec?.let { spec ->
                     // One calculation of the scanned part: the volume card, the forging data and the Co-Pilot all read it
                     val batch = com.aistudio.aerofast.trmst.data.ShopDefaults.batchQty
-                    val scanResult = remember(spec, FastenerCatalog.MATERIALS.size, batch) { com.aistudio.aerofast.trmst.data.DrawingScan.calculate(spec) }
+                    val scanResult = remember(spec, FastenerCatalog.MATERIALS.size, batch, headerChoice) { com.aistudio.aerofast.trmst.data.DrawingScan.calculate(spec, headerChoice) }
                     val volume = remember(spec, scanResult) { com.aistudio.aerofast.trmst.data.DrawingScan.volume(spec, scanResult) }
                     Spacer(modifier = Modifier.height(14.dp))
                     ProductionSummaryCard(spec = spec, result = scanResult)
@@ -1122,6 +1123,7 @@ private fun ProductionSummaryCard(spec: ExtractedFastenerSpec, result: com.aistu
             )
             val rowStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, color = customColors.textMain)
             Spacer(modifier = Modifier.height(4.dp))
+            result.headingPlan?.let { Text(text = "Machine         : ${it.machineDescription}", style = rowStyle, color = if (it.feasibilityIssue != null) AlertRed else customColors.textMain) }
             Text(text = "Wire Ø          : ${n(s.wireDiaMm)} mm", style = rowStyle)
             Text(text = "Cut-off length  : ${n(s.cutOffLengthMm)} mm", style = rowStyle.copy(color = customColors.accentPrimary))
             Text(text = "Finished weight : ${n(s.finishedWeightG, 3)} g", style = rowStyle)

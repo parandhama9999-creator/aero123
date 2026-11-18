@@ -3,6 +3,7 @@ package com.aistudio.aerofast.trmst.data
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 
 enum class SectionShape { ROUND, HEX, SQUARE, TWELVE_POINT, DOME, HEXALOBULAR }
@@ -99,8 +100,15 @@ enum class HeaderRoute(val label: String) {
     MULTI_STATION("Multi-station progressive former"),
     NUT_FORMER("Nut former"),
     PRESS("Progressive press"),
-    /** One die, two punches: used only when the part needs no extrusion and no more than two blows. */
+    /** One die, two punches: cone / extrusion blow, then the finishing blow. Hex heads are formed, not trimmed. */
     TWO_BLOW("1-die 2-blow header")
+}
+
+/** The machine asked for on screen. AUTO picks the 1-die 2-blow header only where it is enough for the part. */
+enum class HeaderChoice(val label: String) {
+    AUTO("Auto"),
+    TWO_BLOW("1-die 2-blow"),
+    MULTI_STATION("Multi-station")
 }
 
 data class HeadingPlan(
@@ -114,7 +122,9 @@ data class HeadingPlan(
     val notes: List<String>,
     val route: HeaderRoute = HeaderRoute.MULTI_STATION,
     /** Why this route was chosen, or why a route that was asked for cannot make the part. */
-    val routeReason: String = ""
+    val routeReason: String = "",
+    /** Set when the chosen machine cannot make the part as designed: the reason, for the poka-yoke gate. */
+    val feasibilityIssue: String? = null
 ) {
     val dieStations: Int get() = stations.count { !it.isCutOff }
 
@@ -179,21 +189,115 @@ object HeadingProgression {
         trimmedHexS: Double = 0.0,
         trimmedHexK: Double = 0.0,
         flangeDiaMm: Double? = null,
-        flangeThicknessMm: Double? = null
+        flangeThicknessMm: Double? = null,
+        choice: HeaderChoice = HeaderChoice.AUTO
     ): HeadingPlan? {
         if (part.style == HeadStyle.WASHER) return null
         if (part.style == HeadStyle.NUT) return nut(type, wireDiaMm, part, threadLabel)
-        val reason = if (part.style == HeadStyle.HEADLESS)
-            "Progressive former: the thread sections are extruded and there is no head to upset."
-        else "Progressive former: extrusion, pre-upsets, socket back-extrusion and trimming each run in their own station."
+        val headed = part.style != HeadStyle.HEADLESS && part.headVolumeMm3 > 0.0
+        if (headed && choice == HeaderChoice.TWO_BLOW) return twoBlow(type, part, threadLabel, chosen = true)
+        if (headed && choice == HeaderChoice.AUTO && forging == null && twoBlowIsEnough(type, part, wireDiaMm))
+            return twoBlow(type, part, threadLabel, chosen = false)
+        val reason = when {
+            part.style == HeadStyle.HEADLESS -> "Progressive former: the thread sections are extruded and there is no head to upset."
+            choice == HeaderChoice.MULTI_STATION -> "Multi-station progressive former (your choice): extrusion, pre-upsets, socket back-extrusion and trimming each run in their own station."
+            else -> "Progressive former: extrusion, pre-upsets, socket back-extrusion and trimming each run in their own station."
+        }
         val plan = when {
             forging != null && forgedHeadDiaMm != null ->
                 trimmedHex(type, lengthMm, forging, forgedHeadDiaMm, trimmedHexS, trimmedHexK, threadLabel, flangeDiaMm, flangeThicknessMm, part.cautions)
             part.style == HeadStyle.HEADLESS || part.headVolumeMm3 <= 0.0 -> headless(type, wireDiaMm, part, threadLabel)
             else -> headed(type, wireDiaMm, part, threadLabel)
         }
-        return if (plan.route == HeaderRoute.TWO_BLOW) plan else plan.copy(route = HeaderRoute.MULTI_STATION, routeReason = reason)
+        return plan.copy(route = HeaderRoute.MULTI_STATION, routeReason = reason)
     }
+
+    /** Largest area reduction a single closed die takes in the first blow before the shank upsets instead of extruding. */
+    const val MAX_DIE_EXTRUSION_PCT = 30.0
+
+    /** Auto: one die is enough when nothing is extruded, the head needs ≤ 2 blows and is formed, not trimmed. */
+    private fun twoBlowIsEnough(type: FastenerType, part: FinishedPart, wire: Double): Boolean {
+        val lt = part.threadLengthMm
+        val extrude = lt > 0.0 && (1.0 - area(part.blankDiaMm) / area(wire)) * 100.0 >= 1.0
+        val ld = part.headVolumeMm3 / area(wire) / wire
+        val upsetIsFinal = part.style == HeadStyle.RIVET || part.style == HeadStyle.ROUND_PIN
+        return !extrude && ld <= TWO_BLOW_LD && !upsetIsFinal && (type.category == "Machine Screws" || part.style == HeadStyle.HEX_FORMED)
+    }
+
+    /**
+     * The part designed for a 1-die 2-blow header. The wire is the largest shank diameter; when the head would need a
+     * third blow the wire is enlarged until two blows are enough, as long as the die can extrude it back down. The
+     * first blow extrudes the shank in the closed die (when it is reduced) and gathers the head in the cone punch; the
+     * second forms the head and any recess. A hex or 12-point head is closed in the punch insert: no trim, no cheese.
+     */
+    private fun twoBlow(type: FastenerType, part: FinishedPart, threadLabel: String, chosen: Boolean): HeadingPlan {
+        val body = part.dieSegments
+        val inDie = body.sumOf { it.heightMm }
+        val headVol = part.headVolumeMm3
+        val minD = body.minOfOrNull { min(it.dBottomMm, it.dTopMm) } ?: part.blankDiaMm
+        val maxD = body.maxOfOrNull { max(it.dBottomMm, it.dTopMm) } ?: part.blankDiaMm
+        fun ldAt(w: Double) = headVol / area(w) / w
+        fun reductionAt(w: Double) = (1.0 - area(minD) / area(w)) * 100.0
+        var wire = kotlin.math.ceil(maxD * 100.0 - 1e-6) / 100.0
+        var issue: String? = null
+        var enlarged = false
+        if (ldAt(wire) > TWO_BLOW_LD) {
+            // Two blows need L/D ≤ 4.5: L/D = 4V / (π D³), so D ≥ (4V / (4.5 π))^⅓, drawn in 0.05 mm steps
+            val need = kotlin.math.ceil(Math.cbrt(4.0 * headVol / (PI * TWO_BLOW_LD)) / 0.05 - 1e-9) * 0.05
+            if (reductionAt(need) <= MAX_DIE_EXTRUSION_PCT) { wire = need; enlarged = true }
+            else issue = "the head stock L/D is ${f(ldAt(wire))} on Ø${f(wire)} wire, more than two blows can gather ($TWO_BLOW_LD); " +
+                "wire large enough for two blows (Ø${f(need)}) would have to be extruded ${f(reductionAt(need), 0)} % in the die, over the ~${MAX_DIE_EXTRUSION_PCT.toInt()} % one die takes"
+        }
+        val reductionPct = reductionAt(wire).coerceAtLeast(0.0)
+        if (issue == null && reductionPct > MAX_DIE_EXTRUSION_PCT)
+            issue = "extruding Ø${f(wire)} → Ø${f(minD)} is ${f(reductionPct, 0)} % area reduction, over the ~${MAX_DIE_EXTRUSION_PCT.toInt()} % one die takes in the first blow"
+        val aw = area(wire)
+        val slugVol = part.volumeMm3          // formed, not trimmed: the slug is the finished part
+        val slugLen = slugVol / aw
+        val stock = headVol / aw
+        val ld = stock / wire
+        val top = part.headSegments.last()
+        val prism = top.shape == SectionShape.HEX || top.shape == SectionShape.TWELVE_POINT
+        // The preform must enter the finishing cavity: the inscribed circle of a prism head, the diameter otherwise
+        val dCavity = if (prism) 0.96 * top.dBottomMm else top.maxWidthMm
+        var hc = stock * 0.62
+        var dc = coneLargeEnd(headVol, wire, hc)
+        if (dc > 0.9 * dCavity) {
+            dc = 0.9 * dCavity
+            hc = 12.0 * headVol / (PI * (dc * dc + dc * wire + wire * wire))
+        }
+        val extrude = reductionPct >= 1.0
+        val stations = mutableListOf(cutOff(wire, slugLen))
+        stations += HeadingStation(
+            index = 1,
+            title = if (extrude) "1st blow: extrude & cone preform" else "1st blow: cone preform",
+            operation = (if (extrude) "Forward-extrude the shank in the closed die Ø${f(wire)} → Ø${f(minD, 3)} (${f(reductionPct, 0)} % area reduction); " else "") +
+                "gather head stock ${f(stock, 1)} mm (L/D ${f(ld)}) in the cone punch: Ø${f(dc)} → Ø${f(wire)} × ${f(hc, 1)} mm",
+            segments = body + ProfileSegment(hc, dc, wire),
+            inDieMm = inDie
+        )
+        val (title, operation) = finishingBlow(type, part)
+        stations += HeadingStation(
+            index = 2, title = "2nd blow: $title", operation = operation,
+            segments = part.segments, recesses = part.recesses, inDieMm = inDie, isPeakBlow = true
+        )
+        val notes = buildList {
+            issue?.let { add("NOT FEASIBLE on a 1-die 2-blow header: $it. Choose Multi-station, or change the head / wire.") }
+            if (enlarged) add("Wire enlarged to Ø${f(wire)} so the head gathers in two blows; the shank is extruded back to Ø${f(minD, 3)} in the first blow.")
+            else if (!extrude && part.threadLengthMm > 0.0) add("Wire is drawn to the rolling blank Ø${f(minD, 3)} mm: the shank is not extruded, the thread is rolled straight onto it.")
+            if (prism) add("Formed head, no trim: the ${if (top.shape == SectionShape.HEX) "hex" else "12-point"} is closed in the punch insert, so there is no trim cheese; corners are slightly fuller than a trimmed head.")
+            if (part.recesses.any { it.fromTop }) add("The recess is back-extruded in the finishing blow.")
+            addAll(part.cautions)
+        }
+        val reason = when {
+            issue != null -> "1-die 2-blow header (your choice) cannot make this part as drawn: $issue."
+            chosen -> "1-die 2-blow header (your choice): ${if (extrude) "shank extruded in the die and head gathered in the first blow" else "head gathered in the first blow"}, head${if (prism) " formed (no trim)" else ""} finished in the second."
+            else -> "1-die 2-blow header (auto): no extrusion and head L/D ${f(ld)} ≤ $TWO_BLOW_LD, so one die with a cone blow and a finishing blow makes the part. Choose Multi-station to run it on the progressive former."
+        }
+        return HeadingPlan(wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), 2, notes,
+            route = HeaderRoute.TWO_BLOW, routeReason = reason, feasibilityIssue = issue)
+    }
+
 
     private fun area(d: Double) = sectionArea(SectionShape.ROUND, d)
     private fun f(v: Double, decimals: Int = 2) = String.format(java.util.Locale.US, "%.${decimals}f", v)
@@ -450,33 +554,6 @@ object HeadingProgression {
         val stations = mutableListOf(cutOff(wire, slugLen))
         // Full-thread parts are headed from wire drawn to the rolling blank: nothing to extrude
         val extrude = lt > 0.0 && reductionPct >= 1.0
-        // 1-die 2-blow header, only where it is enough: no extrusion, head gathered in ≤ 2 blows, no trimming
-        // (machine screws, and formed hex / hex-flange heads)
-        if (!extrude && blows <= 2 && !upsetIsFinal && (type.category == "Machine Screws" || part.style == HeadStyle.HEX_FORMED)) {
-            val hc0 = stock * 0.62
-            val dc = minOf(coneLargeEnd(headVol, wire, hc0), 0.9 * dRound)
-            val hc = 12.0 * headVol / (PI * (dc * dc + dc * wire + wire * wire))
-            stations += HeadingStation(
-                index = 1,
-                title = "1st blow: cone preform",
-                operation = "Gather head stock ${f(stock, 1)} mm (L/D ${f(ld)}) in the cone punch: Ø${f(dc)} → Ø${f(wire)} × ${f(hc, 1)} mm" +
-                    (if (lt > 0.0) "; the shank stays in the die at the rolling blank Ø${f(blank, 3)}" else ""),
-                segments = body + ProfileSegment(hc, dc, wire),
-                inDieMm = inDie
-            )
-            val (title, operation) = finishingBlow(type, part)
-            stations += HeadingStation(
-                index = 2, title = "2nd blow: $title", operation = operation,
-                segments = part.segments, recesses = part.recesses, inDieMm = inDie, isPeakBlow = true
-            )
-            val notes = buildList {
-                if (lt > 0.0) add("Wire is drawn to the rolling blank Ø${f(blank, 3)} mm: the shank is not extruded, the thread is rolled straight onto it.")
-                addAll(part.cautions)
-            }
-            return HeadingPlan(wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), 2, notes,
-                route = HeaderRoute.TWO_BLOW,
-                routeReason = "1-die 2-blow header: no extrusion and head L/D ${f(ld)} ≤ $TWO_BLOW_LD, so one die with a cone blow and a finishing blow makes the part. Parts that need extrusion, trimming or a third blow run on the progressive former.")
-        }
         stations += HeadingStation(
             index = 1,
             title = if (extrude) "Square & forward extrude" else "Square ends",

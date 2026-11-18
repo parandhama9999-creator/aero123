@@ -156,7 +156,8 @@ object ProductionReport {
         row("Machine", r.recommendedMachine)
         row("Forging load", "${n(r.forgingTonnage, 1)} t")
         row("Upset L/D", n(r.upsetLdRatio, 2))
-        r.boltForging?.let { f ->
+        // A 1-die 2-blow plan forms the head in the punch: the trimmed-head figures do not apply
+        r.boltForging?.takeIf { r.headingPlan?.route != HeaderRoute.TWO_BLOW }?.let { f ->
             row("Blank dia (thread)", "${n(f.blankDiaMm, 3)} mm via 15 deg/side cone ${n(f.coneLengthMm)} mm")
             row("Thread length b", "${n(f.threadLengthMm, 1)} mm")
             row("Stock to extrude", "${n(f.stockToExtrudeMm)} mm")
@@ -165,6 +166,7 @@ object ProductionReport {
             append(" Head: ${f.headNote}\n")
         }
         r.headingPlan?.let { plan ->
+            if (plan.routeReason.isNotBlank()) append(" Route: ${plan.routeReason}\n")
             append(" ${plan.route.label}: slug ${n(plan.slugDiaMm)} x ${n(plan.slugLengthMm)} mm, ${plan.upsetBlows} upset blow(s)\n")
             plan.stations.forEach { st -> append("   St ${st.index}: ${st.title} - ${st.operation}\n") }
             plan.offHeaderOps.forEach { op -> append("   Off-header: ${op.title} - ${op.operation}\n") }

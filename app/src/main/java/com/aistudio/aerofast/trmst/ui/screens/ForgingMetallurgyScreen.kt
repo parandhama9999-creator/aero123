@@ -73,6 +73,8 @@ import com.aistudio.aerofast.trmst.ui.theme.SuccessGreen
 fun ForgingMetallurgyScreen(
     result: FastenerCalculationResult,
     modifier: Modifier = Modifier,
+    headerChoice: com.aistudio.aerofast.trmst.data.HeaderChoice = com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO,
+    onHeaderChoice: (com.aistudio.aerofast.trmst.data.HeaderChoice) -> Unit = {}
 ) {
     val customColors = LocalCustomColors.current
     val scrollState = rememberScrollState()
@@ -295,7 +297,7 @@ fun ForgingMetallurgyScreen(
         SoftAnnealCard(result = result)
 
         // 5-Station Cold Heading Die Progression Canvas
-        ColdHeadingProgressionCanvas(result = result)
+        ColdHeadingProgressionCanvas(result = result, headerChoice = headerChoice, onHeaderChoice = onHeaderChoice)
 
         // Section 2: Detailed Heat Treatment Cycles
         Surface(
@@ -1045,6 +1047,8 @@ private fun HtStageCard(
 fun ColdHeadingProgressionCanvas(
     result: FastenerCalculationResult,
     modifier: Modifier = Modifier,
+    headerChoice: com.aistudio.aerofast.trmst.data.HeaderChoice = com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO,
+    onHeaderChoice: (com.aistudio.aerofast.trmst.data.HeaderChoice) -> Unit = {}
 ) {
     val customColors = LocalCustomColors.current
     val plan = result.headingPlan
@@ -1102,13 +1106,10 @@ fun ColdHeadingProgressionCanvas(
                 return@Column
             }
 
-            if (plan.routeReason.isNotBlank()) {
-                Text(
-                    text = plan.routeReason,
-                    fontSize = 9.sp,
-                    color = customColors.textMuted,
-                    modifier = Modifier.padding(top = 3.dp)
-                )
+            if (plan.route == com.aistudio.aerofast.trmst.data.HeaderRoute.NUT_FORMER || plan.route == com.aistudio.aerofast.trmst.data.HeaderRoute.PRESS) {
+                if (plan.routeReason.isNotBlank()) Text(text = plan.routeReason, fontSize = 9.sp, color = customColors.textMuted, modifier = Modifier.padding(top = 3.dp))
+            } else {
+                com.aistudio.aerofast.trmst.ui.components.HeaderChoiceSelector(headerChoice, onHeaderChoice, plan, Modifier.padding(top = 6.dp))
             }
 
             Text(
@@ -1174,7 +1175,7 @@ fun ColdHeadingProgressionCanvas(
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 plan.stations.forEach { st ->
                     Text(
-                        text = "${stationCode(st)}  ${st.title} — L ${fmt(st.heightMm, 1)} · ${stationFeatureLabel(st)} · V ${fmt(st.volumeMm3, 0)} mm³",
+                        text = "${stationCode(st, plan.route)}  ${st.title} — L ${fmt(st.heightMm, 1)} · ${stationFeatureLabel(st)} · V ${fmt(st.volumeMm3, 0)} mm³",
                         fontSize = 9.sp,
                         fontFamily = FontFamily.Monospace,
                         color = if (st.isPeakBlow) Color(0xFFF59E0B) else customColors.textMuted
@@ -1279,7 +1280,12 @@ private object DieColors {
 
 private fun fmt(v: Double, decimals: Int) = String.format(java.util.Locale.US, "%,.${decimals}f", v)
 
-private fun stationCode(st: HeadingStation) = if (st.isCutOff) "CUT" else "D${st.index} "
+// One die: the numbers are blows of the same tool, not separate dies
+private fun stationCode(st: HeadingStation, route: com.aistudio.aerofast.trmst.data.HeaderRoute = com.aistudio.aerofast.trmst.data.HeaderRoute.MULTI_STATION) = when {
+    st.isCutOff -> "CUT"
+    route == com.aistudio.aerofast.trmst.data.HeaderRoute.TWO_BLOW -> "B${st.index} "
+    else -> "D${st.index} "
+}
 
 internal fun stationFeatureLabel(st: HeadingStation): String {
     val top = st.segments.last()
@@ -1351,7 +1357,7 @@ internal fun DrawScope.drawHeadingProgression(plan: HeadingPlan, textPx: Float, 
         drawContext.canvas.nativeCanvas.apply {
             drawText(stationFeatureLabel(st), cx, topY - textPx * 0.6f, dimPaint)
             labelPaint.color = (if (st.isPeakBlow) DieColors.peak else DieColors.label).toArgb()
-            if (stationLabels) drawText(stationCode(st).trim(), cx, baseY + koBand + textPx * 1.6f, labelPaint)
+            if (stationLabels) drawText(stationCode(st, plan.route).trim(), cx, baseY + koBand + textPx * 1.6f, labelPaint)
         }
     }
 }
