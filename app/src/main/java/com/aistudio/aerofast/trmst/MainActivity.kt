@@ -174,6 +174,11 @@ fun AeroFastApp() {
     var selectedLength by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(60.0) }
     // Customer thread length b in mm; 0 = take it from the applied drawing or the standard rule
     var customThreadLengthMm by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
+    // Drawing tensile band (MPa, 0 = property class) and thread-locking patch
+    var tensileMinMpa by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
+    var tensileMaxMpa by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
+    var threadLockPatch by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val tensileRange = com.aistudio.aerofast.trmst.data.TensileRange.of(tensileMinMpa.takeIf { it > 0 }, tensileMaxMpa.takeIf { it > 0 })
     var selectedPropClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.ShopDefaults.propertyClass) }
     var selectedMaterialKey by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.ShopDefaults.materialKey) }
     var selectedThreadClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("6g") }
@@ -216,6 +221,9 @@ fun AeroFastApp() {
             pitchValue = selectedPitchValue,
             lengthMm = selectedLength,
             customThreadLengthMm = customThreadLengthMm,
+            tensileMinMpa = tensileMinMpa,
+            tensileMaxMpa = tensileMaxMpa,
+            threadLockPatch = threadLockPatch,
             propClass = selectedPropClass.name,
             materialKey = selectedMaterialKey,
             threadClass = selectedThreadClass,
@@ -251,6 +259,9 @@ fun AeroFastApp() {
             selectedPitchValue = loadedState.pitchValue
             selectedLength = loadedState.lengthMm
             customThreadLengthMm = loadedState.customThreadLengthMm
+            tensileMinMpa = loadedState.tensileMinMpa
+            tensileMaxMpa = loadedState.tensileMaxMpa
+            threadLockPatch = loadedState.threadLockPatch
             try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
             selectedMaterialKey = loadedState.materialKey
             selectedThreadClass = loadedState.threadClass
@@ -283,6 +294,8 @@ fun AeroFastApp() {
         selectedPitchValue,
         selectedLength,
         customThreadLengthMm,
+        tensileRange,
+        threadLockPatch,
         selectedThreadClass,
         activeMaterial,
         selectedCoating,
@@ -317,6 +330,8 @@ fun AeroFastApp() {
             customNominalDiaMm = appliedExtractedSpec?.nominalDiaMm,
             extractedRadius = appliedExtractedSpec?.radius,
             propertyClass = selectedPropClass,
+            tensileRange = tensileRange,
+            threadLockPatch = threadLockPatch,
             // Dimensions from the applied drawing; a flange bolt can also take its head sizes typed on the Sizing card
             drawing = (appliedExtractedSpec?.geometry() ?: com.aistudio.aerofast.trmst.data.DrawingGeometry()).let { g ->
                 // A thread length typed on the Sizing card overrides the scanned one
@@ -344,6 +359,9 @@ fun AeroFastApp() {
                 selectedPitchValue = loadedState.pitchValue
                 selectedLength = loadedState.lengthMm
                 customThreadLengthMm = loadedState.customThreadLengthMm
+                tensileMinMpa = loadedState.tensileMinMpa
+                tensileMaxMpa = loadedState.tensileMaxMpa
+                threadLockPatch = loadedState.threadLockPatch
                 try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
                 selectedMaterialKey = loadedState.materialKey
                 selectedThreadClass = loadedState.threadClass
@@ -523,6 +541,17 @@ fun AeroFastApp() {
                                     saveAppState()
                                 },
                                 customThreadLengthMm = customThreadLengthMm.takeIf { it > 0.0 },
+                                tensileRange = tensileRange,
+                                onTensileRangeChanged = {
+                                    tensileMinMpa = it?.minMpa ?: 0.0
+                                    tensileMaxMpa = it?.maxMpa ?: 0.0
+                                    saveAppState()
+                                },
+                                threadLockPatch = threadLockPatch,
+                                onThreadLockPatchChanged = {
+                                    threadLockPatch = it
+                                    saveAppState()
+                                },
                                 onCustomThreadLengthChanged = {
                                     customThreadLengthMm = it ?: 0.0
                                     saveAppState()
@@ -589,6 +618,10 @@ fun AeroFastApp() {
                                     selectedLength = spec.lengthMm
                                     // The drawing's own thread length takes over from any typed value
                                     customThreadLengthMm = 0.0
+                                    tensileMinMpa = spec.tensileMinMpa ?: 0.0
+                                    tensileMaxMpa = spec.tensileMaxMpa ?: 0.0
+                                    threadLockPatch = spec.threadLockPatch
+                                    spec.batchQty?.let { batchQty = it }
                                     selectedPropClass = spec.propertyClass
                                     selectedMaterialKey = spec.materialKey
                                     // Keep a scanned thread class only if it is valid for this unit and internal/external thread

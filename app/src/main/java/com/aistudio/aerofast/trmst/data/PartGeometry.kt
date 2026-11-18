@@ -22,7 +22,10 @@ data class DrawingGeometry(
     val nutHeightMm: Double? = null,
     val washerOuterDiaMm: Double? = null,
     val washerInnerDiaMm: Double? = null,
-    val washerThicknessMm: Double? = null
+    val washerThicknessMm: Double? = null,
+    /** Pan head crown radius rf and the height of its cylindrical edge below the dome. */
+    val headDomeRadiusMm: Double? = null,
+    val headEdgeHeightMm: Double? = null
 )
 
 /** Where a volume figure's dimensions came from, weakest source first when several are mixed. */
@@ -99,9 +102,12 @@ object PartGeometry {
 
     /** Cylindrical-head screws: pan, cheese, shoulder, knurled and the aircraft clevis bolt. */
     private val CYLINDRICAL_HEAD_TYPES = setOf(
-        FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.CHEESE_SLOT, FastenerType.SHOULDER_BOLT,
+        FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.PAN_HEXALOBULAR, FastenerType.CHEESE_SLOT, FastenerType.SHOULDER_BOLT,
         FastenerType.THUMB_SCREW, FastenerType.CLEVIS_BOLT
     )
+
+    /** Pan heads: a short cylindrical edge under a spherical crown of radius rf (ISO 1580 / 7045 / 14583). */
+    val PAN_DOME_TYPES = setOf(FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.PAN_HEXALOBULAR)
 
     /** Countersunk screws: the head is a cone sunk into the joint. */
     private val COUNTERSUNK_TYPES = setOf(
@@ -109,6 +115,23 @@ object PartGeometry {
         FastenerType.TAPPING_CSK, FastenerType.DRYWALL_SCREW, FastenerType.CHIPBOARD_SCREW
     )
     private val SOCKET_STYLES = setOf(HeadStyle.SOCKET_CAP, HeadStyle.SOCKET_COUNTERSUNK, HeadStyle.SOCKET_BUTTON)
+
+    data class PanDome(val edgeMm: Double, val capMm: Double, val radiusMm: Double)
+
+    /**
+     * Splits a pan head into its cylindrical edge and spherical crown. The drawing's crown radius and edge height define
+     * the shape exactly; missing values come from head height k, else the ISO 7045 / 14583 proportion rf ≈ 0.8 dk.
+     */
+    fun panDome(dk: Double, k: Double, radius: Double?, edge: Double?): PanDome {
+        val a = dk / 2.0
+        fun capOf(r: Double) = if (r > a) r - kotlin.math.sqrt(r * r - a * a) else a
+        return when {
+            radius != null && edge != null -> PanDome(edge, capOf(radius), radius)
+            radius != null -> capOf(radius).let { cap -> PanDome(max(0.0, k - cap), min(cap, k), radius) }
+            edge != null -> (k - edge).coerceAtLeast(0.0).let { cap -> PanDome(min(edge, k), cap, if (cap > 0) (a * a + cap * cap) / (2 * cap) else 0.0) }
+            else -> (0.8 * dk).let { r -> capOf(r).let { cap -> PanDome(max(0.0, k - cap), min(cap, k), r) } }
+        }
+    }
     private val ROUND_HEAD_STYLES = SOCKET_STYLES + setOf(HeadStyle.CARRIAGE, HeadStyle.ROUND_PIN, HeadStyle.RIVET)
 
     fun styleOf(type: FastenerType): HeadStyle = when {
@@ -162,6 +185,7 @@ object PartGeometry {
         FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.CHEESE_SLOT, FastenerType.CSK_SLOT,
         FastenerType.CSK_CROSS, FastenerType.RAISED_CSK_CROSS, FastenerType.HEX_WASHER_SCREW ->
             "The slot or cross recess is not in the volume: the head is counted as solid."
+        FastenerType.PAN_HEXALOBULAR -> "The hexalobular recess is counted as a circle of the mean of A and B (ISO 10664); a few mm³ either way."
         FastenerType.CONROD_BOLT -> "The necked-down (waisted) shank is not modelled: the shank is taken at one diameter."
         FastenerType.SHEAR_BOLT -> "The reduced head height of a shear bolt is taken from the drawing; no shear-bolt table in the app."
         FastenerType.TAPER_PIN -> "Counted as a plain cylinder at the nominal Ø: the 1:50 taper is not in the volume."
@@ -371,8 +395,21 @@ object PartGeometry {
                 when (style) {
                     HeadStyle.TWELVE_POINT ->
                         seg(ProfileSegment(headH, headSize, shape = SectionShape.TWELVE_POINT), "12-point head", "s ${n(headSize)} × ${n(headH)} mm", headSrc, true)
-                    HeadStyle.SOCKET_CAP ->
+                    HeadStyle.SOCKET_CAP -> if (type in PAN_DOME_TYPES) {
+                        val r = g.headDomeRadiusMm?.takeIf { it > 0 }
+                        val e = g.headEdgeHeightMm?.takeIf { it > 0 }
+                        val dome = panDome(headSize, k, r, e)
+                        if (r != null) fromDrawing += "crown radius rf ${n(r)} mm" else notOnDrawing += "crown radius rf ${n(dome.radiusMm)} mm — ${if (e != null) "from k and the edge height" else "estimated 0.8 dk (ISO 7045 / 14583 proportion)"}"
+                        if (e != null) fromDrawing += "edge height ${n(e)} mm"
+                        val domeSrc = if (r != null || e != null) headSrc else worst(headSrc, DimSource.ESTIMATED)
+                        seg(ProfileSegment(dome.edgeMm, headSize), "Pan head edge", "Ø${n(headSize)} × ${n(dome.edgeMm)} mm", domeSrc, true)
+                        seg(ProfileSegment(dome.capMm, headSize, shape = SectionShape.DOME), "Pan head crown", "R${n(dome.radiusMm)} dome on Ø${n(headSize)} × ${n(dome.capMm)} mm", domeSrc, true)
+                        val kModel = dome.edgeMm + dome.capMm
+                        if (r != null && e != null && g.headHeightMm != null && kotlin.math.abs(kModel - k) > 0.05)
+                            cautions += "Crown R${n(r)} with edge ${n(e)} mm on Ø${n(headSize)} gives head height ${n(kModel)} mm, not the drawn k ${n(k)} mm: the volume uses R and the edge; confirm which the head is gauged to."
+                    } else {
                         seg(ProfileSegment(k, headSize), "Cylindrical head", "Ø${n(headSize)} × k ${n(k)} mm", headSrc, true)
+                    }
                     HeadStyle.ROUND_PIN ->
                         seg(ProfileSegment(k, headSize), "Round head", "Ø${n(headSize)} × k ${n(k)} mm", headSrc, true)
                     HeadStyle.SOCKET_COUNTERSUNK -> {
@@ -388,7 +425,11 @@ object PartGeometry {
                     else ->
                         seg(ProfileSegment(headH, headSize, shape = SectionShape.HEX), "Hex head", "s ${n(headSize)} × ${n(headH)} mm", headSrc, true)
                 }
-                if (style in SOCKET_STYLES) tableSocket?.let { (key0, depth0) ->
+                if (type == FastenerType.PAN_HEXALOBULAR) tableSocket?.let { (a0, depth0) ->
+                    val (aSize, x) = pick("hexalobular drive A", g.socketSizeMm, a0, "ISO 14583 drive size (ISO 10664 nominal A)", true)
+                    val (depth, y) = pick("recess depth t", g.socketDepthMm, depth0, "estimated 0.27 d — take the recess penetration from the drawing", false)
+                    recess(Recess(true, aSize, depth, SectionShape.HEXALOBULAR), "Hexalobular recess", "A ${n(aSize)} × t ${n(depth)} mm", worst(x, y))
+                } else if (style in SOCKET_STYLES) tableSocket?.let { (key0, depth0) ->
                     val (key, x) = pick("socket key s", g.socketSizeMm, key0)
                     val (depth, y) = pick("socket depth t", g.socketDepthMm, depth0)
                     recess(Recess(true, key, depth, SectionShape.HEX), "Hex socket", "s ${n(key, 1)} × t ${n(depth, 1)} mm", worst(x, y))

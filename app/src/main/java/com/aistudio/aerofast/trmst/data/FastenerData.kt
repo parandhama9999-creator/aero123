@@ -37,6 +37,7 @@ enum class FastenerType(
     // Machine Screws (small-diameter headed screws, ISO 1207 family)
     PAN_SLOT("Slotted Pan Head Machine Screw (ISO 1580 / DIN 85)", false, false, false, "Machine Screws"),
     PAN_CROSS("Cross-Recess Pan Head Screw (ISO 7045 / DIN 7985)", false, false, false, "Machine Screws"),
+    PAN_HEXALOBULAR("Hexalobular (Torx) Pan Head Screw (ISO 14583 / ASME B18.6.3)", false, false, false, "Machine Screws"),
     CHEESE_SLOT("Slotted Cheese Head Screw (ISO 1207 / DIN 84)", false, false, false, "Machine Screws"),
     CSK_SLOT("Slotted Countersunk Head Screw (ISO 2009 / DIN 963)", false, false, false, "Machine Screws"),
     CSK_CROSS("Cross-Recess Countersunk Head Screw (ISO 7046 / DIN 965)", false, false, false, "Machine Screws"),
@@ -148,6 +149,7 @@ enum class ProductStandard(val code: String, val label: String, val category: St
     DIN_571("DIN 571", "DIN 571 (Hex Lag / Coach Screw for Wood)", "ISO/DIN Metric"),
     ISO_1580("ISO 1580", "ISO 1580 / DIN 85 (Slotted Pan Head Machine Screw)", "ISO/DIN Metric"),
     ISO_7045("ISO 7045", "ISO 7045 / DIN 7985 (Cross-Recess Pan Head Screw)", "ISO/DIN Metric"),
+    ISO_14583("ISO 14583", "ISO 14583 (Hexalobular Socket Pan Head Screw)", "ISO/DIN Metric"),
     ISO_1207("ISO 1207", "ISO 1207 / DIN 84 (Slotted Cheese Head Screw)", "ISO/DIN Metric"),
     ISO_2009("ISO 2009", "ISO 2009 / DIN 963 (Slotted Countersunk Head Screw)", "ISO/DIN Metric"),
     ISO_7046("ISO 7046", "ISO 7046 / DIN 965 (Cross-Recess Countersunk Screw)", "ISO/DIN Metric"),
@@ -375,14 +377,33 @@ enum class CoatingType(
         false,
         "MIL-DTL-16232 Type M (5–10 µm)"
     ),
+    // AMS-QQ-P-416 sets only a minimum per class (Class 1 0.0005", Class 2 0.0003", Class 3 0.0002"); the maximum is the shop limit
     AERO_CAD(
         "AERO_CAD",
-        "Aero Cadmium Type II (QQ-P-416)",
+        "Cadmium QQ-P-416 Type II Class 1 (13 µm min)",
+        true,
+        13.0,
+        18.0,
+        true,
+        "AMS-QQ-P-416 Type II Class 1: 13 µm min (18 µm shop max)"
+    ),
+    AERO_CAD_CL2(
+        "AERO_CAD_CL2",
+        "Cadmium QQ-P-416 Type II Class 2 (8 µm min)",
         true,
         8.0,
         13.0,
         true,
-        "QQ-P-416 Type II Class 1 (8–13 µm)"
+        "AMS-QQ-P-416 Type II Class 2: 8 µm min (13 µm shop max)"
+    ),
+    AERO_CAD_CL3(
+        "AERO_CAD_CL3",
+        "Cadmium QQ-P-416 Type II Class 3 (5 µm min)",
+        true,
+        5.0,
+        8.0,
+        true,
+        "AMS-QQ-P-416 Type II Class 3: 5 µm min (8 µm shop max)"
     ),
     AERO_CAD_LHE(
         "AERO_CAD_LHE",

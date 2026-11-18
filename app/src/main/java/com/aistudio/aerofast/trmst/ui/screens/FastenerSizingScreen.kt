@@ -96,6 +96,10 @@ fun FastenerSizingScreen(
     onLengthSelected: (Double) -> Unit,
     customThreadLengthMm: Double? = null,
     onCustomThreadLengthChanged: (Double?) -> Unit = {},
+    tensileRange: com.aistudio.aerofast.trmst.data.TensileRange? = null,
+    onTensileRangeChanged: (com.aistudio.aerofast.trmst.data.TensileRange?) -> Unit = {},
+    threadLockPatch: Boolean = false,
+    onThreadLockPatchChanged: (Boolean) -> Unit = {},
     selectedPropClass: PropertyClass,
     onPropClassSelected: (PropertyClass) -> Unit,
     selectedMaterialKey: String,
@@ -576,6 +580,50 @@ fun FastenerSizingScreen(
                             },
                             onDismissRequest = { showMaterialDialog = false }
                         )
+                    }
+
+                    // Drawing tensile band and locking patch: customer requirements that no property class carries
+                    if (graded) {
+                        var rmMinText by remember { mutableStateOf(tensileRange?.minMpa?.toInt()?.toString() ?: "") }
+                        var rmMaxText by remember { mutableStateOf(tensileRange?.maxMpa?.toInt()?.toString() ?: "") }
+                        LaunchedEffect(tensileRange) {
+                            if (tensileRange == null) {
+                                if (rmMinText.toDoubleOrNull() != null) { rmMinText = ""; rmMaxText = "" }
+                            } else if (rmMinText.toDoubleOrNull() != tensileRange.minMpa) {
+                                rmMinText = tensileRange.minMpa.toInt().toString(); rmMaxText = tensileRange.maxMpa.toInt().toString()
+                            }
+                        }
+                        fun push(minT: String, maxT: String) {
+                            val mn = minT.toDoubleOrNull()?.takeIf { it >= 200.0 }
+                            onTensileRangeChanged(com.aistudio.aerofast.trmst.data.TensileRange.of(mn, maxT.toDoubleOrNull()))
+                        }
+                        val fieldStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = rmMinText, onValueChange = { rmMinText = it; push(it, rmMaxText) }, singleLine = true,
+                                label = { Text("Drawing Rm min (MPa)", fontSize = 10.sp) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), textStyle = fieldStyle,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = rmMaxText, onValueChange = { rmMaxText = it; push(rmMinText, it) }, singleLine = true,
+                                label = { Text("Rm max (MPa)", fontSize = 10.sp) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), textStyle = fieldStyle,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (tensileRange != null) {
+                            Text(
+                                text = "${tensileRange.label} replaces the property class: loads, hardness ${"%.0f".format(java.util.Locale.US, com.aistudio.aerofast.trmst.data.HardnessConversion.hrcFor(tensileRange.minMpa))}–${"%.0f".format(java.util.Locale.US, com.aistudio.aerofast.trmst.data.HardnessConversion.hrcFor(tensileRange.maxMpa))} HRC and temper follow it.",
+                                fontSize = 10.sp, fontWeight = FontWeight.Bold, color = customColors.accentPrimary
+                            )
+                        }
+                    }
+                    if (SelectionFilter.hasThread(selectedFastenerType) && !selectedFastenerType.isNut) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onThreadLockPatchChanged(!threadLockPatch) }) {
+                            androidx.compose.material3.Checkbox(checked = threadLockPatch, onCheckedChange = { onThreadLockPatchChanged(it) })
+                            Text(text = "Thread-locking patch / pellet on the drawing (nylon, 3–5 threads)", fontSize = 11.sp, color = customColors.textMain)
+                        }
                     }
 
                     // Row 5: Thread Class & Coating / Batch

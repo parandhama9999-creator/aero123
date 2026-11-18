@@ -96,6 +96,12 @@ object PokaYokeEngine {
         classStrength(pc, 10.0, FastenerCatalog.MATERIALS.values.first()).isIsoSteelClass || pc in INCH_STEEL_CLASSES || pc in STAINLESS_CLASSES
 
     /** Fastener types bought to aerospace procurement specs rather than ISO 898-1 / SAE J429 grades. */
+    /** Coatings finished with a chromate or passivate layer that the bake would destroy. */
+    val CHROMATED_COATINGS = setOf(
+        CoatingType.ZN_NI, CoatingType.ZINC_BLUE, CoatingType.ZINC_YELLOW,
+        CoatingType.AERO_CAD, CoatingType.AERO_CAD_CL2, CoatingType.AERO_CAD_CL3, CoatingType.AERO_CAD_LHE
+    )
+
     fun isAerospaceType(type: FastenerType) = type.category == "Aerospace" || type == FastenerType.TWELVE_POINT
 
     /** Minimum strength the selected property class guarantees (ISO 898-1 Table 3 / ISO 3506-1). */
@@ -182,7 +188,7 @@ object PokaYokeEngine {
         FastenerType.SOCKET_CSK, FastenerType.STUD, FastenerType.THREAD_FORMING_SCREW,
         FastenerType.SET_SCREW_CONE, FastenerType.SET_SCREW_DOG, FastenerType.SET_SCREW_CUP,
         FastenerType.SLOTTED_SET_SCREW, FastenerType.THREADED_ROD, FastenerType.CSK_SLOT, FastenerType.CSK_CROSS,
-        FastenerType.RAISED_CSK_CROSS, FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.CHEESE_SLOT,
+        FastenerType.RAISED_CSK_CROSS, FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.PAN_HEXALOBULAR, FastenerType.CHEESE_SLOT,
         FastenerType.HEX_WASHER_SCREW, FastenerType.SEMS_SCREW, FastenerType.TAPPING_PAN, FastenerType.TAPPING_CSK,
         FastenerType.TAPPING_HEX, FastenerType.SELF_DRILLING, FastenerType.DRYWALL_SCREW
     )
@@ -373,6 +379,7 @@ object PokaYokeEngine {
             FastenerType.LAG_SCREW -> ProductStandard.DIN_571
             FastenerType.PAN_SLOT -> ProductStandard.ISO_1580
             FastenerType.PAN_CROSS -> ProductStandard.ISO_7045
+            FastenerType.PAN_HEXALOBULAR -> ProductStandard.ISO_14583
             FastenerType.CHEESE_SLOT -> ProductStandard.ISO_1207
             FastenerType.CSK_SLOT -> ProductStandard.ISO_2009
             FastenerType.CSK_CROSS -> ProductStandard.ISO_7046
@@ -451,8 +458,14 @@ object PokaYokeEngine {
         stressAreaMm2: Double = 0.0,
         headDims: HeadDimensions? = null,
         /** Thread length b from the customer drawing or typed by the user; null = standard rule. */
-        threadLengthMm: Double? = null
+        threadLengthMm: Double? = null,
+        /** Tensile band from the drawing; replaces the property class strength. */
+        tensileRange: TensileRange? = null,
+        threadLockPatch: Boolean = false,
+        /** The drawing gives the head sizes, so no product table is needed for them. */
+        headFromDrawing: Boolean = false
     ): List<PokaYokeIssue> {
+        fun strengthOf(pc: PropertyClass) = tensileRange?.strength ?: classStrength(pc, d, material)
         val issues = mutableListOf<PokaYokeIssue>()
         fun critical(t: String, det: String, fix: String) = issues.add(PokaYokeIssue(PokaYokeSeverity.CRITICAL, t, det, fix))
         fun warn(t: String, det: String, fix: String) = issues.add(PokaYokeIssue(PokaYokeSeverity.WARNING, t, det, fix))
@@ -495,7 +508,9 @@ object PokaYokeEngine {
                 }
             }
             val stdClasses = standardThreadClasses(standard, isNut)?.filter { it in ThreadClassCatalog.getOptions(unit, isNut) }?.ifEmpty { null }
-            if (stdClasses != null && threadClass !in stdClasses && threadClass in ThreadClassCatalog.getOptions(unit, isNut)) {
+            // A UNJ / MJ class on an aerospace alloy part is the drawing's own requirement, not a deviation from a commercial class
+            val aeroThread = (threadClass.contains("UNJ") || threadClass.endsWith("-MJ")) && (material.isAero || tensileRange != null)
+            if (stdClasses != null && threadClass !in stdClasses && threadClass in ThreadClassCatalog.getOptions(unit, isNut) && !aeroThread) {
                 warn("Thread class not per ${standard.code}", "${standard.code} specifies ${stdClasses.first()}${if (stdClasses.size > 1) " (or ${stdClasses.drop(1).joinToString(" / ")} for coated parts)" else ""}; $threadClass is a special class.", "Use ${stdClasses.joinToString(" / ")}, or put the special class on the drawing as a deviation.")
             }
             val validClasses = ThreadClassCatalog.getOptions(unit, isNut)
@@ -511,7 +526,7 @@ object PokaYokeEngine {
         // Washers are not graded by bolt property class, so the class never drives their checks
         val pc = if (isWasher) null else propertyClass
         if (pc != null && !isWasher) {
-            val cs = classStrength(pc, d, material)
+            val cs = strengthOf(pc)
             if ((cs.isIsoSteelClass || pc in INCH_STEEL_CLASSES) && family != MaterialFamily.CARBON_ALLOY_STEEL) {
                 critical("Class ${pc.label.substringBefore(" (")} needs carbon/alloy steel", "ISO 898-1 classes apply only to carbon and alloy steel; ${material.name} is ${family.name.lowercase().replace('_', ' ')}.", "Use the material's own class (A2-70/A4-80 for austenitic stainless, aerospace class for Ti/Ni alloys) or change the material.")
             } else if (pc in STAINLESS_CLASSES && !isAusteniticA2A4(material)) {
@@ -520,16 +535,20 @@ object PokaYokeEngine {
                 critical("${pc.label.substringBefore(" (")} needs a stainless steel", "ISO 3506-1 C and F classes are martensitic (C) and ferritic (F) stainless grades; ${material.name} is ${family.name.lowercase().replace('_', ' ')}.", "Select a martensitic / ferritic stainless (410, 1.4057, 420) or change the class.")
             } else if (pc in MARTENSITIC_FERRITIC_CLASSES && isAusteniticA2A4(material)) {
                 critical("${pc.label.substringBefore(" (")} is not an austenitic class", "C and F classes are hardened martensitic / ferritic grades; ${material.name} is an austenitic 304/316-type steel that cannot be quenched and tempered.", "Use A2 / A4 for austenitic stainless, or select a martensitic grade.")
-            } else if (pc == PropertyClass.MATERIAL_SPEC && family == MaterialFamily.CARBON_ALLOY_STEEL && !material.isAero) {
+            } else if (pc == PropertyClass.MATERIAL_SPEC && family == MaterialFamily.CARBON_ALLOY_STEEL && !material.isAero && tensileRange == null) {
                 critical("Commercial steel needs a grade", "${material.name} fasteners are graded by ISO 898-1 (metric) or SAE J429 / ASTM (inch).", "Select the ISO / SAE property class.")
             } else if (pc == PropertyClass.AERO_AL && family != MaterialFamily.ALUMINUM) {
                 critical("Aluminium class with non-aluminium material", "${material.name} is not an aluminium alloy.", "Select an aluminium alloy (2024, 7075, 2219) or change the class.")
             } else if (pc == PropertyClass.AERO_1100 && family != MaterialFamily.TITANIUM) {
                 warn("Titanium class with non-titanium material", "Class ${pc.label} is defined for Ti-6Al-4V; ${material.name} selected.", "Confirm the procurement spec, or select a titanium alloy.")
             }
-            val requiredRm = requiredRmMpa(pc, d, material)
+            val requiredRm = tensileRange?.minMpa ?: requiredRmMpa(pc, d, material)
+            val reqLabel = tensileRange?.label ?: pc.label.substringBefore(" (")
             if (material.postForgingTargetUtsMpa < requiredRm * 0.98) {
-                critical("Material cannot reach the class strength", "${material.name} reaches about ${material.postForgingTargetUtsMpa.toInt()} MPa, but ${pc.label.substringBefore(" (")} needs at least ${requiredRm.toInt()} MPa.", "Select a stronger, hardenable material (e.g. 4140/42CrMo4 for 12.9, 10B21 or 4135 for 10.9).")
+                critical("Material cannot reach the class strength", "${material.name} reaches about ${material.postForgingTargetUtsMpa.toInt()} MPa, but $reqLabel needs at least ${requiredRm.toInt()} MPa.", "Select a stronger, hardenable material (e.g. 4140/42CrMo4 for 12.9, 10B21 or 4135 for 10.9).")
+            }
+            if (tensileRange != null && tensileRange.maxMpa - tensileRange.minMpa < 120.0 && family == MaterialFamily.CARBON_ALLOY_STEEL) {
+                warn("Narrow tensile band", "${tensileRange.label} is only ${(tensileRange.maxMpa - tensileRange.minMpa).toInt()} MPa wide (~${"%.0f".format(java.util.Locale.US, HardnessConversion.hrcFor(tensileRange.maxMpa) - HardnessConversion.hrcFor(tensileRange.minMpa))} HRC): normal Q&T scatter can fall outside it.", "Tight furnace uniformity (AMS 2750 class 2 or better) and per-load hardness checks; agree the band with the customer.")
             }
             if (pc in NUT_ONLY_CLASSES && !isNut) {
                 critical("Nut class on a ${if (type.isStud) "stud" else "bolt / screw"}", "${pc.label.substringBefore(" (")} is a nut class: it is specified by proof load and hardness, with no tensile strength for a threaded shank.", "Select the bolt class (ISO 898-1 for metric, SAE J429 / ASTM for inch).")
@@ -560,7 +579,8 @@ object PokaYokeEngine {
         }
 
         // ---- 5. Coating vs material ----
-        val effectiveRm = if (pc != null) classStrength(pc, d, material).rmMinMpa else material.postForgingTargetUtsMpa
+        // A drawing band is judged at its upper end: that is the hardest part the process may make
+        val effectiveRm = tensileRange?.maxMpa ?: if (pc != null) classStrength(pc, d, material).rmMinMpa else material.postForgingTargetUtsMpa
         val isZincBased = coating.name.startsWith("ZN") || coating.name.startsWith("ZINC") || coating == CoatingType.HOT_DIP_GALV
         val isPassivation = coating.name.startsWith("PASSIVATION")
         val isCadmium = coating.name.contains("CAD")
@@ -587,7 +607,11 @@ object PokaYokeEngine {
         // ---- 6. Hydrogen embrittlement (ISO 4042 / ASTM F1941 / ASTM F1940) ----
         val steelLike = family == MaterialFamily.CARBON_ALLOY_STEEL || family == MaterialFamily.STAINLESS && material.hasHighHardness
         if (coating.isElectroplating && steelLike && effectiveRm >= 1000.0) {
-            if (pc == PropertyClass.CLASS_12_9 || effectiveRm >= 1200.0) {
+            val aerospaceCadmium = isCadmium && (material.isAero || isAerospaceType(type) || tensileRange != null)
+            if ((pc == PropertyClass.CLASS_12_9 || effectiveRm >= 1200.0) && aerospaceCadmium) {
+                // Aerospace cadmium (AMS-QQ-P-416 / BAC 5701) is specified on high-strength steel with process controls, not banned
+                mandatory("High-strength steel cadmium plated: hydrogen controls", "${material.name} up to ${effectiveRm.toInt()} MPa with ${coating.label.substringBefore(" (")}: high hydrogen-embrittlement sensitivity at this strength.", "Stress relieve before cleaning if the plating spec requires it, use a low-embrittlement cadmium process, bake within 4 h of plating per AMS-QQ-P-416, and qualify the line with ASTM F519 notched-bar tests.")
+            } else if (pc == PropertyClass.CLASS_12_9 || effectiveRm >= 1200.0) {
                 critical("Electroplating ≥ 1200 MPa fasteners", "ISO 4042 does not recommend electroplating for class 12.9 / ≥ 1200 MPa: baking cannot reliably remove the hydrogen-embrittlement risk.", "Use a non-electrolytic zinc-flake coating (Geomet / Dacromet, ISO 10683) or mechanical zinc.")
             } else {
                 mandatory("De-embrittlement bake required", "${material.name} at ${effectiveRm.toInt()} MPa with ${coating.label}: hydrogen embrittlement risk.", "Bake 190–220 °C for 8–24 h, starting within 4 h of plating (ISO 4042 / ASTM F1941), and verify with ASTM F1940 / ISO 15330.")
@@ -595,6 +619,15 @@ object PokaYokeEngine {
             if (type == FastenerType.NYLOC_NUT) {
                 warn("Nylon insert vs bake temperature", "The polyamide insert is damaged above ~120 °C, but the bake is ~200 °C.", "Plate and bake the nut body first, then insert the nylon ring.")
             }
+            if (coating in CHROMATED_COATINGS) {
+                mandatory("Bake before the chromate / passivate", "${coating.label.substringBefore(" (")} carries a chromate or passivate top layer, which cracks and loses its corrosion protection above ~66 °C; the de-embrittlement bake runs at ~190 °C.", "Sequence: plate → bake (within 4 h) → chromate / passivate. Never bake a chromated part.")
+            }
+        }
+        if (threadLockPatch && !type.isUnthreaded && !isWasher) {
+            if (coating.isElectroplating && steelLike && effectiveRm >= 1000.0) {
+                mandatory("Locking patch after the bake", "A nylon patch / pellet softens above ~120 °C; the hydrogen bake runs at ~190 °C.", "Sequence: plate → bake → chromate → apply patch. Record the patch lot on the traveller.")
+            }
+            mandatory("Gauge the thread before the patch", "The GO ring gauge cannot pass over a nylon patch, and the patch hides the pitch diameter.", "Gauge the thread (GO / NO-GO and UNJ root radius) after plating and before patching; test prevailing torque on patched parts per the customer's locking-element spec (e.g. MIL-DTL-18240).")
         }
 
         // ---- 7. Hot-dip galvanizing (ISO 10684) ----
@@ -644,7 +677,17 @@ object PokaYokeEngine {
                     if (prePlateMax <= pitchDiaMinMm) {
                         critical("Coating consumes the whole thread tolerance", "$msg Pre-plate pitch diameter would have to be below the lower limit ${"%.3f".format(java.util.Locale.US, pitchDiaMinMm)} mm.", "Use class 6f/6e (2A for inch) or a thinner coating.")
                     } else {
-                        mandatory("Roll thread undersize before plating", msg, "Pre-plate pitch diameter ${"%.3f".format(java.util.Locale.US, pitchDiaMinMm)} – ${"%.3f".format(java.util.Locale.US, prePlateMax)} mm (instead of up to ${"%.3f".format(java.util.Locale.US, pitchDiaMaxMm)} mm), then check with the GO/NO-GO gauge after plating.")
+                        val td2Um = (pitchDiaMaxMm - pitchDiaMinMm) * 1000.0
+                        val bandUm = (prePlateMax - pitchDiaMinMm) * 1000.0
+                        // Below a quarter of the tolerance the rolling band is not holdable: cap the coating on the thread instead
+                        val tCtrlUm = (allowanceUm + 0.75 * td2Um) / 4.0
+                        if (bandUm < 0.25 * td2Um && tCtrlUm >= coating.thicknessMinUm) {
+                            val ctrlMax = pitchDiaMaxMm - (4.0 * tCtrlUm - allowanceUm) / 1000.0
+                            mandatory("Control coating thickness on the thread", "$msg At the full ${coating.thicknessMaxUm.toInt()} µm the pre-plate band is only ${bandUm.toInt()} µm wide, which rolling cannot hold.",
+                                "Hold the coating on the thread to ${coating.thicknessMinUm.toInt()}–${tCtrlUm.toInt()} µm (agree with the plater) and roll pre-plate pitch diameter ${"%.3f".format(java.util.Locale.US, pitchDiaMinMm)} – ${"%.3f".format(java.util.Locale.US, ctrlMax)} mm; gauge GO / NO-GO after plating.")
+                        } else {
+                            mandatory("Roll thread undersize before plating", msg, "Pre-plate pitch diameter ${"%.3f".format(java.util.Locale.US, pitchDiaMinMm)} – ${"%.3f".format(java.util.Locale.US, prePlateMax)} mm (instead of up to ${"%.3f".format(java.util.Locale.US, pitchDiaMaxMm)} mm), then check with the GO/NO-GO gauge after plating.")
+                        }
                     }
                 }
             }
@@ -653,15 +696,15 @@ object PokaYokeEngine {
         // ---- 8b. Bolt–nut matching (ISO 898-2: nut class ≥ first digit of the bolt class) ----
         if (!type.isUnthreaded && pc != null && !isWasher) {
             val nutClass = nutClassFor(pc)
-            val minLoadKn = classStrength(pc, d, material).rmMinMpa * stressAreaMm2 / 1000.0
-            val isoNut = classStrength(pc, d, material).isIsoSteelClass
+            val minLoadKn = strengthOf(pc).rmMinMpa * stressAreaMm2 / 1000.0
+            val isoNut = strengthOf(pc).isIsoSteelClass
             if (isNut) {
                 mandatory(if (isoNut) "Nut class $nutClass (ISO 898-2)" else "Nut grade: $nutClass", "Matches ${pc.label.substringBefore(" (")} bolts. Proof load must be at least the mating bolt's minimum breaking load, ${"%.1f".format(java.util.Locale.US, minLoadKn)} kN, so the bolt breaks before the thread strips.", "Mark the nut '$nutClass' and certify the proof-load test per ISO 898-2.")
                 if (standard == ProductStandard.ISO_4033) {
                     warn("Thin nut (ISO 4033)", "Thin/jam nuts are classes 04/05 and cannot carry the full bolt load.", "Use ISO 4032 or ISO 4033 only as a lock/jam nut.")
                 }
             } else {
-                mandatory(if (isoNut) "Mate with nut class $nutClass or higher" else "Mate with nut: $nutClass", "A lower-class nut strips before a ${pc.label.substringBefore(" (")} bolt reaches its ${"%.1f".format(java.util.Locale.US, minLoadKn)} kN breaking load.",
+                mandatory(if (isoNut) "Mate with nut class $nutClass or higher" else "Mate with nut: $nutClass", "A weaker nut or tapped hole strips before a ${tensileRange?.label ?: pc.label.substringBefore(" (")} ${if (type.category == "Machine Screws") "screw" else "bolt"} reaches its ${"%.1f".format(java.util.Locale.US, minLoadKn)} kN breaking load.",
                     if (isoNut) "Specify the nut on the BOM as class $nutClass+ (e.g. ISO 4032-$nutClass) with the same thread size." else "Specify the nut on the BOM as $nutClass with the same thread size.")
             }
         }
@@ -670,7 +713,9 @@ object PokaYokeEngine {
         if (type.isUnthreaded) {
             warn("Rivet joints are designed in shear", "Tensile proof load, thread-root Kt and fatigue figures assume a threaded bolt; for a rivet they are shank-area values only.", "Size the joint from rivet shear and bearing allowables (MMPDS) and the rivet procurement spec.")
         }
-        if (!isWasher && headDims != null && !headDims.isTable && headDims.source.startsWith("Approximated")) {
+        if (headFromDrawing) {
+            // Head sizes come from the drawing: no standard table is needed
+        } else if (!isWasher && headDims != null && !headDims.isTable && headDims.source.startsWith("Approximated")) {
             warn("No dimension table for this type", "${headDims.source}.", "Take head and nut dimensions from the part drawing before releasing weights, tooling or G-code.")
         } else if (!isWasher && headDims != null && !headDims.isTable) {
             warn("Head/nut size estimated", "M$d is outside the ISO/ASME dimension tables, so head and nut dimensions are proportional estimates.", "Take head dimensions from the drawing before releasing weights, tooling or G-code.")
@@ -690,8 +735,10 @@ object PokaYokeEngine {
                 warn("Too short for a partially threaded bolt", "$std needs L ≥ b + plain shank; at L = ${lengthMm.toInt()} mm the thread length b = ${b.toInt()} mm leaves almost no shank.", "Use $full for this length.")
             }
         }
-        if (!isNut && !isWasher && !type.isUnthreaded && lengthMm > 0 && lengthMm < 2.0 * d && type != FastenerType.SOCKET_SET) {
-            warn("Very short length for diameter", "L = ${lengthMm} mm is less than 2 × d (${(2 * d)} mm).", "Check the head can be formed and the thread fully engaged.")
+        // Machine screws are standardised down to about 1 × d (ISO 7045 / ASME B18.6.3); bolts below 2 × d leave no engagement
+        val shortLimit = if (type.category == "Machine Screws" || type == FastenerType.SOCKET_BUTTON || type == FastenerType.SOCKET_CSK) 1.0 else 2.0
+        if (!isNut && !isWasher && !type.isUnthreaded && lengthMm > 0 && lengthMm < shortLimit * d && type != FastenerType.SOCKET_SET) {
+            warn("Very short length for diameter", "L = ${"%.2f".format(java.util.Locale.US, lengthMm)} mm is less than ${if (shortLimit == 1.0) "" else "2 × "}d (${"%.2f".format(java.util.Locale.US, shortLimit * d)} mm).", "Check the head can be formed and the thread fully engaged.")
         }
         if (!material.isAero && d < 1.6 && !isWasher) {
             warn("Below standard size range", "ISO 4014/4017/4032 start at M1.6; M${d} is micro-screw territory (ISO 1207 / ISO 7045).", "Confirm the micro-fastener standard and specialized heading/rolling equipment.")

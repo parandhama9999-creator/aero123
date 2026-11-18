@@ -97,6 +97,15 @@ object DimensionTables {
     )
 
     /** Hex socket (key size, depth) in mm, or null when the part has no socket. */
+    /**
+     * Hexalobular drive for a pan head screw by nominal diameter (ISO 14583 drive sizes; the inch sizes #4, #6, #8, #10,
+     * 1/4 use the same drives as M3, M3.5, M4, M5, M6), as the nominal point-to-point A of ISO 10664.
+     */
+    fun hexalobularDriveA(dMm: Double): Double {
+        val drives = listOf(2.2 to 1.75, 2.7 to 2.40, 3.2 to 2.80, 3.7 to 3.35, 4.4 to 3.95, 5.4 to 4.50, 7.0 to 5.60, 9.0 to 6.75, 11.0 to 8.95)
+        return drives.firstOrNull { dMm <= it.first }?.second ?: 8.95
+    }
+
     fun socketFor(type: FastenerType, unit: UnitSystem, dMm: Double): Pair<Double, Double>? {
         val metric = unit == UnitSystem.METRIC
         return when (type) {
@@ -107,6 +116,8 @@ object DimensionTables {
                 else lookup(ASME_SHCS, dMm / 25.4)?.let { it[1] * 25.4 to 0.5 * dMm }) ?: (0.8 * dMm to 0.5 * dMm)
             FastenerType.SOCKET_CSK -> (if (metric) lookup(ISO_CSK, dMm)?.let { it[2] to it[3] } else null) ?: (0.6 * dMm to 0.36 * dMm)
             FastenerType.SOCKET_BUTTON -> (if (metric) lookup(ISO_BUTTON, dMm)?.let { it[2] to it[3] } else null) ?: (0.6 * dMm to 0.31 * dMm)
+            // Point-to-point A of the ISO 14583 / ASME B18.6.3 drive size; recess depth is an estimate (~0.27 d) until the drawing gives it
+            FastenerType.PAN_HEXALOBULAR -> hexalobularDriveA(dMm) to 0.27 * dMm
             else -> null
         }
     }
@@ -151,7 +162,7 @@ object DimensionTables {
         FastenerType.SQUARE_BOLT, FastenerType.SHOULDER_BOLT, FastenerType.SET_SCREW_CONE, FastenerType.SET_SCREW_DOG,
         FastenerType.SET_SCREW_CUP, FastenerType.SLOTTED_SET_SCREW, FastenerType.THUMB_SCREW, FastenerType.WING_SCREW,
         FastenerType.HANGER_BOLT, FastenerType.ANCHOR_BOLT, FastenerType.LAG_SCREW,
-        FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.CHEESE_SLOT, FastenerType.CSK_SLOT,
+        FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.PAN_HEXALOBULAR, FastenerType.CHEESE_SLOT, FastenerType.CSK_SLOT,
         FastenerType.CSK_CROSS, FastenerType.RAISED_CSK_CROSS, FastenerType.HEX_WASHER_SCREW, FastenerType.SEMS_SCREW,
         FastenerType.TAPPING_PAN, FastenerType.TAPPING_CSK, FastenerType.TAPPING_HEX, FastenerType.SELF_DRILLING,
         FastenerType.DRYWALL_SCREW, FastenerType.CHIPBOARD_SCREW, FastenerType.CONROD_BOLT,
@@ -209,7 +220,7 @@ object DimensionTables {
                 }
             }
             // Machine-screw head families: ISO 1207 / 7045 / 7046 / 7047 head proportions (dk, k as a ratio of d)
-            FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.TAPPING_PAN, FastenerType.SELF_DRILLING ->
+            FastenerType.PAN_SLOT, FastenerType.PAN_CROSS, FastenerType.PAN_HEXALOBULAR, FastenerType.TAPPING_PAN, FastenerType.SELF_DRILLING ->
                 return estimated(2.0 * dMm, 0.60 * dMm, dMm, "pan head proportions, ISO 7045 / ISO 1481")
             FastenerType.CHEESE_SLOT ->
                 return estimated(1.6 * dMm, 0.60 * dMm, dMm, "cheese head proportions, ISO 1207")

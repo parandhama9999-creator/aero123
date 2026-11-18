@@ -644,7 +644,8 @@ fun AiProcessFlowCard(spec: ExtractedFastenerSpec, issues: List<com.aistudio.aer
         com.aistudio.aerofast.trmst.data.MaterialFamily.ALUMINUM, com.aistudio.aerofast.trmst.data.MaterialFamily.COPPER_ALLOY -> "Cold heading from annealed wire"
         com.aistudio.aerofast.trmst.data.MaterialFamily.TITANIUM, com.aistudio.aerofast.trmst.data.MaterialFamily.NICKEL_SUPERALLOY ->
             "Warm heading — temperature per the alloy's forging specification"
-        else -> if (mat.isAero) "Warm heading — temperature per the alloy's forging specification" else "Multi-station cold heading"
+        else -> if (com.aistudio.aerofast.trmst.data.CalculationEngine.isWarmHeaded(mat, spec.nominalDiaMm)) "Warm heading — temperature per the alloy's forging specification"
+            else if (mat.isAero) "Cold heading from fully spheroidize-annealed wire" else "Multi-station cold heading"
     }
 
     Surface(

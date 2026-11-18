@@ -28,7 +28,9 @@ object ProductionReport {
         val grossVol = if (density > 0) r.grossWeightGrams / density * 1000.0 else 0.0
         val plan = RawMaterialPlanner.plan(
             grossVolumeMm3 = grossVol, densityGPerCm3 = density, batchQty = r.batchQty,
-            wireDiameters = RawMaterialPlanner.suggestedDiameters(r.blankTargetDia, r.wireDiaMm),
+            // The heading plan's own wire first, then the neighbouring drawn sizes
+            wireDiameters = (listOf(r.wireDiaMm) + RawMaterialPlanner.suggestedDiameters(r.blankTargetDia, r.wireDiaMm)
+                .filter { kotlin.math.abs(it - r.wireDiaMm) > 0.004 }),
             headVolumeMm3 = r.headVolumeMm3, rollingBlankDiaMm = r.blankTargetDia
         )
         return ProductionSummary(
@@ -43,6 +45,35 @@ object ProductionReport {
             piecesPerTonne = plan?.piecesPerTonne ?: if (r.grossWeightGrams > 0) (1_000_000.0 / r.grossWeightGrams).toInt() else 0,
             plan = plan
         )
+    }
+
+    /** The operations in the order they must run; plating, bake, chromate and patch follow the hydrogen and polymer limits. */
+    fun processSequence(r: FastenerCalculationResult): List<String> = buildList {
+        val threaded = !r.fastenerType.isUnthreaded && !r.fastenerType.isWasher
+        val anneal = r.softAnnealSpec
+        add("Wire Ø${n(r.wireDiaMm)} mm ${r.material.key}" + (if (anneal?.inHouseAnnealNeeded == true) ", ${anneal.route.label.lowercase()}" else "") + ", coat for heading (phosphate + soap / polymer)")
+        add("Cut-off ${n(r.cutOffLengthMm)} mm and head on the ${r.headingPlan?.machineDescription ?: "header"}" +
+            (if (CalculationEngine.isWarmHeaded(r.material, r.nominalDiaMm)) " (warm)" else " (cold)"))
+        if (threaded) add("Roll the thread: blank Ø${n(r.blankLowerLimit, 3)}–${n(r.blankUpperLimit, 3)} mm" +
+            (if (r.threadClass.contains("UNJ") || r.threadClass.endsWith("-MJ")) "; check whether the drawing / spec requires rolling AFTER heat treatment (common for UNJ / MJ fatigue-rated parts)" else ", before heat treatment"))
+        val ht = r.heatTreatmentSpec
+        if (!ht.austenitizingOrSolutionTempC.startsWith("N/A")) {
+            add("Heat treat: ${ht.austenitizingOrSolutionTempC}, ${ht.quenchMedium}; temper ${ht.temperingOrAgingTempC}")
+            add("Check hardness ${ht.targetHardnessHrc}, decarburisation and tensile on the first load")
+        }
+        val bake = r.hasHydrogenEmbrittlementRisk
+        if (r.coating.isElectroplating) {
+            add("Plate ${r.coating.label}" + (if (r.coating in PokaYokeEngine.CHROMATED_COATINGS) " (metal layer only, no chromate yet)" else ""))
+            if (bake) add("Hydrogen de-embrittlement bake ${ht.bakingTempC}, ${ht.bakingSoakTime}, within 4 h of plating")
+            if (r.coating in PokaYokeEngine.CHROMATED_COATINGS) add("Chromate / passivate${if (bake) " after the bake" else ""}")
+        } else if (r.coating.thicknessMaxUm > 0) {
+            add("Coat ${r.coating.label}")
+        }
+        if (threaded) add("Gauge the thread GO / NO-GO${if (r.threadClass.contains("UNJ")) " and the UNJ root radius" else ""} after coating")
+        if (r.threadLockPatch) add("Apply the nylon locking patch (last: it cannot see the bake); test prevailing torque")
+        val recess = r.finishedPart?.recesses?.firstOrNull { it.fromTop }
+        add("Final inspection: dimensions" + (if (recess != null) ", recess gauge" else "") +
+            (if (r.coating.thicknessMaxUm > 0) ", coating thickness" else "") + (if (bake) ", ASTM F519 / F1940 hydrogen check" else "") + "; pack and label")
     }
 
     fun build(r: FastenerCalculationResult, spec: ExtractedFastenerSpec? = null, timestamp: String = ""): String = buildString {
@@ -60,8 +91,9 @@ object ProductionReport {
         row("Thread x length", "${r.threadLabel} x ${n(r.lengthMm, 1)} mm")
         row("Governing standard", "${r.standard.code} (${r.standard.label})")
         row("Material", "${r.material.key} - ${r.material.name}")
-        row("Property class", r.propertyClass?.label ?: "Per material specification")
+        row("Strength", r.tensileRange?.label ?: r.propertyClass?.label ?: "Per material specification")
         row("Coating", r.coating.label)
+        if (r.threadLockPatch) row("Thread locking", "Nylon patch / pellet (drawing)")
         row("Batch quantity", "${r.batchQty} pcs")
         spec?.let {
             row("Read by", it.modelUsed)
@@ -89,7 +121,11 @@ object ProductionReport {
             section("3. RAW MATERIAL - WIRE OPTIONS FOR ${plan.batchQty} PCS")
             append(" Weight is the same at any wire dia; cut-off and length change.\n")
             plan.options.forEach { o ->
-                val tag = if (o == plan.recommended) "  <- RECOMMENDED" else ""
+                val tag = when {
+                    kotlin.math.abs(o.wireDiaMm - r.wireDiaMm) < 1e-6 -> "  <- HEADING PLAN"
+                    o == plan.recommended -> "  <- shortest cut-off"
+                    else -> ""
+                }
                 append(" Wire ${n(o.wireDiaMm)} mm: cut-off ${n(o.cutOffLengthMm)} mm, ${n(o.kgPerMetre, 3)} kg/m, ${n(o.batchLengthM, 0)} m$tag\n")
                 o.role?.let { append("   ${it}\n") }
                 o.cautions.forEach { c -> append("   Caution: $c\n") }
@@ -160,14 +196,21 @@ object ProductionReport {
         row("De-embrittlement bake", if (r.hasHydrogenEmbrittlementRisk) "REQUIRED: ${ht.bakingTempC}, ${ht.bakingSoakTime}, start within 4 h of plating" else "Not required")
 
         section("9. MECHANICAL PROPERTIES REQUIRED")
-        row("Tensile Rm min", "${n(r.postForgingTargetUtsMpa, 0)} MPa")
+        r.tensileRange?.let { row("Tensile Rm (drawing)", "${n(it.minMpa, 0)} - ${n(it.maxMpa, 0)} MPa") }
+            ?: row("Tensile Rm min", "${n(r.postForgingTargetUtsMpa, 0)} MPa")
         row("Yield min", "${n(r.yieldStrengthMpa, 0)} MPa")
         row("Elongation min", "${n(r.minElongationPct, 0)} %")
         if (r.stressAreaAsMm2 > 0) row("Stress area As", "${n(r.stressAreaAsMm2, 1)} mm2")
         if (r.proofLoadKn > 0) row("Proof load", "${n(r.proofLoadKn, 1)} kN")
-        if (r.tensileBreakingLoadKn > 0) row("Min breaking load", "${n(r.tensileBreakingLoadKn, 1)} kN")
+        if (r.tensileBreakingLoadKn > 0) {
+            val maxLoad = r.tensileRange?.let { r.stressAreaAsMm2 * it.maxMpa / 1000.0 }
+            row(if (maxLoad != null) "Breaking load" else "Min breaking load", if (maxLoad != null) "${n(r.tensileBreakingLoadKn, 1)} - ${n(maxLoad, 1)} kN" else "${n(r.tensileBreakingLoadKn, 1)} kN")
+        }
 
-        section("10. RECOMMENDATIONS")
+        section("10. PROCESS SEQUENCE")
+        processSequence(r).forEachIndexed { i, step -> append(" ${(i + 1) * 10}. $step\n") }
+
+        section("11. RECOMMENDATIONS")
         val recs = buildList {
             r.pokaYokeIssues.sortedBy { it.severity.ordinal }.forEach { add("[${it.severity.name}] ${it.title}: ${it.fix}") }
             // The station-by-station plan in section 5 is the heading route; only the risks are repeated here

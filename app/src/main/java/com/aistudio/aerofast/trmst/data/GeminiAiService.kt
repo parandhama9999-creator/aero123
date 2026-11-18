@@ -57,6 +57,16 @@ data class ExtractedFastenerSpec(
     val washerOuterDiaMm: Double? = null,
     val washerInnerDiaMm: Double? = null,
     val washerThicknessMm: Double? = null,
+    /** Pan head crown radius rf and cylindrical edge height. */
+    val headDomeRadiusMm: Double? = null,
+    val headEdgeHeightMm: Double? = null,
+    /** Tensile band from the drawing notes, when it is given instead of a property class. */
+    val tensileMinMpa: Double? = null,
+    val tensileMaxMpa: Double? = null,
+    /** Nylon thread-locking patch / pellet called for on the drawing. */
+    val threadLockPatch: Boolean = false,
+    /** Order quantity from the drawing's title block (QTY), when shown. */
+    val batchQty: Int? = null,
     /** Values the drawing did not show, so a default stands in: each entry starts with the value's name. */
     val assumed: List<String> = emptyList(),
     /** The part as a stack of solids from the head end to the point end, as the AI read it (empty when it gave none). */
@@ -74,9 +84,12 @@ data class ExtractedFastenerSpec(
             headDiaMm = headDiaMm ?: headAcrossFlatsMm.takeIf { roundHead },
             headHeightMm = headHeightMm, flangeDiaMm = flangeDiaMm, flangeThicknessMm = flangeThicknessMm,
             socketSizeMm = socketSizeMm, socketDepthMm = socketDepthMm, neckHeightMm = neckHeightMm, nutHeightMm = nutHeightMm,
-            washerOuterDiaMm = washerOuterDiaMm, washerInnerDiaMm = washerInnerDiaMm, washerThicknessMm = washerThicknessMm
+            washerOuterDiaMm = washerOuterDiaMm, washerInnerDiaMm = washerInnerDiaMm, washerThicknessMm = washerThicknessMm,
+            headDomeRadiusMm = headDomeRadiusMm, headEdgeHeightMm = headEdgeHeightMm
         )
     }
+
+    val tensileRange: TensileRange? get() = TensileRange.of(tensileMinMpa, tensileMaxMpa)
 }
 
 object GeminiAiService {
@@ -268,12 +281,15 @@ object GeminiAiService {
          "threadLengthMm":number,"shankDiaMm":number,"headAcrossFlatsMm":number,"headDiaMm":number,"headHeightMm":number,
          "flangeDiaMm":number,"flangeThicknessMm":number,"socketSizeMm":number,"socketDepthMm":number,"neckHeightMm":number,
          "nutHeightMm":number,"washerOuterDiaMm":number,"washerInnerDiaMm":number,"washerThicknessMm":number,"radius":number,
+         "headDomeRadiusMm":number,"headEdgeHeightMm":number,"tensileMinMpa":number,"tensileMaxMpa":number,"threadLockPatch":false,"quantity":number,
          "solids":[{"feature":"","shape":"CYLINDER|CONE|HEX|SQUARE|TWELVE_POINT|DOME","d1":number,"d2":number,"lengthMm":number,"threaded":false}],
          "cutouts":[{"feature":"","shape":"CYLINDER|CONE|HEX|SQUARE|TWELVE_POINT","d1":number,"d2":number,"lengthMm":number,"count":1,"from":"HEAD_END|POINT_END|THROUGH|CROSS","threaded":false}],
          "detectedDimensions":[{"feature":"","nominal":"","tolerance":""}],"summary":""}
         Rules:
         - fastenerType one of: ${FastenerType.values().joinToString(",") { it.name }}
-        - coating one of: ${CoatingType.values().joinToString(",") { it.name }}
+        - coating one of: ${CoatingType.values().joinToString(",") { it.name }}. Cadmium per QQ-P-416: AERO_CAD = Class 1, AERO_CAD_CL2 = Class 2, AERO_CAD_CL3 = Class 3.
+        - A pan head with a hexalobular (Torx) recess is PAN_HEXALOBULAR. headDomeRadiusMm = crown radius R of a pan head dome; headEdgeHeightMm = height of the pan head's cylindrical edge under the dome.
+        - tensileMinMpa / tensileMaxMpa = tensile strength from the notes (e.g. "TENSILE STRENGTH = 1000-1240MPa"; ksi × 6.895). threadLockPatch = true when a nylon patch, pellet or locking element is called for. quantity = order quantity (QTY) in the title block or parts list, 0 if not shown.
         - materialKey e.g. 10B21, 4140, SS316, A286, Ti-6Al-4V; propertyClass e.g. 8.8, 10.9, A2-70; threadClass e.g. 6g, 6H, 2A, 3A.
         - Inch drawings: give every diameter and length in mm and pitch in mm (25.4/TPI).
         - threadLengthMm = thread length b; shankDiaMm = plain shank / body diameter; headAcrossFlatsMm = across flats s of a hex or 12-point head, or of a nut;
@@ -527,7 +543,15 @@ object GeminiAiService {
         }
 
         val rawPropText = parsedJson.optString("propertyClass", "")
-        if (rawPropText.isBlank() && !fastenerType.isWasher) assumed += "property class (not on the drawing: ${ShopDefaults.propertyClass.label} used)"
+        // A tensile band in the notes replaces a property class
+        val notesText = (listOf(rawPropText, parsedJson.optString("summary", "")) +
+            (parsedJson.optJSONArray("detectedDimensions")?.let { arr -> (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
+                .map { "${it.optString("feature")} ${it.optString("nominal")} ${it.optString("tolerance")}" } } ?: emptyList()))
+        val tensileRange = TensileRange.of(shown(parsedJson, "tensileMinMpa"), shown(parsedJson, "tensileMaxMpa"))
+            ?: notesText.filter { "TENSILE" in it.uppercase() || "MPA" in it.uppercase() || "KSI" in it.uppercase() }.firstNotNullOfOrNull { TensileRange.parse(it) }
+        val threadLockPatch = parsedJson.optBoolean("threadLockPatch", false) ||
+            notesText.any { val u = it.uppercase(); "PATCH" in u || "PELLET" in u || "LOCKING ELEMENT" in u }
+        if (rawPropText.isBlank() && tensileRange == null && !fastenerType.isWasher) assumed += "property class (not on the drawing: ${ShopDefaults.propertyClass.label} used)"
         val rawProp = rawPropText.uppercase()
         val matchedPropClass = when {
             rawProp.isBlank() -> ShopDefaults.propertyClass
@@ -551,6 +575,7 @@ object GeminiAiService {
             rawProp.contains("A2") || rawProp.contains("A4") || rawProp.contains("70") -> PropertyClass.A2_70
             rawProp.contains("1100") || rawProp.contains("TI") -> PropertyClass.AERO_1100
             rawProp.contains("1380") || rawProp.contains("INCONEL") || rawProp.contains("WASP") -> PropertyClass.AERO_1380
+            tensileRange != null -> PropertyClass.MATERIAL_SPEC
             else -> ShopDefaults.propertyClass.also { assumed += "property class ('$rawPropText' not recognised: ${it.label} used)" }
         }
 
@@ -559,7 +584,14 @@ object GeminiAiService {
             SelectionFilter.threadClasses(unitSystem, fastenerType, PokaYokeEngine.defaultStandard(fastenerType, unitSystem)).first()
         }
         val rawCoating = normEnum(parsedJson.optString("coating", ""))
-        val matchedCoating = (if (rawCoating.isBlank()) null else CoatingType.values().find { it.name == rawCoating }
+        // Cadmium is specified by QQ-P-416 class; read the class from the note when the model gave free text
+        val cadText = (listOf(parsedJson.optString("coating", "")) + notesText).joinToString(" ").uppercase()
+        val cadmiumByClass = if (CoatingType.values().none { it.name == rawCoating } && ("CADMIUM" in cadText || "QQ-P-416" in cadText)) when {
+            Regex("""CLASS\s*2\b""").containsMatchIn(cadText) -> CoatingType.AERO_CAD_CL2
+            Regex("""CLASS\s*3\b""").containsMatchIn(cadText) -> CoatingType.AERO_CAD_CL3
+            else -> CoatingType.AERO_CAD
+        } else null
+        val matchedCoating = cadmiumByClass ?: (if (rawCoating.isBlank()) null else CoatingType.values().find { it.name == rawCoating }
             ?: CoatingType.values().find { normEnum(it.label).contains(rawCoating) || rawCoating.contains(it.name) })
             ?: ShopDefaults.coating.also { assumed += "coating (not on the drawing: ${it.label} used)" }
         val summary = parsedJson.optString("summary", "Successfully extracted blueprint features.")
@@ -598,6 +630,12 @@ object GeminiAiService {
             washerOuterDiaMm = geom("washerOuterDiaMm"),
             washerInnerDiaMm = geom("washerInnerDiaMm"),
             washerThicknessMm = geom("washerThicknessMm"),
+            headDomeRadiusMm = geom("headDomeRadiusMm"),
+            headEdgeHeightMm = geom("headEdgeHeightMm"),
+            tensileMinMpa = tensileRange?.minMpa,
+            tensileMaxMpa = tensileRange?.maxMpa,
+            threadLockPatch = threadLockPatch,
+            batchQty = shown(parsedJson, "quantity")?.toInt()?.takeIf { it > 0 },
             assumed = assumed,
             solids = solids,
             cutouts = cutouts,

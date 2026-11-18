@@ -68,7 +68,7 @@ class ProductionReportTest {
         val text = ProductionReport.build(r, spec, "2026-11-18 10:00")
         listOf(
             "1. REALITY CHECK AGAINST THE STANDARD", "2. CUT-OFF LENGTH & WEIGHT", "5. HEADING", "6. THREAD ROLLING",
-            "7. HEAT TREATMENT", "8. COATING & HYDROGEN EMBRITTLEMENT", "9. MECHANICAL PROPERTIES REQUIRED", "10. RECOMMENDATIONS"
+            "7. HEAT TREATMENT", "8. COATING & HYDROGEN EMBRITTLEMENT", "9. MECHANICAL PROPERTIES REQUIRED", "10. PROCESS SEQUENCE", "11. RECOMMENDATIONS"
         ).forEach { assertTrue(it, it in text) }
         assertTrue("CUT-OFF LENGTH          : ${String.format(java.util.Locale.US, "%,.2f", r.cutOffLengthMm)} mm" in text)
         assertTrue("4135" in text && "10000 pcs" in text)

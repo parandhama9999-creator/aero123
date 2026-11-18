@@ -5,7 +5,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.sqrt
 
-enum class SectionShape { ROUND, HEX, SQUARE, TWELVE_POINT, DOME }
+enum class SectionShape { ROUND, HEX, SQUARE, TWELVE_POINT, DOME, HEXALOBULAR }
 
 private val HEX_AREA_FACTOR = sqrt(3.0) / 2.0
 
@@ -17,6 +17,8 @@ internal fun sectionArea(shape: SectionShape, size: Double) = when (shape) {
     SectionShape.HEX -> HEX_AREA_FACTOR * size * size
     SectionShape.TWELVE_POINT -> TWELVE_POINT_AREA_FACTOR * size * size
     SectionShape.SQUARE -> size * size
+    // Hexalobular recess, size = point-to-point A; inner lobes B ≈ 0.713 A (ISO 10664): a circle of the mean of A and B
+    SectionShape.HEXALOBULAR -> PI / 4.0 * (0.8565 * size) * (0.8565 * size)
     else -> PI / 4.0 * size * size
 }
 
@@ -368,7 +370,17 @@ object HeadingProgression {
         return when (part.style) {
             HeadStyle.SOCKET_CAP -> {
                 val rec = part.recesses.firstOrNull { it.fromTop }
-                if (rec == null) {
+                if (top.shape == SectionShape.DOME) {
+                    val edge = head.getOrNull(head.size - 2)?.takeIf { it.shape == SectionShape.ROUND }
+                    val kAll = f(head.sumOf { it.heightMm })
+                    val crown = "pan head Ø$size × k=$kAll mm (edge ${f(edge?.heightMm ?: 0.0)} mm + crown ${f(top.heightMm)} mm) in the crowned punch"
+                    when {
+                        rec == null -> "Pan head form" to "Form $crown, under-head fillet in the die"
+                        rec.shape == SectionShape.HEXALOBULAR -> "Pan head & hexalobular recess" to
+                            "Form $crown; back-extrude hexalobular recess A=${f(rec.sizeMm)} × t=${f(rec.depthMm)} mm with the recess pin"
+                        else -> "Pan head & recess" to "Form $crown; back-extrude recess ${f(rec.sizeMm, 1)} × t=${f(rec.depthMm, 1)} mm"
+                    }
+                } else if (rec == null) {
                     // Pan, cheese, shoulder and clevis heads: a plain cylindrical head. The slot or cross drive is
                     // not in the modelled volume, so the blow closes the head only.
                     "Cylindrical head form" to "Close cylindrical head Ø$size × k=$k mm in the punch cavity, bearing face and edge radius"
@@ -433,11 +445,14 @@ object HeadingProgression {
         }
 
         val stations = mutableListOf(cutOff(wire, slugLen))
+        // Full-thread parts are headed from wire drawn to the rolling blank: nothing to extrude
+        val extrude = lt > 0.0 && reductionPct >= 1.0
         stations += HeadingStation(
             index = 1,
-            title = if (lt > 0.0) "Square & forward extrude" else "Square ends",
-            operation = if (lt > 0.0) "Square sheared ends; extrude thread section Ø${f(wire)} → Ø${f(blank, 3)} × ${f(lt, 1)} mm " +
+            title = if (extrude) "Square & forward extrude" else "Square ends",
+            operation = if (extrude) "Square sheared ends; extrude thread section Ø${f(wire)} → Ø${f(blank, 3)} × ${f(lt, 1)} mm " +
                 "(${f(reductionPct, 0)} % area reduction); head stock ${f(stock, 1)} mm, L/D ${f(ld)}"
+            else if (lt > 0.0) "Square sheared ends; wire is at the rolling blank Ø${f(blank, 3)}, so the shank is not extruded; head stock ${f(stock, 1)} mm, L/D ${f(ld)}"
             else "Square sheared ends; head stock ${f(stock, 1)} mm, L/D ${f(ld)}",
             segments = body + ProfileSegment(stock, wire),
             inDieMm = inDie

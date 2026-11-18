@@ -1,6 +1,7 @@
 package com.aistudio.aerofast.trmst.data
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.ln
 import kotlin.math.max
@@ -109,7 +110,11 @@ data class FastenerCalculationResult(
     /** Wire-preparation anneal that happens before cut-off and heading. */
     val softAnnealSpec: SoftAnnealSpec? = null,
     /** The finished shape of this fastener type: its volume, labelled breakdown and where each dimension came from. */
-    val finishedPart: FinishedPart? = null
+    val finishedPart: FinishedPart? = null,
+    /** Tensile band from the drawing, when it replaces a property class. */
+    val tensileRange: TensileRange? = null,
+    /** Nylon thread-locking patch / pellet called for on the drawing. */
+    val threadLockPatch: Boolean = false
 ) {
     /** Volume of the finished part in mm³ (0 when no shape was built). */
     val partVolumeMm3: Double get() = finishedPart?.volumeMm3 ?: 0.0
@@ -169,8 +174,13 @@ object CalculationEngine {
         extractedRadius: Double? = null,
         propertyClass: PropertyClass? = null,
         /** Geometry read from a scanned drawing; a null field means the standard / table value is used. */
-        drawing: DrawingGeometry = DrawingGeometry()
+        drawing: DrawingGeometry = DrawingGeometry(),
+        /** Tensile band from the drawing (e.g. 1000–1240 MPa): replaces the property class for loads, hardness and checks. */
+        tensileRange: TensileRange? = null,
+        threadLockPatch: Boolean = false
     ): FastenerCalculationResult {
+        @Suppress("NAME_SHADOWING")
+        val propertyClass = if (tensileRange != null) PropertyClass.MATERIAL_SPEC else propertyClass
         val safeBatchQty = batchQty.coerceAtLeast(1)
         val d: Double = customNominalDiaMm ?: if (unitSystem == UnitSystem.METRIC) {
             val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
@@ -189,7 +199,14 @@ object CalculationEngine {
         val threadLabel = if (fastenerType.isUnthreaded) {
             "Ø${d.round(2)} rivet (no thread)"
         } else if (customNominalDiaMm != null) {
-            "Custom Ø${customNominalDiaMm}×${p.round(3)} - $threadClass"
+            // A scanned size that is a catalogue size keeps its standard name (#8-32, M10×1.5)
+            val std = if (unitSystem == UnitSystem.METRIC)
+                FastenerCatalog.METRIC_SIZES.firstOrNull { abs(it.d - customNominalDiaMm) < 0.02 && it.pitches.any { pp -> abs(pp - p) < 0.005 } }
+                    ?.let { "M${it.d.let { v -> if (v % 1.0 == 0.0) v.toInt().toString() else v.toString() }}×$p - $threadClass" }
+            else FastenerCatalog.INCH_SIZES.firstOrNull { abs(it.dInch * 25.4 - customNominalDiaMm) < 0.03 }?.let { s ->
+                s.tpis.firstOrNull { abs(it - 25.4 / p) < 0.1 }?.let { tpi -> "${s.label.substringBefore(" ")}-$tpi $threadClass" }
+            }
+            std ?: "Custom Ø${customNominalDiaMm}×${p.round(3)} - $threadClass"
         } else if (unitSystem == UnitSystem.METRIC) {
             val metric = FastenerCatalog.METRIC_SIZES.getOrElse(nominalSizeIndex) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
             "M${metric.d.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() }}×$p - $threadClass"
@@ -384,7 +401,7 @@ object CalculationEngine {
 
         // Geometry & Volume
         val lt = drawing.threadLengthMm ?: PokaYokeEngine.threadLengthB(fastenerType, unitSystem, d, lengthMm)
-        val dw = ((d * 0.985) * 100).roundToInt() / 100.0 // Wire feedstock diameter
+        var dw = ((d * 0.985) * 100).roundToInt() / 100.0 // Wire feedstock diameter
         // Head / nut / washer geometry from the ISO, DIN and ASME tables
         val dims = DimensionTables.forPart(fastenerType, unitSystem, d)
         val s = dims.acrossFlatsS
@@ -418,6 +435,11 @@ object CalculationEngine {
             type = fastenerType, unit = unitSystem, dMm = d, lengthMm = lengthMm, threadLengthMm = lt, blankDiaMm = blankDia,
             table = dims, tableSocket = socket, g = drawing, forging = boltForging, flange = flange?.takeIf { boltForging != null }
         )
+        // A headed part with no plain shank is made from wire drawn to the rolling blank: nothing to extrude
+        val fullThreadHeaded = part.headSegmentCount > 0 && part.style != HeadStyle.HEX_TRIMMED &&
+            part.style != HeadStyle.NUT && part.style != HeadStyle.WASHER && !fastenerType.isUnthreaded &&
+            part.dieSegments.isNotEmpty() && part.dieSegments.all { abs(it.dBottomMm - blankDia) < 1e-9 && abs(it.dTopMm - blankDia) < 1e-9 }
+        if (fullThreadHeaded) dw = kotlin.math.ceil(blankDia * 100.0 - 1e-6) / 100.0
         val totalVolMm3 = part.volumeMm3
         val hexHeadArea = (sqrt(3.0) / 2.0) * s.pow(2.0)
         // Head material that has to be gathered above the die (drives the upset ratio and the flow stress)
@@ -452,7 +474,8 @@ object CalculationEngine {
         val stressAreaAsMm2 = if (fastenerType.isUnthreaded) (PI / 4.0) * d.pow(2.0)
             else (PI / 4.0) * (d - (if (unitSystem == UnitSystem.INCH) 0.974279 else 0.938194) * p).pow(2.0)
         // Loads follow the selected property class (ISO 898-1 proof stress Sp and min Rm), not just the raw alloy
-        val strength = if (propertyClass != null) PokaYokeEngine.classStrength(propertyClass, d, material)
+        val strength = if (tensileRange != null) tensileRange.strength
+            else if (propertyClass != null) PokaYokeEngine.classStrength(propertyClass, d, material)
             else ClassStrength(material.postForgingTargetUtsMpa, material.yieldStrengthMpa, material.yieldStrengthMpa * 0.9, false)
         val effectiveRmMpa = strength.rmMinMpa
         val effectiveYieldMpa = strength.yieldMinMpa
@@ -468,7 +491,7 @@ object CalculationEngine {
         val recommendedMachine = when {
             headingPlan == null -> "Progressive blank & pierce press"
             else -> {
-                val warm = if (material.isAero) "warm " else ""
+                val warm = if (isWarmHeaded(material, d)) "warm " else ""
                 "${headingPlan.machineDescription.replaceFirstChar { it.uppercase() }} ($warm${machineCapacity}T @ ${material.headingSpm} SPM)"
             }
         }
@@ -615,7 +638,7 @@ object CalculationEngine {
         val finalUnit = unitSubtotal * (1.0 + marginPct / 100.0)
         val batchTotal = finalUnit * batchQty
 
-        val (risks, recommendations) = analyzeForgingAndCrackRisks(extractedRadius, material, ldRatio)
+        val (risks, recommendations) = analyzeForgingAndCrackRisks(extractedRadius, material, ldRatio, d)
 
         val rootRadiusR = 0.144 * p
         // No thread root on a rivet shank
@@ -684,7 +707,11 @@ object CalculationEngine {
             forgingStages = numberedStages,
             headingPlan = headingPlan,
             boltForging = boltForging,
-            heatTreatmentSpec = calculateDynamicHeatTreatment(material, d, hasHeRisk, propertyClass),
+            heatTreatmentSpec = calculateDynamicHeatTreatment(material, d, hasHeRisk, propertyClass).let { ht ->
+                if (tensileRange != null) heatTreatForRange(ht, material, tensileRange) else ht
+            },
+            tensileRange = tensileRange,
+            threadLockPatch = threadLockPatch,
             softAnnealSpec = SoftAnnealEngine.build(material),
             finishedPart = part,
             cncCycleTimeSec = totalCncSec.round(1),
@@ -711,6 +738,9 @@ object CalculationEngine {
             propertyClass = propertyClass,
             headDimensions = dims,
             pokaYokeIssues = PokaYokeEngine.check(
+                tensileRange = tensileRange,
+                threadLockPatch = threadLockPatch,
+                headFromDrawing = drawing.headHeightMm != null && (drawing.headDiaMm != null || drawing.acrossFlatsMm != null),
                 type = fastenerType,
                 unit = unitSystem,
                 standard = standard,
@@ -737,19 +767,26 @@ object CalculationEngine {
     private fun analyzeForgingAndCrackRisks(
         extractedRadius: Double?,
         material: MaterialInfo,
-        ldRatio: Double
+        ldRatio: Double,
+        d: Double
     ): Pair<List<String>, List<String>> {
         val risks = mutableListOf<String>()
         val recommendations = mutableListOf<String>()
 
-        if (ldRatio > 2.3) {
-            risks.add("⚠️ High Upset Ratio (${String.format(java.util.Locale.US, "%.2f", ldRatio)} > 2.3): Severe risk of free-end buckling and folding laps during heading.")
-            recommendations.add("Mandatory 14° Taper Coning Punch in Station 1 + Enclosed Pre-heading in Station 2.")
+        if (ldRatio > HeadingProgression.THREE_BLOW_LD) {
+            risks.add("⚠️ High Upset Ratio (${String.format(java.util.Locale.US, "%.2f", ldRatio)} > ${HeadingProgression.THREE_BLOW_LD}): beyond three blows — severe risk of buckling and folding laps; use larger wire or warm forming.")
+            recommendations.add("Gather the head in a cone pre-upset before the finishing blow (see the die progression for the stations).")
+        } else if (ldRatio > 2.3) {
+            risks.add("⚠️ Upset L/D ${String.format(java.util.Locale.US, "%.2f", ldRatio)} > 2.3: a single open upset would buckle; the die progression gathers the head in cone preform blow(s) first.")
+            recommendations.add("Gather the head in a cone pre-upset before the finishing blow (see the die progression for the stations).")
         } else {
             risks.add("✅ Safe Upset Ratio (${String.format(java.util.Locale.US, "%.2f", ldRatio)} ≤ 2.3): Stable metal flow without buckling risk.")
         }
 
-        if (material.hasHighHardness && material.isAero) {
+        if (material.isAero && PokaYokeEngine.materialFamily(material) == MaterialFamily.CARBON_ALLOY_STEEL && !isWarmHeaded(material, d)) {
+            risks.add("✈️ Aerospace alloy steel (${material.name}): cold headable only from fully spheroidize-annealed wire; it work-hardens faster than commercial grades.")
+            recommendations.add("Buy or anneal the wire fully spheroidized (typically ≤ 92 HRB), use phosphate + soap or polymer coating, and magnetic-particle check the first-off heads for cracks.")
+        } else if (material.hasHighHardness && material.isAero) {
             risks.add("✈️ High-Strength Aerospace Alloy Warning (${material.name}): Rapid work-hardening behavior. Room-temperature cold working will cause catastrophic micro-cracking.")
             recommendations.add("Strictly enforce Controlled Warm Forging / Induction Heating (650°C–720°C) with Glass-MoS2 dual lubrication.")
         } else if (material.name.contains("Stainless", ignoreCase = true) || material.name.contains("SS204", ignoreCase = true) || material.name.contains("SS304", ignoreCase = true)) {
@@ -778,6 +815,41 @@ object CalculationEngine {
         "10B21", "4135", "4140", "4340", "42CRMO4", "AISI_51B37", "EN24", "EN24_ESR", "8740",
         "AISI_4130", "30KHGSA", "16KHGSN", "35NCD16", "SS410"
     )
+
+    /** Hardness window and temper guidance for a tensile band taken from the drawing. */
+    fun heatTreatForRange(ht: HeatTreatmentSpec, material: MaterialInfo, r: TensileRange): HeatTreatmentSpec {
+        val lo = HardnessConversion.hrcFor(r.minMpa)
+        val hi = HardnessConversion.hrcFor(r.maxMpa)
+        // Aim the middle third of the band so scatter stays inside both limits
+        val aimLo = lo + (hi - lo) / 3.0
+        val aimHi = hi - (hi - lo) / 3.0
+        fun h(v: Double) = "%.0f".format(java.util.Locale.US, v)
+        val rangeText = "${h(lo)}–${h(hi)} HRC for ${r.minMpa.toInt()}–${r.maxMpa.toInt()} MPa; aim ${h(aimLo)}–${h(aimHi)} HRC"
+        if (PokaYokeEngine.materialFamily(material) != MaterialFamily.CARBON_ALLOY_STEEL)
+            return ht.copy(targetUtsMpa = "${r.minMpa.toInt()}–${r.maxMpa.toInt()} MPa (drawing)", targetHardnessHrc = "${ht.targetHardnessHrc} (check against $rangeText)")
+        val start = TemperGuide.startTempC(material.key, (aimLo + aimHi) / 2.0)
+        val temper = if (start != null)
+            "Trial temper ${(start - 15).roundToInt()}–${(start + 15).roundToInt()}°C (typical ${material.key} response for ${h(aimLo)}–${h(aimHi)} HRC); adjust after the first hardness and tensile check"
+        else "Temper by trial to ${h(aimLo)}–${h(aimHi)} HRC: a higher temperature lowers the strength (${ht.temperingOrAgingTempC} is the class cycle)"
+        return ht.copy(
+            temperingOrAgingTempC = temper,
+            targetHardnessHrc = rangeText,
+            targetUtsMpa = "${r.minMpa.toInt()}–${r.maxMpa.toInt()} MPa (drawing)"
+        )
+    }
+
+    /**
+     * Titanium, nickel and other aerospace superalloys are headed warm; aerospace alloy steels (4340, 9310 …) cold head
+     * from spheroidize-annealed wire up to ~M16, and are headed warm above that.
+     */
+    fun isWarmHeaded(material: MaterialInfo, dMm: Double): Boolean {
+        if (!material.isAero) return false
+        return when (PokaYokeEngine.materialFamily(material)) {
+            MaterialFamily.CARBON_ALLOY_STEEL -> dMm > 16.0
+            MaterialFamily.ALUMINUM, MaterialFamily.COPPER_ALLOY -> false
+            else -> true
+        }
+    }
 
     fun calculateDynamicHeatTreatment(
         material: MaterialInfo,
