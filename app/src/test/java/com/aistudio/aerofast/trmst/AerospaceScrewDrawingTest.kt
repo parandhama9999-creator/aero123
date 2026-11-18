@@ -49,8 +49,10 @@ class AerospaceScrewDrawingTest {
         assertEquals(kotlin.math.ceil(r.blankTargetDia * 100 - 1e-6) / 100, r.wireDiaMm, 1e-9)
         assertEquals(15.1, r.cutOffLengthMm, 0.2)
         val plan = r.headingPlan!!
-        assertEquals(HeaderRoute.MULTI_STATION, plan.route)
-        assertEquals("Square ends", plan.stations[1].title)
+        // No extrusion and a 2.4 L/D head: one die, cone blow + finishing blow
+        assertEquals(HeaderRoute.TWO_BLOW, plan.route)
+        assertEquals("1st blow: cone preform", plan.stations[1].title)
+        assertEquals(3, plan.stations.size)
         assertTrue(plan.stations.last().operation.contains("hexalobular recess"))
         assertEquals("#8-32 3A-UNJ", r.threadLabel)
         assertFalse(r.recommendedMachine.contains("warm"))          // 4340 at #8 is cold headed

@@ -98,7 +98,9 @@ enum class HeaderRoute(val label: String) {
     /** Blanks transfer from die to die: extrusion, pre-upsets, socket back-extrusion and trimming are all in-line. */
     MULTI_STATION("Multi-station progressive former"),
     NUT_FORMER("Nut former"),
-    PRESS("Progressive press")
+    PRESS("Progressive press"),
+    /** One die, two punches: used only when the part needs no extrusion and no more than two blows. */
+    TWO_BLOW("1-die 2-blow header")
 }
 
 data class HeadingPlan(
@@ -121,6 +123,7 @@ data class HeadingPlan(
         HeaderRoute.MULTI_STATION -> "$dieStations-die progressive former"
         HeaderRoute.NUT_FORMER -> "$dieStations-die nut former"
         HeaderRoute.PRESS -> "progressive press"
+        HeaderRoute.TWO_BLOW -> "1-die 2-blow header"
     }
 
     /** Largest relative gap between the slug volume and (station volume + scrap removed so far). */
@@ -189,7 +192,7 @@ object HeadingProgression {
             part.style == HeadStyle.HEADLESS || part.headVolumeMm3 <= 0.0 -> headless(type, wireDiaMm, part, threadLabel)
             else -> headed(type, wireDiaMm, part, threadLabel)
         }
-        return plan.copy(route = HeaderRoute.MULTI_STATION, routeReason = reason)
+        return if (plan.route == HeaderRoute.TWO_BLOW) plan else plan.copy(route = HeaderRoute.MULTI_STATION, routeReason = reason)
     }
 
     private fun area(d: Double) = sectionArea(SectionShape.ROUND, d)
@@ -447,6 +450,33 @@ object HeadingProgression {
         val stations = mutableListOf(cutOff(wire, slugLen))
         // Full-thread parts are headed from wire drawn to the rolling blank: nothing to extrude
         val extrude = lt > 0.0 && reductionPct >= 1.0
+        // 1-die 2-blow header, only where it is enough: no extrusion, head gathered in ≤ 2 blows, no trimming
+        // (machine screws, and formed hex / hex-flange heads)
+        if (!extrude && blows <= 2 && !upsetIsFinal && (type.category == "Machine Screws" || part.style == HeadStyle.HEX_FORMED)) {
+            val hc0 = stock * 0.62
+            val dc = minOf(coneLargeEnd(headVol, wire, hc0), 0.9 * dRound)
+            val hc = 12.0 * headVol / (PI * (dc * dc + dc * wire + wire * wire))
+            stations += HeadingStation(
+                index = 1,
+                title = "1st blow: cone preform",
+                operation = "Gather head stock ${f(stock, 1)} mm (L/D ${f(ld)}) in the cone punch: Ø${f(dc)} → Ø${f(wire)} × ${f(hc, 1)} mm" +
+                    (if (lt > 0.0) "; the shank stays in the die at the rolling blank Ø${f(blank, 3)}" else ""),
+                segments = body + ProfileSegment(hc, dc, wire),
+                inDieMm = inDie
+            )
+            val (title, operation) = finishingBlow(type, part)
+            stations += HeadingStation(
+                index = 2, title = "2nd blow: $title", operation = operation,
+                segments = part.segments, recesses = part.recesses, inDieMm = inDie, isPeakBlow = true
+            )
+            val notes = buildList {
+                if (lt > 0.0) add("Wire is drawn to the rolling blank Ø${f(blank, 3)} mm: the shank is not extruded, the thread is rolled straight onto it.")
+                addAll(part.cautions)
+            }
+            return HeadingPlan(wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), 2, notes,
+                route = HeaderRoute.TWO_BLOW,
+                routeReason = "1-die 2-blow header: no extrusion and head L/D ${f(ld)} ≤ $TWO_BLOW_LD, so one die with a cone blow and a finishing blow makes the part. Parts that need extrusion, trimming or a third blow run on the progressive former.")
+        }
         stations += HeadingStation(
             index = 1,
             title = if (extrude) "Square & forward extrude" else "Square ends",

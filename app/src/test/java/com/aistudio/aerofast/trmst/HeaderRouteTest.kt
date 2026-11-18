@@ -5,7 +5,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 /**
- * Every headed part runs on a progressive former (the 1-die 2-blow route was removed), a nut runs on a nut
+ * Headed parts run on a progressive former, or on a 1-die 2-blow header when no extrusion and ≤ 2 blows are needed; a nut runs on a nut
  * former and a washer is not headed at all. The head volume is also reported on its own.
  */
 class HeaderRouteTest {
@@ -19,19 +19,29 @@ class HeaderRouteTest {
         )
     }
 
-    @Test fun thereIsNoOneDieRouteLeft() {
+    @Test fun oneDieTwoBlowOnlyWhereItIsEnough() {
         assertEquals(
-            listOf("MULTI_STATION", "NUT_FORMER", "PRESS"),
+            listOf("MULTI_STATION", "NUT_FORMER", "PRESS", "TWO_BLOW"),
             HeaderRoute.values().map { it.name }
         )
         for (type in FastenerType.values()) {
             if (type.isWasher) continue
-            val plan = calc(type, 10.0, 50.0).headingPlan!!
-            assertTrue("$type ran on ${plan.route}", plan.route == HeaderRoute.MULTI_STATION || plan.route == HeaderRoute.NUT_FORMER)
-            assertFalse("$type still names a 1-die header", plan.machineDescription.contains("1-die header"))
-            assertFalse("$type still names a 1-die header", plan.machineDescription.contains("blow header"))
-            assertFalse("$type still offers the 1-die route", plan.routeReason.contains("1-die"))
+            val r = calc(type, 10.0, 50.0)
+            val plan = r.headingPlan!!
+            if (plan.route == HeaderRoute.TWO_BLOW) {
+                // No extrusion, no trimming, at most two blows on one die
+                assertEquals("$type", 3, plan.stations.size)
+                assertTrue("$type", plan.upsetBlows <= 2)
+                assertTrue("$type", plan.stations.none { it.title.contains("extrude", ignoreCase = true) || it.title.contains("Trim") })
+                assertTrue("$type", type.category == "Machine Screws" || r.finishedPart!!.style == HeadStyle.HEX_FORMED)
+                assertTrue("$type", plan.maxVolumeError < 1e-9)
+            } else {
+                assertTrue("$type ran on ${plan.route}", plan.route == HeaderRoute.MULTI_STATION || plan.route == HeaderRoute.NUT_FORMER)
+            }
         }
+        // A full-thread pan head screw qualifies; a partial-thread bolt that must be extruded does not
+        assertEquals(HeaderRoute.TWO_BLOW, calc(FastenerType.PAN_HEXALOBULAR, 4.0, 10.0).headingPlan!!.route)
+        assertEquals(HeaderRoute.MULTI_STATION, calc(FastenerType.HEX_BOLT, 10.0, 60.0).headingPlan!!.route)
     }
 
     @Test fun aFullyThreadedBoltIsHeadedOnAProgressiveFormer() {
