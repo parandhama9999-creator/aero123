@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
  */
 enum class AiProvider(val label: String, val defaultBaseUrl: String, val suggestedModel: String, val note: String) {
     GEMINI("Google Gemini", "https://generativelanguage.googleapis.com", "",
-        "Reads drawings, answers the Co-Pilot and Jarvis. Key from Google AI Studio."),
+        "Reads drawings, answers the Co-Pilot. Key from Google AI Studio."),
     OPENROUTER("OpenRouter", "https://openrouter.ai/api/v1", "openrouter/free",
         "Models ending in “:free” cost nothing but are rate-limited; “openrouter/free” lets OpenRouter pick a free one. Key from openrouter.ai."),
     DEEPSEEK("DeepSeek", "https://api.deepseek.com", "deepseek-flash",

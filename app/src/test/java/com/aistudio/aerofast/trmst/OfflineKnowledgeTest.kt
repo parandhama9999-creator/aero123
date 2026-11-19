@@ -28,7 +28,7 @@ class OfflineKnowledgeTest {
 
     @Test fun anotherSizeIsCalculatedNotGuessed() {
         val a = ask("M12 x 80 hex bolt weight")
-        val expected = OfflineKnowledge.recalc(base, JarvisParser.parse("M12 x 80 hex bolt"))
+        val expected = OfflineKnowledge.recalc(base, QuestionParser.parse("M12 x 80 hex bolt"))
         assertEquals(12.0, expected.nominalDiaMm, 1e-9)
         assertEquals(80.0, expected.lengthMm, 1e-9)
         assertTrue(a.text, a.text.startsWith("For M12×1.75 - 6g × 80.0 mm"))
@@ -98,7 +98,7 @@ class OfflineKnowledgeTest {
 
     @Test fun namingAPartGivesItsCutOffAndWeight() {
         val a = ask("M8 x 30 hex bolt")
-        val r = OfflineKnowledge.recalc(base, JarvisParser.parse("M8 x 30 hex bolt"))
+        val r = OfflineKnowledge.recalc(base, QuestionParser.parse("M8 x 30 hex bolt"))
         assertTrue(a.text, a.text.contains(n(r.cutOffLengthMm, 2)) && a.text.contains(n(r.netWeightGrams, 3)))
     }
 

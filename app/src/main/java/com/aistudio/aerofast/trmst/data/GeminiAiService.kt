@@ -680,66 +680,6 @@ object GeminiAiService {
         )
     }
 
-    /** One text-only request through the model chain; null when no model answered. JSON mode returns the raw JSON text. */
-    internal suspend fun generateText(context: Context, prompt: String, json: Boolean, maxTokens: Int = 1024): String? = withContext(Dispatchers.IO) {
-        if (!AiSettings.isConfigured(context)) return@withContext null
-        val cfg = AiSettings.load(context)
-        if (cfg.provider != AiProvider.GEMINI) return@withContext OpenAiCompatClient.chat(cfg, prompt, null, maxTokens, 0.1).getOrNull()
-        val apiKey = getEffectiveApiKey(context)
-        val body = JSONObject().apply {
-            put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
-            put("generationConfig", JSONObject().apply {
-                put("temperature", 0.1)
-                put("maxOutputTokens", maxTokens)
-                put("thinkingConfig", JSONObject().put("thinkingLevel", "minimal"))
-                if (json) put("responseMimeType", "application/json")
-            })
-        }
-        for (model in MODEL_FALLBACK_CHAIN) {
-            try {
-                checkRateLimit()
-                val request = Request.Builder()
-                    .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey")
-                    .header("User-Agent", "AeroFastPro/1.0")
-                    .post(body.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-                val response = httpClient.newCall(request).execute()
-                val text = response.use { if (it.isSuccessful) it.body?.string() else null } ?: continue
-                val parts = JSONObject(text).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: continue
-                val out = (0 until parts.length()).mapNotNull { parts.optJSONObject(it) }
-                    .filter { !it.optBoolean("thought", false) }.joinToString("") { it.optString("text", "") }.trim()
-                if (out.isNotBlank()) return@withContext out
-            } catch (_: Exception) {
-            }
-        }
-        null
-    }
-
-    /** Jarvis: turns a spoken sentence in any language into the app's settings and questions. */
-    suspend fun jarvisInterpret(context: Context, spoken: String): JarvisIntent? {
-        val prompt = """
-            Voice command for a fastener engineering app. Return ONLY this JSON (omit nothing; use "" or 0 when not said):
-            {"fastenerType":"","unitSystem":"","nominalDiameterMm":0,"pitch":0,"lengthMm":0,"threadLengthMm":0,"materialKey":"","propertyClass":"",
-             "tensileMinMpa":0,"tensileMaxMpa":0,"coating":"","batchQty":0,"headerChoice":"","threadLockPatch":null,"queries":[],"action":""}
-            Rules:
-            - The sentence may be Telugu, Hindi, English, Spanish, German, French, Russian, Chinese, Japanese or mixed. Convert number words to digits.
-            - fastenerType one of: ${FastenerType.values().joinToString(",") { it.name }}
-            - coating one of: ${CoatingType.values().joinToString(",") { it.name }}
-            - materialKey one of: ${FastenerCatalog.MATERIALS.keys.joinToString(",")}
-            - propertyClass like 8.8, 10.9, 12.9, A2-70. unitSystem METRIC or INCH; inch sizes: nominalDiameterMm in mm, pitch in TPI; metric pitch in mm.
-            - headerChoice AUTO, TWO_BLOW (1 die 2 blow) or MULTI_STATION (multi-station / progressive).
-            - queries: any of CUT_OFF, WEIGHT, BLANK, HARDNESS, MACHINE, STATUS the user asks about.
-            - action: SHARE_REPORT, OPEN_SCANNER, OPEN_SIZING, OPEN_FORGING, OPEN_COPILOT or "".
-            Sentence: "${spoken.replace("\"", "'")}"
-        """.trimIndent()
-        val text = generateText(context, prompt, json = true) ?: return null
-        return try {
-            JarvisParser.fromJson(JSONObject(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1))).takeIf { !it.isEmpty }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     // 3. Local Zero-Quota Engine for Standard Fastener & Conversational Queries
     /** The scanned drawing as text: what was read, every dimension, and the total volume with its breakdown. */
     fun drawingContext(spec: ExtractedFastenerSpec, result: FastenerCalculationResult): String = buildString {
@@ -996,9 +936,7 @@ object GeminiAiService {
         /** The Sizing selection, secondary to a scanned drawing (currentResult is then the drawing's calculation). */
         sizingResult: FastenerCalculationResult? = null,
         /** Language to answer in; null = the app language. */
-        replyLanguage: com.aistudio.aerofast.trmst.util.AppLanguage? = null,
-        /** Jarvis: a short answer to be read aloud. */
-        voice: Boolean = false
+        replyLanguage: com.aistudio.aerofast.trmst.util.AppLanguage? = null
     ): String = withContext(Dispatchers.IO) {
         val trimmedPrompt = prompt.trim()
 
@@ -1072,7 +1010,6 @@ object GeminiAiService {
             }
 
             val currentLang = replyLanguage ?: try { com.aistudio.aerofast.trmst.util.AppLocalization.getSelectedLanguage(context) } catch (_: Exception) { com.aistudio.aerofast.trmst.util.AppLanguage.EN }
-            if (voice) append("\nVOICE REPLY: this answer is read aloud. At most 3 short sentences, plain words, no bullets, no symbols, no markdown, no emoji. Say numbers with their units. If you are not certain, say that you are not certain instead of guessing.\n")
             if (currentLang != com.aistudio.aerofast.trmst.util.AppLanguage.EN) {
                 append("\nCRITICAL USER LANGUAGE REQUIREMENT:\n")
                 append("The user has configured the application language to: ${currentLang.displayName} (${currentLang.code}).\n")

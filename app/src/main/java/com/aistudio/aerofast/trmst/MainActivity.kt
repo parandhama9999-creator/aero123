@@ -181,15 +181,6 @@ fun AeroFastApp() {
     // Heading machine: the die design, wire and cut-off follow it everywhere (Sizing, HT & Forging, scanner, report)
     var headerChoice by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO) }
 
-    // Jarvis: voice assistant that listens and answers in the chosen app language
-    var jarvisOpen by remember { mutableStateOf(false) }
-    var jarvisLang by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(currentLanguage) }
-    var jarvisHeard by remember { mutableStateOf("") }
-    var jarvisReply by remember { mutableStateOf("") }
-    var jarvisBusy by remember { mutableStateOf(false) }
-    var jarvisPending by remember { mutableStateOf<Pair<Long, com.aistudio.aerofast.trmst.data.JarvisIntent>?>(null) }
-    val jarvisVoice = remember { com.aistudio.aerofast.trmst.ui.components.JarvisVoice(context) }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { jarvisVoice.shutdown() } }
     val tensileRange = com.aistudio.aerofast.trmst.data.TensileRange.of(tensileMinMpa.takeIf { it > 0 }, tensileMaxMpa.takeIf { it > 0 })
     var selectedPropClass by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.ShopDefaults.propertyClass) }
     var selectedMaterialKey by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.ShopDefaults.materialKey) }
@@ -359,129 +350,6 @@ fun AeroFastApp() {
                 )
             }
         )
-    }
-
-    val latestCalculation by androidx.compose.runtime.rememberUpdatedState(currentCalculation)
-
-    fun jarvisSay(text: String) {
-        jarvisReply = text
-        if (!jarvisVoice.speak(com.aistudio.aerofast.trmst.data.JarvisReply.forSpeech(text), jarvisLang)) {
-            Toast.makeText(context, "No ${jarvisLang.displayName} voice: add it in Android Settings › Text-to-speech. The reply is shown on screen.", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    /** Puts what was said into the app, the same way the Sizing controls would. */
-    fun applyJarvis(i: com.aistudio.aerofast.trmst.data.JarvisIntent) {
-        val unit = i.unit ?: selectedUnitSystem
-        if (i.unit != null && i.unit != selectedUnitSystem) {
-            selectedUnitSystem = i.unit
-            selectedStandard = com.aistudio.aerofast.trmst.data.PokaYokeEngine.defaultStandard(selectedFastenerType, i.unit)
-            selectedThreadClass = SelectionFilter.threadClasses(i.unit, selectedFastenerType, selectedStandard).first()
-            appliedExtractedSpec = null
-        }
-        i.type?.let { t ->
-            if (t != selectedFastenerType) {
-                selectedFastenerType = t
-                selectedStandard = com.aistudio.aerofast.trmst.data.PokaYokeEngine.defaultStandard(t, unit)
-                selectedThreadClass = SelectionFilter.threadClasses(unit, t, selectedStandard).first()
-                customThreadLengthMm = 0.0
-                appliedExtractedSpec = null
-            }
-        }
-        i.diaMm?.let { d ->
-            selectedSizeIndex = FastenerCatalog.sizeIndexFor(unit, d)
-            selectedPitchValue = if (unit == UnitSystem.METRIC) FastenerCatalog.METRIC_SIZES[selectedSizeIndex].pitches.first()
-                else FastenerCatalog.INCH_SIZES[selectedSizeIndex].tpis.first().toDouble()
-            customThreadLengthMm = 0.0
-            appliedExtractedSpec = null
-        }
-        i.pitch?.let { p ->
-            val ok = if (unit == UnitSystem.METRIC) FastenerCatalog.METRIC_SIZES.getOrNull(selectedSizeIndex)?.pitches?.any { kotlin.math.abs(it - p) < 1e-6 } == true
-                else FastenerCatalog.INCH_SIZES.getOrNull(selectedSizeIndex)?.tpis?.any { kotlin.math.abs(it - p) < 1e-6 } == true
-            if (ok) selectedPitchValue = p
-        }
-        i.lengthMm?.let { selectedLength = it }
-        i.threadLengthMm?.let { customThreadLengthMm = it }
-        i.materialKey?.let { selectedMaterialKey = it }
-        i.propertyClass?.let { selectedPropClass = it; tensileMinMpa = 0.0; tensileMaxMpa = 0.0 }
-        i.tensileRange?.let { tensileMinMpa = it.minMpa; tensileMaxMpa = it.maxMpa }
-        i.coating?.let { selectedCoating = it }
-        i.batchQty?.let { batchQty = it }
-        i.headerChoice?.let { headerChoice = it }
-        i.threadLockPatch?.let { threadLockPatch = it }
-        if (i.changesSetup) saveAppState()
-    }
-
-    fun onJarvisHeard(spoken: String) {
-        jarvisHeard = spoken
-        jarvisReply = ""
-        jarvisBusy = true
-        scope.launch {
-            try {
-                val local = com.aistudio.aerofast.trmst.data.JarvisParser.parse(spoken, selectedUnitSystem)
-                // Gemini reads what the offline parser cannot: number words, other scripts, free phrasing
-                val nonLatin = spoken.any { it.isLetter() && it.code > 0x24F }
-                val ai = if (com.aistudio.aerofast.trmst.data.AiSettings.isConfigured(context) && (local.isEmpty || nonLatin))
-                    com.aistudio.aerofast.trmst.data.GeminiAiService.jarvisInterpret(context, spoken) else null
-                val intent = ai?.orElse(local) ?: local
-                // "Can I …?" is a question about a change, not a command: answer it without touching the setup
-                val whatIf = com.aistudio.aerofast.trmst.data.KTopic.CAN in com.aistudio.aerofast.trmst.data.OfflineKnowledge.topics(spoken)
-                if (intent.isEmpty || whatIf) {
-                    // A general question: the Co-Pilot answers it, short, in Jarvis's language
-                    val answer = com.aistudio.aerofast.trmst.data.GeminiAiService.askCoPilot(
-                        prompt = spoken, currentResult = scanCalculation ?: currentCalculation, extractedSpec = scannedSpec.takeIf { scanCalculation != null },
-                        imageBitmap = null, context = context, sizingResult = currentCalculation.takeIf { scanCalculation != null },
-                        replyLanguage = jarvisLang, voice = true
-                    )
-                    jarvisSay(answer.ifBlank { com.aistudio.aerofast.trmst.data.JarvisReply.notUnderstood(jarvisLang) })
-                } else {
-                    applyJarvis(intent)
-                    jarvisPending = System.nanoTime() to intent
-                }
-            } catch (e: Exception) {
-                jarvisSay(com.aistudio.aerofast.trmst.data.JarvisReply.notUnderstood(jarvisLang))
-            } finally {
-                jarvisBusy = false
-            }
-        }
-    }
-
-    // The reply is built after the new setup has been recalculated
-    LaunchedEffect(jarvisPending) {
-        val (_, intent) = jarvisPending ?: return@LaunchedEffect
-        val r = latestCalculation
-        jarvisSay(com.aistudio.aerofast.trmst.data.JarvisReply.build(intent, r, jarvisLang))
-        when (intent.action) {
-            com.aistudio.aerofast.trmst.data.JarvisAction.SHARE_REPORT -> com.aistudio.aerofast.trmst.util.ProductionReportShare.share(context, r, appliedExtractedSpec)
-            com.aistudio.aerofast.trmst.data.JarvisAction.OPEN_SCANNER -> currentTab = NavigationTab.SCANNER
-            com.aistudio.aerofast.trmst.data.JarvisAction.OPEN_SIZING -> currentTab = NavigationTab.SIZING
-            com.aistudio.aerofast.trmst.data.JarvisAction.OPEN_FORGING -> currentTab = NavigationTab.FORGING
-            com.aistudio.aerofast.trmst.data.JarvisAction.OPEN_COPILOT -> currentTab = NavigationTab.COPILOT
-            null -> {}
-        }
-        jarvisPending = null
-    }
-
-    val jarvisListener = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
-    ) { res ->
-        val spoken = res.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (res.resultCode == android.app.Activity.RESULT_OK && !spoken.isNullOrBlank()) onJarvisHeard(spoken)
-    }
-    fun startJarvisListening() {
-        jarvisVoice.stop()
-        val tag = com.aistudio.aerofast.trmst.data.JarvisReply.localeTag(jarvisLang)
-        val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, tag)
-            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, tag)
-            putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, com.aistudio.aerofast.trmst.data.JarvisReply.listening(jarvisLang))
-        }
-        try {
-            jarvisListener.launch(intent)
-        } catch (e: Exception) {
-            Toast.makeText(context, "Speech recognition is not available: install or enable Google voice typing.", Toast.LENGTH_LONG).show()
-        }
     }
 
     fun reloadAppState() {
@@ -808,26 +676,6 @@ fun AeroFastApp() {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    // Jarvis: mic button on every tab, panel with what was heard and answered
-    if (jarvisOpen) {
-        com.aistudio.aerofast.trmst.ui.components.JarvisPanel(
-            language = jarvisLang, heard = jarvisHeard, reply = jarvisReply, busy = jarvisBusy,
-            onLanguage = { jarvisLang = it },
-            onMic = { startJarvisListening() },
-            onStop = { jarvisVoice.stop() },
-            onClose = { jarvisVoice.stop(); jarvisOpen = false },
-            onTyped = { onJarvisHeard(it) },
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 10.dp, end = 10.dp, bottom = 78.dp)
-        )
-    } else {
-        Box(modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 14.dp, bottom = 78.dp)) {
-            com.aistudio.aerofast.trmst.ui.components.JarvisFab {
-                jarvisOpen = true
-                startJarvisListening()
             }
         }
     }

@@ -136,7 +136,7 @@ object OfflineKnowledge {
 
     fun topics(question: String): Set<KTopic> {
         val t = " " + question.lowercase(Locale.ROOT) + " "
-        val found = TOPIC_WORDS.filter { (_, words) -> words.any { JarvisParser.has(t, it) } }.keys.toMutableSet()
+        val found = TOPIC_WORDS.filter { (_, words) -> words.any { QuestionParser.has(t, it) } }.keys.toMutableSet()
         if (KTopic.THREAD in found) found -= KTopic.PITCH          // "pitch diameter" is a thread limit, not the pitch list
         if (KTopic.LOADS in found && "proof stress" in t) found -= KTopic.LOADS
         return found
@@ -147,7 +147,7 @@ object OfflineKnowledge {
     private val CARD_TOPICS = setOf(KTopic.STRENGTH, KTopic.HARDNESS, KTopic.DENSITY, KTopic.COATING, KTopic.BAKE, KTopic.PITCH, KTopic.STANDARD, KTopic.HEAT_TREAT, KTopic.ANNEAL)
 
     /** The current part recalculated with only what the question changes; drawing dimensions are kept unless the size changes. */
-    fun recalc(base: FastenerCalculationResult, i: JarvisIntent): FastenerCalculationResult {
+    fun recalc(base: FastenerCalculationResult, i: ParsedQuestion): FastenerCalculationResult {
         val unit = i.unit ?: base.unitSystem
         val type = i.type ?: base.fastenerType
         val sizeChanged = i.diaMm != null || unit != base.unitSystem
@@ -254,7 +254,7 @@ object OfflineKnowledge {
         // A standard, material or product the app does not hold: say so, never answer it from the current part
         unknownCodes(question).takeIf { it.isNotEmpty() }?.let { return unknownAnswer(it, l) }
         val topics = topics(question)
-        val intent = JarvisParser.parse(question, current?.unitSystem ?: UnitSystem.METRIC)
+        val intent = QuestionParser.parse(question, current?.unitSystem ?: UnitSystem.METRIC)
         val dimsAsked = intent.diaMm != null || intent.type != null || intent.lengthMm != null || intent.unit != null
         val entities = intent.materialKey != null || intent.propertyClass != null || intent.coating != null || intent.tensileRange != null
         val overrides = dimsAsked || entities || intent.headerChoice != null || intent.threadLockPatch != null || intent.batchQty != null
@@ -264,7 +264,7 @@ object OfflineKnowledge {
         // "Can I …?": the app's own rules decide, for the current part with the asked change
         if (KTopic.CAN in topics && current != null && overrides) return whatIf(current, recalc(current, intent), l)
 
-        // A part named with no question: its cut-off and weight, as Jarvis gives after a change
+        // A part named with no question: its cut-off and weight, as the app gives after a change
         val partTopics = topics.intersect(PART_TOPICS).ifEmpty { if (dimsAsked && (topics - KTopic.HELP).isEmpty()) setOf(KTopic.CUT_OFF, KTopic.WEIGHT) else emptySet() }
         val cardOnly = !dimsAsked && entities && (topics - KTopic.HELP).all { it in CARD_TOPICS }
         if (current != null && partTopics.isNotEmpty() && !cardOnly) {
@@ -346,7 +346,15 @@ object OfflineKnowledge {
                 sources += "AeroFast poka-yoke rules"
                 val c = r.criticalIssues; val m = r.pokaYokeIssues.filter { it.severity == PokaYokeSeverity.MANDATORY }
                 val w = r.pokaYokeIssues.count { it.severity == PokaYokeSeverity.WARNING }
-                JarvisReply.build(JarvisIntent(queries = setOf(JarvisQuery.STATUS)), r, l).substringBefore(" ⚠") +
+                L(l, "Standard check: ${c.size} critical, ${m.size} mandatory, $w warnings.",
+                    "స్టాండర్డ్ చెక్: ${c.size} క్రిటికల్, ${m.size} తప్పనిసరి, $w హెచ్చరికలు.",
+                    "स्टैंडर्ड जांच: ${c.size} क्रिटिकल, ${m.size} अनिवार्य, $w चेतावनियाँ।",
+                    "Verificación: ${c.size} críticos, ${m.size} obligatorios, $w avisos.",
+                    "Normprüfung: ${c.size} kritisch, ${m.size} Pflicht, $w Warnungen.",
+                    "Contrôle : ${c.size} critiques, ${m.size} obligatoires, $w avertissements.",
+                    "Проверка: ${c.size} критических, ${m.size} обязательных, $w предупреждений.",
+                    "标准检查：${c.size} 项严重，${m.size} 项必须，$w 项警告。",
+                    "規格チェック：重大 ${c.size}、必須 ${m.size}、警告 $w。") +
                     (c + m).joinToString("") { "\n• [${it.severity.name}] ${it.title}: ${it.fix}" } +
                     (if (w > 0) "\n(${w} warning(s) on the Sizing card)" else "")
             }
@@ -420,7 +428,7 @@ object OfflineKnowledge {
             else L(l, "not required", "అవసరం లేదు", "आवश्यक नहीं", "no necesario", "nicht erforderlich", "non nécessaire", "не требуется", "不需要", "不要")
     }
 
-    private fun sizeCard(i: JarvisIntent, l: AppLanguage, sources: MutableSet<String>): String {
+    private fun sizeCard(i: ParsedQuestion, l: AppLanguage, sources: MutableSet<String>): String {
         val unit = i.unit ?: UnitSystem.METRIC
         val idx = FastenerCatalog.sizeIndexFor(unit, i.diaMm!!)
         return if (unit == UnitSystem.METRIC) {
