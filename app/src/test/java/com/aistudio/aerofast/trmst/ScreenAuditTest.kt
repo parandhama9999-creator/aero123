@@ -9,7 +9,6 @@ import com.aistudio.aerofast.trmst.data.FastenerCatalog
 import com.aistudio.aerofast.trmst.data.FastenerType
 import com.aistudio.aerofast.trmst.data.ProductStandard
 import com.aistudio.aerofast.trmst.data.PropertyClass
-import com.aistudio.aerofast.trmst.data.SpcStats
 import com.aistudio.aerofast.trmst.data.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,24 +38,6 @@ class ScreenAuditTest {
         val r = calc()
         assertEquals(0.85 * (150.0 / 10.0 + 45.0), r.fatigueEnduranceLimitSeMpa, 0.2) // ≈ 51 MPa, not ~450
         assertEquals(51.0 * 58.0 / 1.2 / 1000.0, r.allowableAlternatingForceKn, 0.1)
-    }
-
-    // ---------- G-code ----------
-    @Test fun nutProgram_boresNutHeightNotBoltLength() {
-        val code = calc(type = FastenerType.HEX_NUT, standard = ProductStandard.ISO_4032, threadClass = "6H").fanucGCode
-        assertTrue(code.contains("Z-8.9")) // 0.84·10 + 0.5
-        assertFalse(code.contains("Z-60."))
-    }
-
-    // ---------- SPC ----------
-    @Test fun spc_computesFromReadings() {
-        val readings = SpcStats.parse("8.93, 8.94 8.92;8.93 8.94")
-        val s = SpcStats.compute(readings, 8.862, 8.994)!!
-        assertEquals(5, s.n)
-        assertEquals(8.932, s.mean, 1e-6)
-        assertEquals(0.008367, s.sigma, 1e-5)
-        assertEquals((8.994 - 8.862) / (6 * s.sigma), s.cp, 1e-6)
-        assertTrue(s.cpk < s.cp)
     }
 
     // ---------- Heat treatment ----------

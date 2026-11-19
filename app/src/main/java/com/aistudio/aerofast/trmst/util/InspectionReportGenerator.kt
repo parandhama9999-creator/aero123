@@ -68,7 +68,7 @@ object InspectionReportGenerator {
         sb.append("--------------------------------------------------------\n")
         sb.append(PokaYokeEngine.reportSection(result.pokaYokeIssues)).append('\n')
 
-        sb.append("5. SHOP-FLOOR TOOLING & CNC G-CODE SUMMARY\n")
+        sb.append("5. SHOP-FLOOR TOOLING SUMMARY\n")
         sb.append("--------------------------------------------------------\n")
         sb.append(" Pre-Roll Blank Dia: ${result.blankTargetDia} mm (Tol: ±${result.blankTolHalf})\n")
         sb.append(" Recommended Mach : ${result.recommendedMachine}\n")

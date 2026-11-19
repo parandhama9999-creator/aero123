@@ -74,7 +74,7 @@ fun PricingDialog(
                 TierCard(
                     title = "COMMUNITY FREE",
                     price = "₹0 / Free Forever",
-                    features = "Full M0.25-M64 calculations, turning blanks, live gauge simulator, offline Fanuc G-code",
+                    features = "Full M0.25-M64 calculations, turning blanks, live gauge simulator",
                     isSelected = currentTier == "FREE",
                     buttonText = "Active Free Tier",
                     onSelect = {
@@ -89,7 +89,7 @@ fun PricingDialog(
                 TierCard(
                     title = "PRO MACHINIST",
                     price = "₹1,999 / month",
-                    features = "Camera blueprint vision scanner, unlimited Gemini metallurgy co-pilot, G-code collision check",
+                    features = "Camera blueprint vision scanner, unlimited Gemini metallurgy co-pilot",
                     isSelected = currentTier == "PRO",
                     buttonText = "Select Pro Machinist",
                     highlightColor = customColors.accentPrimary,

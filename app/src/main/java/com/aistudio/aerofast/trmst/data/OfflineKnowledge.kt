@@ -63,7 +63,7 @@ object ApprovedFacts {
 
 enum class KTopic {
     CUT_OFF, WEIGHT, RAW_MATERIAL, BLANK, THREAD, LOADS, HARDNESS, HEAT_TREAT, ANNEAL, COATING, BAKE,
-    PROCESS, STATIONS, MACHINE, STATUS, DENSITY, STRENGTH, PITCH, STANDARD, COST, GCODE, CAN, HELP
+    PROCESS, STATIONS, MACHINE, STATUS, DENSITY, STRENGTH, PITCH, STANDARD, COST, CAN, HELP
 }
 
 data class KnowledgeAnswer(val text: String, val sources: List<String>, val found: Boolean) {
@@ -98,15 +98,15 @@ object OfflineKnowledge {
         "これはオフライン知識ベースにないため、推測では答えません。図面や規格を確認するか、📚 で承認済みの情報として追加してください。")
 
     fun help(l: AppLanguage) = L(l,
-        "Offline knowledge (no internet): ask about cut-off, weight, raw material, blank, thread limits, loads, hardness, heat treatment, anneal, coating, bake, process, die stations, machine, standard check, cost or G-code — for the current part or another size (e.g. \"M12 x 80 weight\"). Also a material (4140), a class (10.9), a coating (Zn-Ni), a size (M12), a standard, or \"can I …\" checks. Add your own facts with 📚.",
-        "ఆఫ్‌లైన్ నాలెడ్జ్ (ఇంటర్నెట్ లేకుండా): కట్ ఆఫ్, బరువు, ముడి పదార్థం, బ్లాంక్, థ్రెడ్ లిమిట్స్, లోడ్స్, హార్డ్‌నెస్, హీట్ ట్రీట్‌మెంట్, అనీల్, కోటింగ్, బేక్, ప్రాసెస్, డై స్టేషన్లు, మెషిన్, స్టాండర్డ్ చెక్, ధర, G-code గురించి అడగండి — ప్రస్తుత పార్ట్ లేదా వేరే సైజ్ (ఉదా: \"M12 x 80 బరువు\"). మెటీరియల్ (4140), క్లాస్ (10.9), కోటింగ్ (Zn-Ni), సైజ్ (M12), స్టాండర్డ్, లేదా \"చేయవచ్చా\" చెక్‌లు కూడా. మీ సొంత ఫ్యాక్ట్స్ 📚 తో జోడించండి.",
-        "ऑफ़लाइन नॉलेज (बिना इंटरनेट): कट ऑफ, वजन, कच्चा माल, ब्लैंक, थ्रेड लिमिट, लोड, कठोरता, हीट ट्रीटमेंट, एनील, कोटिंग, बेक, प्रक्रिया, डाई स्टेशन, मशीन, स्टैंडर्ड जांच, लागत या G-code पूछें — मौजूदा पार्ट या दूसरा साइज़ (जैसे \"M12 x 80 वजन\")। मटेरियल (4140), क्लास (10.9), कोटिंग (Zn-Ni), साइज़ (M12), मानक, या \"कर सकते हैं?\" जांच भी। अपने तथ्य 📚 से जोड़ें।",
-        "Conocimiento sin conexión: pregunte por corte, peso, materia prima, diámetro de rodado, límites de rosca, cargas, dureza, tratamiento térmico, recocido, recubrimiento, deshidrogenado, proceso, estaciones, máquina, verificación, coste o código G — de la pieza actual u otra medida (p. ej. \"M12 x 80 peso\"). También un material (4140), una clase (10.9), un recubrimiento (Zn-Ni), una medida (M12), una norma o \"¿puedo…?\". Añada sus datos con 📚.",
-        "Offline-Wissen: fragen Sie nach Ablänge, Gewicht, Rohmaterial, Rollrohling, Gewindegrenzmaßen, Kräften, Härte, Wärmebehandlung, Weichglühen, Beschichtung, Wasserstoff-Tempern, Ablauf, Stufen, Maschine, Normprüfung, Kosten oder G-Code — für das aktuelle Teil oder eine andere Größe (z. B. \"M12 x 80 Gewicht\"). Auch Werkstoff (4140), Klasse (10.9), Beschichtung (Zn-Ni), Größe (M12), Norm oder \"darf ich …\". Eigene Angaben mit 📚.",
-        "Connaissances hors ligne : demandez longueur de coupe, poids, matière, ébauche de roulage, limites de filetage, charges, dureté, traitement thermique, recuit, revêtement, dégazage, gamme, postes, machine, contrôle, coût ou code G — pour la pièce actuelle ou une autre taille (ex. \"M12 x 80 poids\"). Aussi un matériau (4140), une classe (10.9), un revêtement (Zn-Ni), une taille (M12), une norme ou \"puis-je…\". Ajoutez vos faits avec 📚.",
-        "Офлайн-знания: спросите про длину отрезки, вес, сырьё, заготовку под накатку, пределы резьбы, нагрузки, твёрдость, термообработку, отжиг, покрытие, обезводороживание, процесс, переходы, оборудование, проверку, стоимость или G-код — для текущей детали или другого размера (например, \"M12 x 80 вес\"). Также материал (4140), класс (10.9), покрытие (Zn-Ni), размер (M12), стандарт или \"можно ли…\". Свои факты — через 📚.",
-        "离线知识（无需联网）：可询问下料长度、重量、原材料、滚丝坯径、螺纹极限、载荷、硬度、热处理、退火、涂层、除氢烘烤、工艺、工位、设备、标准检查、成本或 G 代码——针对当前零件或其他规格（如\"M12 x 80 重量\"）。也可查询材料（4140）、等级（10.9）、涂层（Zn-Ni）、规格（M12）、标准或\"可以…吗\"。用 📚 添加您自己的事实。",
-        "オフライン知識（インターネット不要）：切断長、重量、原材料、転造ブランク、ねじ限界、荷重、硬さ、熱処理、焼なまし、表面処理、ベーキング、工程、ステーション、設備、規格チェック、コスト、Gコードを質問できます——現在の部品または別サイズ（例：\"M12 x 80 重量\"）。材料（4140）、強度区分（10.9）、表面処理（Zn-Ni）、サイズ（M12）、規格、\"できますか\" も可。独自の情報は 📚 で追加。")
+        "Offline knowledge (no internet): ask about cut-off, weight, raw material, blank, thread limits, loads, hardness, heat treatment, anneal, coating, bake, process, die stations, machine, standard check or cost — for the current part or another size (e.g. \"M12 x 80 weight\"). Also a material (4140), a class (10.9), a coating (Zn-Ni), a size (M12), a standard, or \"can I …\" checks. Add your own facts with 📚.",
+        "ఆఫ్‌లైన్ నాలెడ్జ్ (ఇంటర్నెట్ లేకుండా): కట్ ఆఫ్, బరువు, ముడి పదార్థం, బ్లాంక్, థ్రెడ్ లిమిట్స్, లోడ్స్, హార్డ్‌నెస్, హీట్ ట్రీట్‌మెంట్, అనీల్, కోటింగ్, బేక్, ప్రాసెస్, డై స్టేషన్లు, మెషిన్, స్టాండర్డ్ చెక్, ధర గురించి అడగండి — ప్రస్తుత పార్ట్ లేదా వేరే సైజ్ (ఉదా: \"M12 x 80 బరువు\"). మెటీరియల్ (4140), క్లాస్ (10.9), కోటింగ్ (Zn-Ni), సైజ్ (M12), స్టాండర్డ్, లేదా \"చేయవచ్చా\" చెక్‌లు కూడా. మీ సొంత ఫ్యాక్ట్స్ 📚 తో జోడించండి.",
+        "ऑफ़लाइन नॉलेज (बिना इंटरनेट): कट ऑफ, वजन, कच्चा माल, ब्लैंक, थ्रेड लिमिट, लोड, कठोरता, हीट ट्रीटमेंट, एनील, कोटिंग, बेक, प्रक्रिया, डाई स्टेशन, मशीन, स्टैंडर्ड जांच या लागत पूछें — मौजूदा पार्ट या दूसरा साइज़ (जैसे \"M12 x 80 वजन\")। मटेरियल (4140), क्लास (10.9), कोटिंग (Zn-Ni), साइज़ (M12), मानक, या \"कर सकते हैं?\" जांच भी। अपने तथ्य 📚 से जोड़ें।",
+        "Conocimiento sin conexión: pregunte por corte, peso, materia prima, diámetro de rodado, límites de rosca, cargas, dureza, tratamiento térmico, recocido, recubrimiento, deshidrogenado, proceso, estaciones, máquina, verificación o coste — de la pieza actual u otra medida (p. ej. \"M12 x 80 peso\"). También un material (4140), una clase (10.9), un recubrimiento (Zn-Ni), una medida (M12), una norma o \"¿puedo…?\". Añada sus datos con 📚.",
+        "Offline-Wissen: fragen Sie nach Ablänge, Gewicht, Rohmaterial, Rollrohling, Gewindegrenzmaßen, Kräften, Härte, Wärmebehandlung, Weichglühen, Beschichtung, Wasserstoff-Tempern, Ablauf, Stufen, Maschine, Normprüfung oder Kosten — für das aktuelle Teil oder eine andere Größe (z. B. \"M12 x 80 Gewicht\"). Auch Werkstoff (4140), Klasse (10.9), Beschichtung (Zn-Ni), Größe (M12), Norm oder \"darf ich …\". Eigene Angaben mit 📚.",
+        "Connaissances hors ligne : demandez longueur de coupe, poids, matière, ébauche de roulage, limites de filetage, charges, dureté, traitement thermique, recuit, revêtement, dégazage, gamme, postes, machine, contrôle ou coût — pour la pièce actuelle ou une autre taille (ex. \"M12 x 80 poids\"). Aussi un matériau (4140), une classe (10.9), un revêtement (Zn-Ni), une taille (M12), une norme ou \"puis-je…\". Ajoutez vos faits avec 📚.",
+        "Офлайн-знания: спросите про длину отрезки, вес, сырьё, заготовку под накатку, пределы резьбы, нагрузки, твёрдость, термообработку, отжиг, покрытие, обезводороживание, процесс, переходы, оборудование, проверку или стоимость — для текущей детали или другого размера (например, \"M12 x 80 вес\"). Также материал (4140), класс (10.9), покрытие (Zn-Ni), размер (M12), стандарт или \"можно ли…\". Свои факты — через 📚.",
+        "离线知识（无需联网）：可询问下料长度、重量、原材料、滚丝坯径、螺纹极限、载荷、硬度、热处理、退火、涂层、除氢烘烤、工艺、工位、设备、标准检查或成本——针对当前零件或其他规格（如\"M12 x 80 重量\"）。也可查询材料（4140）、等级（10.9）、涂层（Zn-Ni）、规格（M12）、标准或\"可以…吗\"。用 📚 添加您自己的事实。",
+        "オフライン知識（インターネット不要）：切断長、重量、原材料、転造ブランク、ねじ限界、荷重、硬さ、熱処理、焼なまし、表面処理、ベーキング、工程、ステーション、設備、規格チェック、コストを質問できます——現在の部品または別サイズ（例：\"M12 x 80 重量\"）。材料（4140）、強度区分（10.9）、表面処理（Zn-Ni）、サイズ（M12）、規格、\"できますか\" も可。独自の情報は 📚 で追加。")
 
     private val TOPIC_WORDS: Map<KTopic, List<String>> = mapOf(
         KTopic.CUT_OFF to listOf("cut off", "cut-off", "cutoff", "cut length", "slug length", "కట్ ఆఫ్", "కటాఫ్", "కట్ఆఫ్", "కట్ లెంగ్త్", "कट ऑफ", "कटऑफ", "कट लेंथ", "longitud de corte", "corte", "ablänge", "schnittlänge", "longueur de coupe", "отрезк", "下料", "切断"),
@@ -129,7 +129,6 @@ object OfflineKnowledge {
         KTopic.PITCH to listOf("pitch", "pitches", "tpi", "threads per inch", "పిచ్", "पिच", "टीपीआई", "paso", "steigung", "pas", "шаг", "螺距", "ピッチ"),
         KTopic.STANDARD to listOf("standard", "which standard", "iso", "din", "asme", "స్టాండర్డ్", "मानक", "स्टैंडर्ड", "norma", "norm", "norme", "стандарт", "标准", "規格"),
         KTopic.COST to listOf("cost", "price", "quotation", "quote", "ధర", "ఖర్చు", "కోటేషన్", "कीमत", "लागत", "कोटेशन", "precio", "coste", "costo", "preis", "kosten", "prix", "coût", "цена", "стоимост", "价格", "成本", "価格", "コスト"),
-        KTopic.GCODE to listOf("g-code", "gcode", "g code", "cnc program", "fanuc", "జీ కోడ్", "जी कोड", "programa cnc", "cnc-programm", "programme cn", "программа чпу", "数控程序", "ncプログラム"),
         KTopic.CAN to listOf("can i", "can we", "is it ok", "is it allowed", "allowed", "possible", "should i", "safe to", "చేయవచ్చా", "వాడవచ్చా", "పర్వాలేదా", "సాధ్యమా", "చేయొచ్చా", "कर सकते", "चलेगा", "सकता है", "ठीक है", "puedo", "se puede", "darf", "kann ich", "zulässig", "puis-je", "peut-on", "можно", "可以吗", "能否", "できますか", "可能"),
         KTopic.HELP to listOf("help", "what can you do", "hello", "hi", "hey", "నమస్కారం", "సహాయం", "హలో", "नमस्ते", "मदद", "hola", "ayuda", "hallo", "hilfe", "bonjour", "aide", "привет", "помощь", "你好", "帮助", "こんにちは", "ヘルプ")
     )
@@ -143,7 +142,7 @@ object OfflineKnowledge {
     }
 
     private val PART_TOPICS = setOf(KTopic.CUT_OFF, KTopic.WEIGHT, KTopic.RAW_MATERIAL, KTopic.BLANK, KTopic.THREAD, KTopic.LOADS, KTopic.HARDNESS,
-        KTopic.HEAT_TREAT, KTopic.ANNEAL, KTopic.COATING, KTopic.BAKE, KTopic.PROCESS, KTopic.STATIONS, KTopic.MACHINE, KTopic.STATUS, KTopic.COST, KTopic.GCODE)
+        KTopic.HEAT_TREAT, KTopic.ANNEAL, KTopic.COATING, KTopic.BAKE, KTopic.PROCESS, KTopic.STATIONS, KTopic.MACHINE, KTopic.STATUS, KTopic.COST)
     private val CARD_TOPICS = setOf(KTopic.STRENGTH, KTopic.HARDNESS, KTopic.DENSITY, KTopic.COATING, KTopic.BAKE, KTopic.PITCH, KTopic.STANDARD, KTopic.HEAT_TREAT, KTopic.ANNEAL)
 
     /** The current part recalculated with only what the question changes; drawing dimensions are kept unless the size changes. */
@@ -363,7 +362,6 @@ object OfflineKnowledge {
                 L(l, "Unit price", "యూనిట్ ధర", "इकाई मूल्य", "Precio unitario", "Stückpreis", "Prix unitaire", "Цена за штуку", "单价", "単価") + " ${r.currencySymbol}${n(r.finalUnitPrice)} · " +
                     L(l, "Batch total", "బ్యాచ్ మొత్తం", "बैच कुल", "Total del lote", "Losgesamtpreis", "Total du lot", "Итого за партию", "批量总价", "ロット合計") + " ${r.currencySymbol}${n(r.batchTotalPrice)} (${r.batchQty} pcs)"
             }
-            KTopic.GCODE -> "Fanuc:\n${r.fanucGCode}"
             else -> ""
         }
     }

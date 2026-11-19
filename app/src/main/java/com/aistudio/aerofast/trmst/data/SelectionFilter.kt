@@ -148,11 +148,6 @@ object SelectionFilter {
     }
 
     /** The default alloy for a class: its own [PropertyClass.defaultMatKey] when that grade can carry the class. */
-    fun defaultMaterialKey(pc: PropertyClass, all: Map<String, MaterialInfo>, dMm: Double = 10.0): String? {
-        all[pc.defaultMatKey]?.let { if (classAllows(pc, it, dMm)) return it.key }
-        return all.values.firstOrNull { classAllows(pc, it, dMm) }?.key
-    }
-
     /** Washers are not graded by bolt property class (the gate skips it). */
     fun usesPropertyClass(type: FastenerType) = !type.isWasher
 

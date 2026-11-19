@@ -1436,7 +1436,6 @@ private fun DrawScope.drawStation(
     }
 
     fun chamfered(shape: SectionShape) = shape == SectionShape.HEX || shape == SectionShape.TWELVE_POINT
-    val chamferTop = chamfered(segs.last().shape)
     val chamferBottom = chamfered(segs.first().shape)
     val outline: Path
     if (st.isCutOff) {

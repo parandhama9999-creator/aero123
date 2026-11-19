@@ -81,5 +81,3 @@ fun createTypography(fontFamily: FontFamily): Typography {
         )
     )
 }
-
-val Typography = createTypography(FontFamily.Monospace)

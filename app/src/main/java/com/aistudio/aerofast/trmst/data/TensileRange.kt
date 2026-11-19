@@ -3,7 +3,6 @@ package com.aistudio.aerofast.trmst.data
 /** A tensile strength band from the customer drawing (e.g. "1000–1240 MPa") instead of a property class. */
 data class TensileRange(val minMpa: Double, val maxMpa: Double) {
     val label: String get() = "Rm ${minMpa.toInt()}–${maxMpa.toInt()} MPa (drawing)"
-    val midMpa: Double get() = (minMpa + maxMpa) / 2.0
 
     /** Q&T alloy steel ratios as in ISO 898-1 class 10.9: Rp0.2 ≈ 0.9 Rm, proof stress ≈ 0.8 Rm. */
     val strength: ClassStrength get() = ClassStrength(minMpa, 0.9 * minMpa, 0.8 * minMpa, false)

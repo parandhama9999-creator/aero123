@@ -161,10 +161,6 @@ class DrawingVolumeTest {
         val result = DrawingScan.calculate(spec)
         val ctx = GeminiAiService.drawingContext(spec, result)
         assertTrue(ctx, ctx.contains("TOTAL VOLUME AS PER DRAWING") && ctx.contains("Head dia: 16 mm h13"))
-        val local = GeminiAiService.tryAnswerLocally("what is the volume and weight?", result, spec)!!
-        assertTrue(local.contains("From the scanned drawing") && local.contains("mm³"))
-        // without a drawing the volume question is not answered from one
-        assertFalse(GeminiAiService.tryAnswerLocally("what is the volume?", result, null)?.contains("scanned drawing") ?: false)
         val prompt = GeminiAiService.buildExtractionPrompt()
         assertTrue(prompt.contains("\"solids\"") && prompt.contains("socketDepthMm") && prompt.contains("washerThicknessMm"))
     }

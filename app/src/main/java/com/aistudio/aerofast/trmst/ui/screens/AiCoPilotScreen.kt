@@ -475,7 +475,6 @@ fun AiCoPilotScreen(
                 "🛡️ Poka-Yoke De-embrittlement Baking Protocol (ASTM F1940)",
                 "🛡️ Poka-Yoke VDI 2230 Bolted Joint Over-Torque Safeguard",
                 "🛡️ Poka-Yoke ISO 1502 GO/NO-GO Ring Gauge Limits",
-                "🛡️ Poka-Yoke CNC G-Code Collision-Free Threading",
                 "Check list of materials & supported alloys",
                 "Inspect blueprint callouts (OD, ID, tolerances)",
                 "Heading die: ASP30 vs GT55?",

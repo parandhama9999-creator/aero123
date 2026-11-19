@@ -418,7 +418,6 @@ fun FastenerSizingScreen(
                     val inchUnit = selectedUnitSystem == UnitSystem.INCH
                     val unitTag = if (inchUnit) "in" else "mm"
                     fun toMm(v: Double) = if (inchUnit) v * 25.4 else v
-                    fun fromMm(v: Double) = if (inchUnit) v / 25.4 else v
                     fun fmtInput(mm: Double) = if (inchUnit) "%.3f".format(java.util.Locale.US, mm / 25.4).trimEnd('0').trimEnd('.')
                         else "%.2f".format(java.util.Locale.US, mm).trimEnd('0').trimEnd('.')
                     var lenText by remember(selectedUnitSystem) { mutableStateOf("") }

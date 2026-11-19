@@ -28,12 +28,7 @@ data class ParsedQuestion(
             .any { it != null }
     val isEmpty: Boolean get() = !changesSetup && queries.isEmpty()
 
-    /** This intent's values first, the other's where this one is silent. */
-    fun orElse(o: ParsedQuestion) = ParsedQuestion(
-        type ?: o.type, unit ?: o.unit, diaMm ?: o.diaMm, pitch ?: o.pitch, lengthMm ?: o.lengthMm, threadLengthMm ?: o.threadLengthMm,
-        materialKey ?: o.materialKey, propertyClass ?: o.propertyClass, tensileRange ?: o.tensileRange, coating ?: o.coating,
-        batchQty ?: o.batchQty, headerChoice ?: o.headerChoice, threadLockPatch ?: o.threadLockPatch, queries + o.queries
-    )
+
 }
 
 /**

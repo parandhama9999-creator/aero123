@@ -62,6 +62,5 @@ val TitaniumAccentSecondary = Color(0xFFF59E0B)
 
 // Shared Alert colors
 val AlertRed = Color(0xFFDC2626)
-val AlertRedBg = Color(0xFFE11D48)
 val SuccessGreen = Color(0xFF059669)
 val WarningAmber = Color(0xFFD97706)

@@ -69,12 +69,6 @@ data class FastenerCalculationResult(
     val forgingStages: List<ForgingStage>,
     val heatTreatmentSpec: HeatTreatmentSpec,
 
-    // CNC Tooling & G-Code
-    val cncCycleTimeSec: Double,
-    val cncSpindleRpm: Int,
-    val cncToolList: List<CncToolItem>,
-    val fanucGCode: String,
-
     // Quotation
     val costRawMaterial: Double,
     val costForgingHeading: Double,
@@ -140,13 +134,6 @@ data class ForgingStage(
     val description: String
 )
 
-data class CncToolItem(
-    val toolNo: String,
-    val description: String,
-    val operation: String,
-    val cuttingSpeed: Double,
-    val feedRate: Double
-)
 
 enum class GaugeStatus(val label: String, val isScrap: Boolean, val isWarning: Boolean) {
     IDEAL_PASS("IDEAL PASS (94% Fill)", false, false),
@@ -531,106 +518,11 @@ object CalculationEngine {
         val hasHeRisk = coating.isElectroplating && effectiveRmMpa >= 1000.0 &&
             (heFamily == MaterialFamily.CARBON_ALLOY_STEEL || heFamily == MaterialFamily.STAINLESS && material.hasHighHardness)
 
-        // CNC Tooling & Fanuc G-Code
+        // CNC turning time (costing)
         val maxRpm = if (material.isAero) 1800 else 3200
         val calcRpm = min(maxRpm, ((1000 * material.vc) / (PI * max(1.0, d))).roundToInt())
         // Rivets are finished on the header: no turning, no threading
         val totalCncSec = if (fastenerType.isUnthreaded) 0.0 else ((lengthMm / (calcRpm * material.feed)) * 60.0 * 2.1) + 5.5
-
-        val cncTools = if (fastenerType.isUnthreaded) {
-            emptyList()
-        } else if (isNut) {
-            listOf(
-                CncToolItem("T0101", "S20Q-SCLCR09 + ${material.insertSpec}", "Internal Boring Bar G71/G01", material.vc, material.feed),
-                CncToolItem("T0202", "IR06.0-1.5 ISO + PVD TiAlN", "Internal Threading G76", (material.vc * 0.8).round(0), 0.1),
-                CncToolItem("T0303", "CE-4.0 Chamfering Tool", "Face & Back Chamfer", material.vc, 0.08)
-            )
-        } else {
-            listOf(
-                CncToolItem("T0101", "PCLNR 2020K12 + ${material.insertSpec}", "G71 Rough Turning", material.vc, material.feed),
-                CncToolItem("T0202", "SVJCR 2020K16 + VCMT 160404", "Finish Blank Ø${blankDia.round(3)} (±${blankTolHalf.round(3)})", (material.vc * 1.15).round(0), (material.feed * 0.55).round(2)),
-                CncToolItem("T0303", "QE-L2020K22 + N123G2", "DIN 76 Relief Ø${(minorMax - 0.15).round(3)}", (material.vc * 0.75).round(0), 0.07)
-            )
-        }
-
-        val filletR = (d * 0.08).round(2)
-        // Fanuc comments: ASCII only and no nested parentheses, otherwise the control alarms on load
-        fun cmt(s: String) = "(" + s.uppercase().replace("×", "X").replace("Ø", "DIA ").replace("±", "+/-")
-            .replace(Regex("[()]"), " ").replace(Regex("[^ -~]"), "").replace(Regex(" {2,}"), " ").trim() + ")"
-        // 4-digit program number (O0001–O9999) accepted by every Fanuc 0i/30i control
-        val programNo = String.format(java.util.Locale.US, "O%04d", ((d.roundToInt() * 100 + lengthMm.roundToInt()) % 9999).coerceAtLeast(1))
-        // Threading must run at constant RPM (G97): G96 changes speed with X and breaks pitch synchronisation
-        val threadRpm = min(min(maxRpm, 1500), ((1000 * material.vc * 0.6) / (PI * max(1.0, d))).roundToInt())
-        val fanucCode = if (fastenerType.isUnthreaded) {
-            "%\n$programNo ${cmt("AEROFAST PRO RIVET")}\n${cmt("NO CNC PROGRAM - RIVETS ARE FULLY FORMED ON THE HEADER")}\nM30\n%"
-        } else if (isNut) {
-            val nutHeight = dims.nutHeightM.round(2) // ISO 4032 / ASME B18.2.2 nut height m
-            buildString {
-                appendLine("%")
-                appendLine("$programNo ${cmt("AEROFAST PRO NUT - INTERNAL BORE AND G76 THREAD")}")
-                appendLine(cmt("PART: $threadLabel  NUT HEIGHT ${nutHeight} MM"))
-                appendLine(cmt("BORE ID ${blankDia.round(3)} MM +/- ${blankTolHalf.round(3)}"))
-                appendLine("G21 G18 G40 G80 G97 G99")
-                appendLine("G28 U0.0 W0.0")
-                appendLine("T0101 ${cmt("INTERNAL BORING BAR")}")
-                appendLine("G50 S$maxRpm")
-                appendLine("G96 S${(material.vc * 0.9).toInt()} M03")
-                appendLine("G00 X${blankDia.round(3)} Z2.0 M08")
-                appendLine("G01 Z-${(nutHeight + 0.5).round(2)} F${(material.feed * 0.8).round(2)}")
-                appendLine("G01 X${(blankDia - 0.5).round(3)} F0.2")
-                appendLine("G00 Z5.0 ${cmt("RETRACT OUT OF BORE BEFORE X MOVE")}")
-                appendLine("G00 X100.0 Z80.0 M09")
-                appendLine("G28 U0.0 W0.0")
-                appendLine("T0202 ${cmt("INTERNAL THREADING G76")}")
-                appendLine("G97 S$threadRpm M03")
-                appendLine("G00 X${(blankDia - 0.2).round(3)} Z5.0 M08")
-                appendLine("G76 P020060 Q100 R0.05")
-                appendLine("G76 X${d.round(3)} Z-${(nutHeight + 0.5).round(2)} P${((d - minorMin) * 500).toInt()} Q150 F$p")
-                appendLine("G00 Z5.0")
-                appendLine("G00 X100.0 Z80.0 M09")
-                appendLine("G28 U0.0 W0.0")
-                appendLine("M05")
-                appendLine("M30")
-                append("%")
-            }
-        } else {
-            // G71 start point must clear the largest profile diameter (head face X = 1.6·d)
-            val cycleStartX = (s + 2.0).round(2)
-            buildString {
-                appendLine("%")
-                appendLine("$programNo ${cmt("AEROFAST PRO FANUC TURNING")}")
-                appendLine(cmt("PART: $threadLabel X ${lengthMm.round(1)} MM  ALLOY: ${material.name}"))
-                appendLine(cmt("PRE-ROLL BLANK ${blankDia.round(3)} MM  MAX ${blankUpper.round(3)}  MIN ${blankLower.round(3)}"))
-                appendLine("G21 G18 G40 G80 G97 G99")
-                appendLine("G28 U0.0 W0.0")
-                appendLine("T0101 ${cmt("ROUGH TURNING")}")
-                appendLine("G50 S$maxRpm")
-                appendLine("G96 S${material.vc.toInt()} M03")
-                appendLine("G00 X$cycleStartX Z2.0 M08")
-                appendLine("G71 U${material.doc.round(1)} R0.5")
-                appendLine("G71 P10 Q20 U0.20 W0.05 F${material.feed}")
-                appendLine("N10 G00 G42 X${(blankDia - 1.3 * p).round(3)}")
-                appendLine("G01 Z0.0 F${(material.feed * 0.55).round(2)}")
-                appendLine("G01 X${blankDia.round(3)} Z-${(p * 0.85).round(2)}")
-                appendLine("G01 Z-${lt.round(2)}")
-                appendLine("G01 X${d.round(3)} Z-${(lt + 1.2).round(2)}")
-                appendLine("G01 Z-${(lengthMm - filletR).round(2)}")
-                appendLine("G02 X${(d + 2 * filletR).round(3)} Z-${lengthMm.round(2)} R${filletR.round(2)}")
-                appendLine("N20 G01 G40 X${s.round(2)}")
-                appendLine("G00 X100.0 Z80.0 M09")
-                appendLine("G28 U0.0 W0.0")
-                appendLine("T0202 ${cmt("FINISH TURNING")}")
-                appendLine("G50 S$maxRpm")
-                appendLine("G96 S${(material.vc * 1.15).toInt()} M03")
-                appendLine("G00 X$cycleStartX Z2.0 M08")
-                appendLine("G70 P10 Q20")
-                appendLine("G40 G00 X100.0 Z80.0 M09")
-                appendLine("G28 U0.0 W0.0")
-                appendLine("M05")
-                appendLine("M30")
-                append("%")
-            }
-        }
 
         // NPD Quotation
         val fx = if (currencyIsUsd) (1.0 / 86.50) else 1.0
@@ -726,10 +618,6 @@ object CalculationEngine {
             drawing = drawing,
             softAnnealSpec = SoftAnnealEngine.build(material),
             finishedPart = part,
-            cncCycleTimeSec = totalCncSec.round(1),
-            cncSpindleRpm = calcRpm,
-            cncToolList = cncTools,
-            fanucGCode = fanucCode,
             costRawMaterial = cRawMat.round(2),
             costForgingHeading = cForging.round(2),
             costCncTurning = cCnc.round(2),
