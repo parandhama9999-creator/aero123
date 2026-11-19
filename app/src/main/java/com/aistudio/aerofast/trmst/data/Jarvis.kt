@@ -133,7 +133,7 @@ object JarvisParser {
     private val wordCache = HashMap<String, Regex>()
 
     /** Latin words match whole words (plural allowed) so "nut" is not found in "minute"; other scripts match as written. */
-    private fun has(t: String, w: String): Boolean {
+    internal fun has(t: String, w: String): Boolean {
         if (w.any { it.isLetter() && it.code > 0x24F } || w.any { !it.isLetterOrDigit() && it != ' ' && it != '-' }) return w in t
         val re = wordCache.getOrPut(w) { Regex("(?<![\\p{L}\\d])" + Regex.escape(w) + "(?:s|es)?(?![\\p{L}\\d])") }
         return re.containsMatchIn(t)

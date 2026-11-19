@@ -424,7 +424,9 @@ fun AeroFastApp() {
                 val ai = if (com.aistudio.aerofast.trmst.data.AiSettings.isConfigured(context) && (local.isEmpty || nonLatin))
                     com.aistudio.aerofast.trmst.data.GeminiAiService.jarvisInterpret(context, spoken) else null
                 val intent = ai?.orElse(local) ?: local
-                if (intent.isEmpty) {
+                // "Can I …?" is a question about a change, not a command: answer it without touching the setup
+                val whatIf = com.aistudio.aerofast.trmst.data.KTopic.CAN in com.aistudio.aerofast.trmst.data.OfflineKnowledge.topics(spoken)
+                if (intent.isEmpty || whatIf) {
                     // A general question: the Co-Pilot answers it, short, in Jarvis's language
                     val answer = com.aistudio.aerofast.trmst.data.GeminiAiService.askCoPilot(
                         prompt = spoken, currentResult = scanCalculation ?: currentCalculation, extractedSpec = scannedSpec.takeIf { scanCalculation != null },

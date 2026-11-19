@@ -86,7 +86,10 @@ data class ChatMessage(
     val id: String = java.util.UUID.randomUUID().toString(),
     val isUser: Boolean,
     val text: String,
-    val attachmentBitmap: Bitmap? = null
+    val attachmentBitmap: Bitmap? = null,
+    /** Answered by an online AI (not the offline knowledge): it can be checked and saved as an approved fact. */
+    val fromAi: Boolean = false,
+    val question: String = ""
 )
 
 @Composable
@@ -106,6 +109,8 @@ fun AiCoPilotScreen(
     val listState = rememberLazyListState()
 
     val currentLang = com.aistudio.aerofast.trmst.util.LocalAppLanguage.current
+    var showKnowledgeDialog by remember { mutableStateOf(false) }
+    var factDraft by remember { mutableStateOf<Triple<String, String, String>?>(null) }
     // Keyed only on language: keying on initialMessages rebuilt the list on every send and dropped attachments
     val messages = remember(currentLang) {
         val list = mutableStateListOf<ChatMessage>()
@@ -249,11 +254,15 @@ fun AiCoPilotScreen(
                     context = context,
                     history = history
                 )
-                messages.add(ChatMessage(isUser = false, text = reply))
+                // Offline answers carry their own source; anything else that is not an error came from the AI
+                val offlineText = com.aistudio.aerofast.trmst.data.OfflineKnowledge.answer(effectivePrompt, currentResult, currentLang,
+                    com.aistudio.aerofast.trmst.data.ApprovedFacts.load(context)).withSources(currentLang)
+                val fromAi = reply != offlineText && !reply.contains("Offline answer") && !reply.startsWith("⚠️") && !reply.startsWith("📷")
+                messages.add(ChatMessage(isUser = false, text = reply, fromAi = fromAi, question = effectivePrompt))
             } catch (e: Exception) {
-                val fallback = GeminiAiService.tryAnswerLocally(trimmed, currentResult, extractedSpec)
-                val replyText = fallback ?: "🤖 **AeroFast AI Co-Pilot**: Based on your setup (${currentResult.threadLabel}), pre-roll blank target is Ø${String.format("%.3f", currentResult.blankTargetDia)} mm and AMS 2759 soaking time is ${currentResult.heatTreatmentSpec.soakingTimeMinutes}."
-                messages.add(ChatMessage(isUser = false, text = replyText))
+                val fallback = com.aistudio.aerofast.trmst.data.OfflineKnowledge.answer(trimmed, currentResult, currentLang,
+                    com.aistudio.aerofast.trmst.data.ApprovedFacts.load(context)).withSources(currentLang)
+                messages.add(ChatMessage(isUser = false, text = fallback))
             } finally {
                 isLoading = false
                 notifyMessagesUpdated()
@@ -355,6 +364,15 @@ fun AiCoPilotScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // Offline knowledge: offline-only switch and approved facts
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = customColors.bgElevated,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, customColors.accentSecondary),
+                    modifier = Modifier.clickable { showKnowledgeDialog = true }
+                ) {
+                    Text("📚", fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                }
                 // New Chat Button
                 Surface(
                     shape = RoundedCornerShape(8.dp),
@@ -492,7 +510,10 @@ fun AiCoPilotScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(messages, key = { it.id }) { msg ->
-                ChatBubble(message = msg)
+                ChatBubble(message = msg, onSaveFact = { m ->
+                    factDraft = Triple(m.question, m.text, "")
+                    showKnowledgeDialog = true
+                })
             }
 
             if (isLoading) {
@@ -690,10 +711,17 @@ fun AiCoPilotScreen(
             }
         }
     }
+
+    if (showKnowledgeDialog) {
+        com.aistudio.aerofast.trmst.ui.components.KnowledgeDialog(
+            onDismiss = { showKnowledgeDialog = false; factDraft = null },
+            initialQuestion = factDraft?.first.orEmpty(), initialAnswer = factDraft?.second.orEmpty(), initialSource = factDraft?.third.orEmpty()
+        )
+    }
 }
 
 @Composable
-private fun ChatBubble(message: ChatMessage) {
+private fun ChatBubble(message: ChatMessage, onSaveFact: (ChatMessage) -> Unit = {}) {
     val customColors = LocalCustomColors.current
     val isUser = message.isUser
 
@@ -747,6 +775,17 @@ private fun ChatBubble(message: ChatMessage) {
                     fontFamily = FontFamily.Default,
                     color = if (isUser) Color.White else customColors.textMain
                 )
+                if (message.fromAi) {
+                    Text(
+                        text = "AI answer — not verified by the app. Check it, then 💾 save it as an approved fact with its source.",
+                        fontSize = 10.sp, color = customColors.textMuted, modifier = Modifier.padding(top = 6.dp)
+                    )
+                    Text(
+                        text = "💾 Save as approved fact",
+                        fontSize = 11.sp, fontWeight = FontWeight.Bold, color = customColors.accentPrimary,
+                        modifier = Modifier.padding(top = 4.dp).clickable { onSaveFact(message) }
+                    )
+                }
             }
         }
     }

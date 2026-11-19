@@ -72,8 +72,12 @@ fun SettingsDialog(
         val c = AiSettings.loadFor(context, provider)
         baseUrl = c.baseUrl; model = c.model; currentKey = c.apiKey; models = emptyList()
     }
-    fun honestStatus(): String = if (AiSettings.isConfigured(context)) "✅ AI active: ${AiSettings.describe(context)}"
-        else "No AI provider set up. All engineering calculations work offline; AI chat, drawing reading and Jarvis's free questions need a key."
+    var offlineOnly by remember { mutableStateOf(AiSettings.offlineOnly(context)) }
+    fun honestStatus(): String = when {
+        AiSettings.offlineOnly(context) -> "📚 Offline only is ON: nothing is sent to the internet. Answers come from the app's calculations, tables and your approved facts."
+        AiSettings.isConfigured(context) -> "✅ AI active: ${AiSettings.describe(context)} (asked only when the offline knowledge has no answer, or for explanations)"
+        else -> "No AI provider set up. The offline knowledge answers from the app's calculations, tables and your approved facts; drawing reading by AI and free-form questions need a key."
+    }
     var statusText by remember { mutableStateOf(honestStatus()) }
     val fieldColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = customColors.accentPrimary, unfocusedBorderColor = customColors.border)
 
@@ -114,6 +118,17 @@ fun SettingsDialog(
                     }
                 }
                 Text(text = provider.note, fontSize = 11.sp, color = customColors.textMuted, modifier = Modifier.padding(vertical = 6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Offline only", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = customColors.textMain)
+                        Text("Never use the internet: providers are switched off.", fontSize = 10.sp, color = customColors.textMuted)
+                    }
+                    androidx.compose.material3.Switch(checked = offlineOnly, onCheckedChange = {
+                        offlineOnly = it
+                        AiSettings.setOfflineOnly(context, it)
+                        statusText = honestStatus()
+                    })
+                }
 
                 if (provider != AiProvider.GEMINI) {
                     OutlinedTextField(

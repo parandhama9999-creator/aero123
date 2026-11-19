@@ -528,7 +528,7 @@ object PokaYokeEngine {
         if (pc != null && !isWasher) {
             val cs = strengthOf(pc)
             if ((cs.isIsoSteelClass || pc in INCH_STEEL_CLASSES) && family != MaterialFamily.CARBON_ALLOY_STEEL) {
-                critical("Class ${pc.label.substringBefore(" (")} needs carbon/alloy steel", "ISO 898-1 classes apply only to carbon and alloy steel; ${material.name} is ${family.name.lowercase().replace('_', ' ')}.", "Use the material's own class (A2-70/A4-80 for austenitic stainless, aerospace class for Ti/Ni alloys) or change the material.")
+                critical("${pc.label.substringBefore(" (")} needs carbon/alloy steel", "ISO 898-1 classes apply only to carbon and alloy steel; ${material.name} is ${family.name.lowercase().replace('_', ' ')}.", "Use the material's own class (A2-70/A4-80 for austenitic stainless, aerospace class for Ti/Ni alloys) or change the material.")
             } else if (pc in STAINLESS_CLASSES && !isAusteniticA2A4(material)) {
                 critical("${pc.label.substringBefore(" (")} needs A2/A4 austenitic stainless", "ISO 3506-1 A2/A4 classes cover 304-type (A2) and 316-type (A4) steels only; ${material.name} is not one of them.", "Select SS304 / SS316 / SS316L, or use 'Per material spec' for martensitic, PH and other stainless grades.")
             } else if (pc in MARTENSITIC_FERRITIC_CLASSES && family != MaterialFamily.STAINLESS) {

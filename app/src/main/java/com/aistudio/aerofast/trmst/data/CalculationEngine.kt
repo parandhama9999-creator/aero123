@@ -114,7 +114,10 @@ data class FastenerCalculationResult(
     /** Tensile band from the drawing, when it replaces a property class. */
     val tensileRange: TensileRange? = null,
     /** Nylon thread-locking patch / pellet called for on the drawing. */
-    val threadLockPatch: Boolean = false
+    val threadLockPatch: Boolean = false,
+    /** The machine asked for, and the drawing dimensions used: kept so a what-if recalculation changes only what is asked. */
+    val headerChoice: HeaderChoice = HeaderChoice.AUTO,
+    val drawing: DrawingGeometry = DrawingGeometry()
 ) {
     /** Volume of the finished part in mm³ (0 when no shape was built). */
     val partVolumeMm3: Double get() = finishedPart?.volumeMm3 ?: 0.0
@@ -719,6 +722,8 @@ object CalculationEngine {
             },
             tensileRange = tensileRange,
             threadLockPatch = threadLockPatch,
+            headerChoice = headerChoice,
+            drawing = drawing,
             softAnnealSpec = SoftAnnealEngine.build(material),
             finishedPart = part,
             cncCycleTimeSec = totalCncSec.round(1),

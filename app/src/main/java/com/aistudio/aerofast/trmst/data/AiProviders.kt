@@ -70,8 +70,20 @@ object AiSettings {
         e.apply()
     }
 
+    /** Offline only: no question, drawing or command ever leaves the phone. */
+    fun offlineOnly(context: Context): Boolean = try {
+        GeminiAiService.encryptedPrefs(context, PREFS).getBoolean("offline_only", false)
+    } catch (_: Exception) {
+        false
+    }
+
+    fun setOfflineOnly(context: Context, on: Boolean) {
+        GeminiAiService.encryptedPrefs(context, PREFS).edit().putBoolean("offline_only", on).apply()
+    }
+
     /** True when the active provider can be called: a key (custom endpoints may run without one), an https address and a model. */
     fun isConfigured(context: Context): Boolean {
+        if (offlineOnly(context)) return false
         val c = load(context)
         return if (c.provider == AiProvider.GEMINI) GeminiAiService.hasLiveApiKey(context) else isUsable(c)
     }
@@ -83,7 +95,7 @@ object AiSettings {
     }
 
     /** Short label of what is answering, for the screens. */
-    fun describe(context: Context): String = load(context).let { c ->
+    fun describe(context: Context): String = if (offlineOnly(context)) "Offline knowledge only" else load(context).let { c ->
         if (c.provider == AiProvider.GEMINI) "Gemini" else "${c.provider.label}: ${c.model}"
     }
 }

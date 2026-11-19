@@ -1006,35 +1006,15 @@ object GeminiAiService {
         val aiConfig = AiSettings.load(context)
         val hasLiveKey = AiSettings.isConfigured(context)
 
-        // Fast response for simple greetings only
-        val qLower = trimmedPrompt.lowercase()
-        val isSimpleGreeting = qLower in listOf("hi", "hello", "hey", "hola", "greetings", "good morning", "good afternoon", "good evening", "namaste", "sup", "yo", "hi there", "hello there", "hey aerofast", "hello co-pilot")
-        if (isSimpleGreeting && imageBitmap == null) {
-            val localGreeting = tryAnswerLocally(trimmedPrompt, currentResult)
-            if (localGreeting != null) return@withContext localGreeting
-        }
-
-        // Offline zero-API fallback
-        if (!hasLiveKey && imageBitmap == null) {
-            val localAnswer = tryAnswerLocally(trimmedPrompt, currentResult, extractedSpec)
-            if (localAnswer != null) return@withContext localAnswer
-
-            val setupDesc = if (currentResult != null) {
-                "${currentResult.threadLabel} ${currentResult.fastenerType.label} in ${currentResult.material.name} (UTS: ${currentResult.material.uts} MPa)"
-            } else {
-                "Fastener Engineering Setup"
-            }
-            return@withContext "🤖 **AeroFast AI Co-Pilot**:\n\n" +
-                    "I am ready to help with your fastener engineering requirements!\n\n" +
-                    "**Active Configuration**: $setupDesc\n" +
-                    (if (currentResult != null) {
-                        "• **Pre-Roll Blank**: Ø${currentResult.blankTargetDia.round(3)} mm (±${currentResult.blankTolHalf.round(3)} mm)\n" +
-                        "• **Pitch Sweet-Spot**: ${currentResult.pitchDiaSweet.round(3)} mm\n" +
-                        "• **AMS 2759 Heat Treatment**: ${currentResult.heatTreatmentSpec.austenitizingOrSolutionTempC} soak ${currentResult.heatTreatmentSpec.soakingTimeMinutes}\n" +
-                        "• **Heading Press**: ${currentResult.recommendedMachine} (Head Tonnage: ${currentResult.forgingTonnage.round(1)} T)\n" +
-                        forgingContext(currentResult) + "\n"
-                    } else "") +
-                    "💡 *You can ask about blank diameter sweet-spots, dynamic soaking times, heading tonnage, Fanuc G-code, or batch pricing.*"
+        // Offline first: the app's own calculations, tables, rules and approved facts answer before any AI is asked
+        val answerLang = replyLanguage ?: try { com.aistudio.aerofast.trmst.util.AppLocalization.getSelectedLanguage(context) } catch (_: Exception) { com.aistudio.aerofast.trmst.util.AppLanguage.EN }
+        val knowledge = OfflineKnowledge.answer(trimmedPrompt, currentResult, answerLang, ApprovedFacts.load(context))
+        val asksWhy = Regex("""\b(why|explain|how come|difference|reason)\b|ఎందుకు|వివరించ|क्यों|समझा|por qué|warum|pourquoi|почему|为什么|なぜ""", RegexOption.IGNORE_CASE).containsMatchIn(trimmedPrompt)
+        if (imageBitmap == null) {
+            if (knowledge.found && !(asksWhy && hasLiveKey)) return@withContext knowledge.withSources(answerLang)
+            if (!hasLiveKey) return@withContext knowledge.withSources(answerLang)
+        } else if (!hasLiveKey) {
+            return@withContext "📷 Offline: reading an attached image needs an AI provider (🔑). Use the AI Scanner tab — it reads the drawing's numbers on the phone without internet."
         }
 
         // Cloud Gemini Prompt with Complete Materials Catalog and Engineering Instructions
@@ -1111,8 +1091,8 @@ object GeminiAiService {
             answer.getOrNull()?.let { return@withContext it.trim() }
             val why = answer.exceptionOrNull()?.message ?: "no response"
             val offlineNote = "\n\n_⚠️ Offline answer — ${aiConfig.provider.label} unavailable ($why)._"
-            return@withContext (tryAnswerLocally(trimmedPrompt, currentResult, extractedSpec)?.let { it + offlineNote }
-                ?: "⚠️ ${aiConfig.provider.label} did not answer: $why")
+            return@withContext if (knowledge.found) knowledge.withSources(answerLang) + offlineNote
+                else "⚠️ ${aiConfig.provider.label} did not answer: $why\n\n" + knowledge.withSources(answerLang)
         }
 
         val jsonBody = JSONObject().apply {
@@ -1205,11 +1185,7 @@ object GeminiAiService {
 
         // Final fallback: return deterministic local calculation, flagged so the user knows the AI was not reached
         val offlineNote = "\n\n_⚠️ Offline answer — Gemini AI unavailable (${lastError ?: "no response"})._"
-        val localFallback = tryAnswerLocally(trimmedPrompt, currentResult, extractedSpec)
-        if (localFallback != null) {
-            return@withContext localFallback + offlineNote
-        }
-
-        return@withContext "🤖 **AeroFast AI Co-Pilot**: Active for ${currentResult?.threadLabel ?: "fastener"}. Pre-roll blank diameter is Ø${currentResult?.blankTargetDia?.round(3) ?: "N/A"} mm (±${currentResult?.blankTolHalf?.round(3) ?: "0.02"} mm), AMS 2759 soak time is ${currentResult?.heatTreatmentSpec?.soakingTimeMinutes ?: "30 min"}, and head forming tonnage is ${currentResult?.forgingTonnage?.round(1) ?: "N/A"} T." + offlineNote
+        return@withContext if (knowledge.found) knowledge.withSources(answerLang) + offlineNote
+            else "⚠️ Gemini did not answer: ${lastError ?: "no response"}\n\n" + knowledge.withSources(answerLang)
     }
 }
