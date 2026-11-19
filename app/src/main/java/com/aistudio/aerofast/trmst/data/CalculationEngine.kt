@@ -809,7 +809,8 @@ object CalculationEngine {
                 key != "A286" && key != "SS204" && key != "SS304" && key != "SS316" &&
                 !key.contains("15_5") && !key.contains("17_4") -> baseWithBake
             // CP titanium (Grade 1/2) is not heat treatable, and Ti-6242 uses a duplex anneal: keep catalogue cycles
-            key == "TI_GR1" || key == "TI_6242" -> baseWithBake
+            // Ti-3Al-2.5V (annealed / CWSR grade) and Ti Beta-C (beta alloy) have their own cycles, not Ti-6Al-4V STA
+            key == "TI_GR1" || key == "TI_6242" || key == "TI_3AL25V" || key == "TI_BETA_C" -> baseWithBake
 
             // Precipitation Hardening Stainless (15-5PH, 17-4PH)
             // Precipitation Hardening Stainless (15-5PH, 17-4PH)
@@ -861,23 +862,23 @@ object CalculationEngine {
                     isAging = true
                 )
             }
-            // Ti-6Al-4V Gr 5 (AMS 4928)
+            // Ti-6Al-4V Gr 5 / Gr 23 solution treated and aged (AMS 4965; ATI 6-4 datasheet)
             key == "TI_GR5" || key.contains("TI") -> {
                 HeatTreatmentSpec(
-                    austenitizingOrSolutionTempC = "955°C ± 5°C (Vacuum Solution Treatment)",
-                    soakingTimeMinutes = "60 mins soak (AMS 4928)",
-                    quenchMedium = "Argon Gas Blast (2–5 bar) or Agitated Water Quench",
-                    temperingOrAgingTempC = "540°C ± 5°C (Precipitation Aging)",
-                    temperingOrAgingTimeHours = "6 Hours (360 mins) soak",
+                    austenitizingOrSolutionTempC = "913°C – 954°C (1675 – 1750°F) Solution Treatment, below the β-transus",
+                    soakingTimeMinutes = "60 mins soak (ATI 6-4 / AMS 4965)",
+                    quenchMedium = "Water Quench — minimum delay from furnace to water",
+                    temperingOrAgingTempC = "524°C – 552°C (975 – 1025°F) Aging",
+                    temperingOrAgingTimeHours = "4 – 8 Hours, air cool",
                     targetHardnessHrc = "36–40 HRC",
                     hydrogenBakingRequired = false,
                     hydrogenBakingCycle = "Vacuum degassing at 700°C if hydrogen pick-up exceeds 125 ppm",
-                    standardReference = "AMS 4928 / AMS 2801",
+                    standardReference = "AMS 4965 (STA) / AMS 2801",
                     preheatTempC = "600°C (Induction Pre-heat in Vacuum)",
                     preheatSoakTime = "30 mins",
                     atmosphere = "High Vacuum (<10⁻⁴ mbar) to avoid alpha-case embrittlement",
-                    quenchDetails = "Pressurized Argon quench (2–5 bar) with high-velocity gas circulation",
-                    coolingMethod = "Vacuum cooling to room temperature",
+                    quenchDetails = "Water quench with minimum delay: STA strength depends on a fast quench; large sections or a slow transfer give lower properties (ATI)",
+                    coolingMethod = "Air cool after aging",
                     targetUtsMpa = "1100–1200 MPa",
                     bakingTempC = "N/A",
                     bakingSoakTime = "N/A",
@@ -912,15 +913,15 @@ object CalculationEngine {
             // Waspaloy (AMS 5708)
             key == "WASPALOY" || key.contains("WASP") -> {
                 HeatTreatmentSpec(
-                    austenitizingOrSolutionTempC = "1010°C ± 10°C (Solution Treatment)",
-                    soakingTimeMinutes = "120 mins (2 hrs) soak (AMS 5708)",
+                    austenitizingOrSolutionTempC = "996°C – 1038°C (1825 – 1900°F), 1010°C typical (Solution Treatment)",
+                    soakingTimeMinutes = "240 mins (4 hrs) soak (ATI / Special Metals)",
                     quenchMedium = "Rapid Oil Quench or High-Velocity Argon",
                     temperingOrAgingTempC = "Stabilize 845°C (4 hrs) + Age 760°C (16 hrs)",
                     temperingOrAgingTimeHours = "Stabilize: 240 mins (4 hrs) soak | Final Age: 960 mins (16 hrs) soak",
                     targetHardnessHrc = "35–42 HRC",
                     hydrogenBakingRequired = false,
                     hydrogenBakingCycle = "Not susceptible to hydrogen embrittlement",
-                    standardReference = "AMS 5708 / AMS 5709",
+                    standardReference = "AMS 5708 (solution treated) / AMS 5709 (solution + stabilize + age)",
                     preheatTempC = "750°C (Pre-heat)",
                     preheatSoakTime = "60 mins",
                     atmosphere = "Vacuum (<10⁻⁴ mbar) or High-Purity Argon",
@@ -960,16 +961,16 @@ object CalculationEngine {
             }
             // Carbon / Boron / Alloy Steels (10B21, 4135, 4140/EN24, 4340, 30KhGSNA, 1008, 1018, SS410)
             else -> {
-                val austSoak = maxOf(30, (20 + 1.8 * d).roundToInt())
+                // Same rules as the complete-cycle card (HeatTreatCycleEngine), so both show one time
+                val austSoakH = HeatTreatCycleEngine.soakHours(d)
+                val temperH = HeatTreatCycleEngine.temperHours(d)
                 val preheatSoak = maxOf(30, (15 + 1.2 * d).roundToInt())
                 val isDouble = key == "4340" || key.contains("30KH") || key.contains("GSNA")
 
                 val tempSoakText = if (isDouble) {
-                    "Double Temper: 2 x 120 mins (2 x 2.0 hrs) soak"
+                    "Double Temper: 2 × ${temperH.round(1)} hrs soak (AMS 2759/1: 2 h min + 1 h per 25 mm over 25 mm)"
                 } else {
-                    val tempSoak = maxOf(90, (60 + 2.5 * d).roundToInt())
-                    val tempHours = ((tempSoak / 60.0) * 10).roundToInt() / 10.0
-                    "$tempSoak mins (~$tempHours hrs for Ø${d.round(1)}mm)"
+                    "${temperH.round(1)} hrs soak for Ø${d.round(1)}mm (AMS 2759/1: 2 h min + 1 h per 25 mm over 25 mm)"
                 }
 
                 val austTemp = when (key) {
@@ -1031,7 +1032,7 @@ object CalculationEngine {
 
                 HeatTreatmentSpec(
                     austenitizingOrSolutionTempC = austTemp,
-                    soakingTimeMinutes = "$austSoak mins soak (for Ø${d.round(1)}mm)",
+                    soakingTimeMinutes = "${austSoakH.round(1)} hrs soak for Ø${d.round(1)}mm (1 h per 25 mm, min 1 h, from the load thermocouple)",
                     quenchMedium = quenchMed,
                     temperingOrAgingTempC = tempTemp,
                     temperingOrAgingTimeHours = tempSoakText,

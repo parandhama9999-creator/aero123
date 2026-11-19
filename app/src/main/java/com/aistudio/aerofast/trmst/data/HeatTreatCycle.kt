@@ -48,13 +48,18 @@ object HeatTreatCycleEngine {
      * The quench-and-temper cycle for a steel fastener of this section. Returns null for a grade the
      * catalogue does not quench and temper (austenitic stainless, aluminium, solid-solution nickel).
      */
-    fun quenchTemper(material: MaterialInfo, sectionMm: Double): FurnaceCycle? {
+    fun quenchTemper(
+        material: MaterialInfo,
+        sectionMm: Double,
+        /** The part's own spec (class-based temper, cold-formed classes N/A); defaults to the catalogue card. */
+        spec: HeatTreatmentSpec = material.heatTreatmentSpec
+    ): FurnaceCycle? {
         if (PokaYokeEngine.materialFamily(material) != MaterialFamily.CARBON_ALLOY_STEEL) return null
         // Maraging steel is never quenched and tempered: it air-cools to a soft nickel martensite
         // and is hardened by ageing. The quench-and-temper stages and their cautions — transfer
         // without delay, untempered martensite cracks — are simply false for it.
         if (!SteelCompositions.canSpheroidise(material)) return solutionTreatAndAge(material, sectionMm)
-        val ht = material.heatTreatmentSpec
+        val ht = spec
         val aust = ht.austenitizingOrSolutionTempC
         if (aust.isBlank() || aust.contains("N/A", true) || aust.contains("Not applicable", true)) return null
 

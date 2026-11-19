@@ -1620,7 +1620,7 @@ object FastenerCatalog {
                 targetHardnessHrc = "34 – 38 HRC",
                 hydrogenBakingRequired = false,
                 hydrogenBakingCycle = "Verified H2 < 80 ppm",
-                standardReference = "AMS 4930 / ASTM F136 / AMS 2759/4"
+                standardReference = "AMS 4930 / ASTM F136 / AMS 2801"
             )
         ),
         "CUBE2" to MaterialInfo(

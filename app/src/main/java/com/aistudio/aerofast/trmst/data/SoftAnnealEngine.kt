@@ -227,9 +227,9 @@ object SoftAnnealEngine {
                     route = route,
                     inHouseAnnealNeeded = true,
                     suppliedCondition = supplied,
-                    temperatureC = "${fmt(a1 - 25)} – ${fmt(a1 - 5)} °C (just below A1; A1 = ${fmt(a1)} °C)",
+                    temperatureC = "${fmt(a1 - 40)} – ${fmt(a1 - 15)} °C (below A1 with a 15 °C margin; A1 = ${fmt(a1)} °C)",
                     soakTime = "See the full cycle below — soak is coil-mass driven, not part Ø",
-                    coolingRate = "Slow furnace cool through the transformation range, then still air",
+                    coolingRate = "Slow furnace cool ≈ 20 °C/h to 550 °C, then still air (published wire practice)",
                     atmosphere = "Protective N₂ or endothermic gas — prevent decarburisation of the wire surface",
                     targetUtsMpa = supplied,
                     targetHardnessHb = hbText,
@@ -517,8 +517,10 @@ object AnnealCycleEngine {
         // Just below THIS grade's A1. Nickel and manganese depress it, silicon and chromium raise
         // it, and across these grades that spans more than 140 °C.
         val ac1 = SteelCompositions.ac1For(material) ?: SteelCompositions.A1_PLAIN_CARBON_C
-        val soakLo = ac1 - 25.0
-        val soakHi = ac1 - 5.0
+        // 15 °C margin under A1 for furnace uniformity and heat-to-heat scatter; published plant soaks sit
+        // 20 – 60 °C under A1 (SCM435 680 – 720 °C, AISI 1022 695 – 705 °C)
+        val soakLo = ac1 - 40.0
+        val soakHi = ac1 - 15.0
         val (heatLo, heatHi) = heatUpHours(chargeTonnes)
         val (holdLo, holdHi) = soakHours(material, wireDiaMm)
 
@@ -558,12 +560,13 @@ object AnnealCycleEngine {
             ),
             AnnealStage(
                 "5. Controlled cool to ${fmt(slowCoolTo)} °C",
-                "≈ 20 °C/h through the transformation range — the slow leg is what keeps the carbide globular",
+                "≈ 20 °C/h, as in the published wire cycles. A soak below A1 forms no austenite, so this leg is the " +
+                    "safeguard: any coil that ran over A1 re-transforms to globular carbide instead of new lamellar pearlite",
                 slowHours, slowHours
             ),
             AnnealStage(
                 "6. Cool to ${fmt(fastCoolTo)} °C",
-                "≈ 80 °C/h once past transformation; nothing is gained by holding the charge hot",
+                "≈ 80 °C/h below 550 °C; nothing is gained by holding the charge hot",
                 fastHours, fastHours
             ),
             AnnealStage(
@@ -586,7 +589,7 @@ object AnnealCycleEngine {
                     "load thermocouple before running production.",
                 "Soak and ramp are set by coil mass, stack height and position in the stack — not by the part " +
                     "diameter. Two coils in one stack do not see the same cycle.",
-                "The soak band is set 25 to 5 °C under this grade's own A1, worked out from its nominal " +
+                "The soak band is set 40 to 15 °C under this grade's own A1, worked out from its nominal " +
                     "composition. A mill certificate at the far end of the range shifts A1 by a few degrees, so " +
                     "check it: soaking above A1 austenitises and undoes the anneal."
             )
