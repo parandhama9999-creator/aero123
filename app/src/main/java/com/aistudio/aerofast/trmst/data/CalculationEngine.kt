@@ -109,6 +109,9 @@ data class FastenerCalculationResult(
     val tensileRange: TensileRange? = null,
     /** Nylon thread-locking patch / pellet called for on the drawing. */
     val threadLockPatch: Boolean = false,
+    /** Raw wire from the mill certificate, and its check against the catalogue's headable range. */
+    val millCert: MillCert? = null,
+    val wireCheck: WireCheck? = null,
     /** The machine asked for, and the drawing dimensions used: kept so a what-if recalculation changes only what is asked. */
     val headerChoice: HeaderChoice = HeaderChoice.AUTO,
     val drawing: DrawingGeometry = DrawingGeometry()
@@ -168,6 +171,8 @@ object CalculationEngine {
         /** Tensile band from the drawing (e.g. 1000–1240 MPa): replaces the property class for loads, hardness and checks. */
         tensileRange: TensileRange? = null,
         threadLockPatch: Boolean = false,
+        /** Raw wire Rm / HRB from the supplier's mill certificate; null = not entered. */
+        millCert: MillCert? = null,
         /** Machine asked for: Auto, 1-die 2-blow header or multi-station former. The die design follows it. */
         headerChoice: HeaderChoice = HeaderChoice.AUTO
     ): FastenerCalculationResult {
@@ -524,6 +529,8 @@ object CalculationEngine {
         // Rivets are finished on the header: no turning, no threading
         val totalCncSec = if (fastenerType.isUnthreaded) 0.0 else ((lengthMm / (calcRpm * material.feed)) * 60.0 * 2.1) + 5.5
 
+        val wireCheck = MillCertCheck.check(material, fastenerType, part, millCert)
+
         // NPD Quotation
         val fx = if (currencyIsUsd) (1.0 / 86.50) else 1.0
         val currencySymbol = if (currencyIsUsd) "$" else "₹"
@@ -614,6 +621,8 @@ object CalculationEngine {
             },
             tensileRange = tensileRange,
             threadLockPatch = threadLockPatch,
+            millCert = millCert,
+            wireCheck = wireCheck,
             headerChoice = headerChoice,
             drawing = drawing,
             softAnnealSpec = SoftAnnealEngine.build(material),
@@ -663,7 +672,7 @@ object CalculationEngine {
             ) + listOfNotNull(headingPlan?.feasibilityIssue?.let {
                 PokaYokeIssue(PokaYokeSeverity.CRITICAL, "1-die 2-blow cannot make this part", "On a 1-die 2-blow header: $it.",
                     "Choose Multi-station, or change the head size / wire so the head gathers in two blows.")
-            })
+            }) + MillCertCheck.issues(wireCheck)
         )
     }
 

@@ -27,6 +27,9 @@ data class AeroFastState(
     var tensileMinMpa: Double = 0.0,
     var tensileMaxMpa: Double = 0.0,
     var threadLockPatch: Boolean = false,
+    /** Mill certificate wire Rm (MPa) and hardness (HRB); 0 = not entered. */
+    var millCertRmMpa: Double = 0.0,
+    var millCertHrb: Double = 0.0,
     /** Heading machine asked for: AUTO, TWO_BLOW or MULTI_STATION. */
     var headerChoice: String = "AUTO",
     var propClass: String = PropertyClass.CLASS_10_9.name,
@@ -57,6 +60,8 @@ data class AeroFastState(
         obj.put("tensileMinMpa", tensileMinMpa)
         obj.put("tensileMaxMpa", tensileMaxMpa)
         obj.put("threadLockPatch", threadLockPatch)
+        obj.put("millCertRmMpa", millCertRmMpa)
+        obj.put("millCertHrb", millCertHrb)
         obj.put("headerChoice", headerChoice)
         obj.put("propClass", propClass)
         obj.put("materialKey", materialKey)
@@ -117,6 +122,8 @@ data class AeroFastState(
                     tensileMinMpa = obj.optDouble("tensileMinMpa", 0.0).takeIf { it.isFinite() } ?: 0.0,
                     tensileMaxMpa = obj.optDouble("tensileMaxMpa", 0.0).takeIf { it.isFinite() } ?: 0.0,
                     threadLockPatch = obj.optBoolean("threadLockPatch", false),
+                    millCertRmMpa = obj.optDouble("millCertRmMpa", 0.0).takeIf { it.isFinite() } ?: 0.0,
+                    millCertHrb = obj.optDouble("millCertHrb", 0.0).takeIf { it.isFinite() } ?: 0.0,
                     headerChoice = obj.optString("headerChoice", "AUTO"),
                     propClass = obj.optString("propClass", PropertyClass.CLASS_10_9.name),
                     materialKey = obj.optString("materialKey", "10B21"),

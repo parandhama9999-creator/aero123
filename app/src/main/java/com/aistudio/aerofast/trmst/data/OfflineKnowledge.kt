@@ -171,6 +171,8 @@ object OfflineKnowledge {
             drawing = if (dims) DrawingGeometry(threadLengthMm = i.threadLengthMm) else base.drawing.let { g -> if (i.threadLengthMm != null) g.copy(threadLengthMm = i.threadLengthMm) else g },
             tensileRange = if (i.propertyClass != null) null else i.tensileRange ?: base.tensileRange,
             threadLockPatch = i.threadLockPatch ?: base.threadLockPatch,
+            // The certificate belongs to the wire on the job: another grade has no certificate yet
+            millCert = if (i.materialKey == null || i.materialKey == base.material.key) base.millCert else null,
             headerChoice = i.headerChoice ?: base.headerChoice
         )
     }
@@ -326,7 +328,8 @@ object OfflineKnowledge {
             KTopic.ANNEAL -> r.softAnnealSpec?.let { a ->
                 L(l, "Soft anneal", "సాఫ్ట్ అనీల్", "सॉफ्ट एनील", "Recocido", "Weichglühen", "Recuit", "Отжиг", "软化退火", "焼なまし") +
                     ": ${a.route.label}; ${a.temperatureC.ifBlank { "—" }}; ${a.soakTime.ifBlank { "—" }}; ${a.coolingRate.ifBlank { "—" }}" +
-                    (if (a.route == AnnealRoute.SPHEROIDIZE) AnnealCycleEngine.spheroidize(r.material, AnnealCycleEngine.DEFAULT_CHARGE_TONNES, r.wireDiaMm)?.let { "; cycle ${it.totalText} (10 t charge)" } ?: "" else "")
+                    (if (a.route == AnnealRoute.SPHEROIDIZE) AnnealCycleEngine.spheroidize(r.material, AnnealCycleEngine.DEFAULT_CHARGE_TONNES, r.wireDiaMm)?.let { "; cycle ${it.totalText} (10 t charge)" } ?: "" else "") +
+                    (r.wireCheck?.let { "\n" + it.message } ?: "")
             } ?: ""
             KTopic.COATING -> L(l, "Coating", "కోటింగ్", "कोटिंग", "Recubrimiento", "Beschichtung", "Revêtement", "Покрытие", "涂层", "表面処理") + ": ${r.coating.label} — ${r.coatingSpecText}"
             KTopic.BAKE -> L(l, "Hydrogen bake", "హైడ్రోజన్ బేక్", "हाइड्रोजन बेक", "Deshidrogenado", "Wasserstoff-Tempern", "Dégazage hydrogène", "Обезводороживание", "除氢烘烤", "水素脆化除去ベーキング") + ": " +

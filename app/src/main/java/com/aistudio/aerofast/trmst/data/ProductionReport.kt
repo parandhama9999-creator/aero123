@@ -51,7 +51,10 @@ object ProductionReport {
     fun processSequence(r: FastenerCalculationResult): List<String> = buildList {
         val threaded = !r.fastenerType.isUnthreaded && !r.fastenerType.isWasher
         val anneal = r.softAnnealSpec
-        add("Wire Ø${n(r.wireDiaMm)} mm ${r.material.key}" + (if (anneal?.inHouseAnnealNeeded == true) ", ${anneal.route.label.lowercase()}" else "") + ", coat for heading (phosphate + soap / polymer)")
+        val certTooHard = r.wireCheck?.verdict == WireVerdict.TOO_HARD
+        add("Wire Ø${n(r.wireDiaMm)} mm ${r.material.key}" +
+            (if (anneal?.inHouseAnnealNeeded == true || certTooHard) ", ${(anneal?.route?.label ?: "soft anneal").lowercase()}" + (if (certTooHard) " (mill cert above the headable range: anneal before heading)" else "") else "") +
+            ", coat for heading (phosphate + soap / polymer)")
         add("Cut-off ${n(r.cutOffLengthMm)} mm and head on the ${r.headingPlan?.machineDescription ?: "header"}" +
             (if (CalculationEngine.isWarmHeaded(r.material, r.nominalDiaMm)) " (warm)" else " (cold)"))
         if (threaded) add("Roll the thread: blank Ø${n(r.blankLowerLimit, 3)}–${n(r.blankUpperLimit, 3)} mm" +
@@ -136,6 +139,10 @@ object ProductionReport {
             section("4. WIRE PREPARATION - SOFT ANNEAL")
             row("Route", a.route.label)
             row("Supplied condition", a.suppliedCondition)
+            r.millCert?.let { c ->
+                row("Mill cert (wire)", listOfNotNull(c.rmMpa?.let { "Rm ${n(it, 0)} MPa" }, c.hrb?.let { "${n(it, 0)} HRB" }).joinToString(", "))
+                r.wireCheck?.let { row("Cert check", it.verdict.name.replace('_', ' ') + " vs " + it.reference) }
+            }
             row("In-house anneal", if (a.inHouseAnnealNeeded) "REQUIRED" else "Not required")
             if (a.temperatureC.isNotBlank()) row("Temperature", a.temperatureC)
             if (a.soakTime.isNotBlank()) row("Soak", a.soakTime)

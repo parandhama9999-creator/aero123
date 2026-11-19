@@ -178,6 +178,10 @@ fun AeroFastApp() {
     var tensileMinMpa by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
     var tensileMaxMpa by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
     var threadLockPatch by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    // Raw wire from the supplier's mill certificate (0 = not entered)
+    var millCertRmMpa by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
+    var millCertHrb by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
+    val millCert = com.aistudio.aerofast.trmst.data.MillCert.of(millCertRmMpa.takeIf { it > 0 }, millCertHrb.takeIf { it > 0 })
     // Heading machine: the die design, wire and cut-off follow it everywhere (Sizing, HT & Forging, scanner, report)
     var headerChoice by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO) }
 
@@ -227,6 +231,8 @@ fun AeroFastApp() {
             tensileMinMpa = tensileMinMpa,
             tensileMaxMpa = tensileMaxMpa,
             threadLockPatch = threadLockPatch,
+            millCertRmMpa = millCertRmMpa,
+            millCertHrb = millCertHrb,
             headerChoice = headerChoice.name,
             propClass = selectedPropClass.name,
             materialKey = selectedMaterialKey,
@@ -266,6 +272,8 @@ fun AeroFastApp() {
             tensileMinMpa = loadedState.tensileMinMpa
             tensileMaxMpa = loadedState.tensileMaxMpa
             threadLockPatch = loadedState.threadLockPatch
+            millCertRmMpa = loadedState.millCertRmMpa
+            millCertHrb = loadedState.millCertHrb
             headerChoice = runCatching { com.aistudio.aerofast.trmst.data.HeaderChoice.valueOf(loadedState.headerChoice) }.getOrDefault(com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO)
             try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
             selectedMaterialKey = loadedState.materialKey
@@ -301,6 +309,7 @@ fun AeroFastApp() {
         customThreadLengthMm,
         tensileRange,
         threadLockPatch,
+        millCert,
         headerChoice,
         selectedThreadClass,
         activeMaterial,
@@ -338,6 +347,7 @@ fun AeroFastApp() {
             propertyClass = selectedPropClass,
             tensileRange = tensileRange,
             threadLockPatch = threadLockPatch,
+            millCert = millCert,
             headerChoice = headerChoice,
             // Dimensions from the applied drawing; a flange bolt can also take its head sizes typed on the Sizing card
             drawing = (appliedExtractedSpec?.geometry() ?: com.aistudio.aerofast.trmst.data.DrawingGeometry()).let { g ->
@@ -369,6 +379,8 @@ fun AeroFastApp() {
                 tensileMinMpa = loadedState.tensileMinMpa
                 tensileMaxMpa = loadedState.tensileMaxMpa
                 threadLockPatch = loadedState.threadLockPatch
+                millCertRmMpa = loadedState.millCertRmMpa
+                millCertHrb = loadedState.millCertHrb
                 headerChoice = runCatching { com.aistudio.aerofast.trmst.data.HeaderChoice.valueOf(loadedState.headerChoice) }.getOrDefault(com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO)
                 try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
                 selectedMaterialKey = loadedState.materialKey
@@ -558,6 +570,12 @@ fun AeroFastApp() {
                                 threadLockPatch = threadLockPatch,
                                 onThreadLockPatchChanged = {
                                     threadLockPatch = it
+                                    saveAppState()
+                                },
+                                millCert = millCert,
+                                onMillCertChanged = { rm, hrb ->
+                                    millCertRmMpa = rm ?: 0.0
+                                    millCertHrb = hrb ?: 0.0
                                     saveAppState()
                                 },
                                 headerChoice = headerChoice,

@@ -125,10 +125,10 @@ object SoftAnnealEngine {
     private const val A1_PLAIN_CARBON_C = 723.0
 
     /** Brinell from tensile strength for steel (ASTM A370 / SAE J417 basis): HB = Rm / 3.38. */
-    private const val HB_PER_MPA = 3.38
+    internal const val HB_PER_MPA = 3.38
 
     /** ASTM A370 steel HB -> HRB, piecewise over the annealed range. Approximate by nature. */
-    private fun hbToHrb(hb: Double): Double? {
+    internal fun hbToHrb(hb: Double): Double? {
         val pts = listOf(
             100.0 to 56.2, 120.0 to 66.7, 140.0 to 75.0, 160.0 to 83.0,
             180.0 to 89.0, 200.0 to 93.0, 220.0 to 97.0
@@ -143,7 +143,7 @@ object SoftAnnealEngine {
     }
 
     /** Pulls "480 – 560" out of "480 – 560 MPa (Spheroidized Annealed Wire, >85% globular)". */
-    private fun parseUtsRange(s: String): Pair<Double, Double>? {
+    internal fun parseUtsRange(s: String): Pair<Double, Double>? {
         val nums = Regex("""(\d+(?:\.\d+)?)""").findAll(s).map { it.value.toDouble() }.toList()
         val range = nums.filter { it >= 100.0 }
         return when {

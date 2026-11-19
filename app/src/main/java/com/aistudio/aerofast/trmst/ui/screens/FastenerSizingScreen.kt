@@ -100,6 +100,8 @@ fun FastenerSizingScreen(
     onTensileRangeChanged: (com.aistudio.aerofast.trmst.data.TensileRange?) -> Unit = {},
     threadLockPatch: Boolean = false,
     onThreadLockPatchChanged: (Boolean) -> Unit = {},
+    millCert: com.aistudio.aerofast.trmst.data.MillCert? = null,
+    onMillCertChanged: (Double?, Double?) -> Unit = { _, _ -> },
     headerChoice: com.aistudio.aerofast.trmst.data.HeaderChoice = com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO,
     onHeaderChoice: (com.aistudio.aerofast.trmst.data.HeaderChoice) -> Unit = {},
     selectedPropClass: PropertyClass,
@@ -581,6 +583,45 @@ fun FastenerSizingScreen(
                             },
                             onDismissRequest = { showMaterialDialog = false }
                         )
+                    }
+
+                    // Raw wire as tested on the supplier's mill certificate: checked against the grade's headable range
+                    if (!selectedFastenerType.isWasher) {
+                        var certRmText by remember { mutableStateOf(millCert?.rmMpa?.toInt()?.toString() ?: "") }
+                        var certHrbText by remember { mutableStateOf(millCert?.hrb?.let { "%.0f".format(java.util.Locale.US, it) } ?: "") }
+                        LaunchedEffect(millCert) {
+                            if (millCert == null && (certRmText.toDoubleOrNull() != null || certHrbText.toDoubleOrNull() != null)) { certRmText = ""; certHrbText = "" }
+                        }
+                        val certStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = customColors.textMain)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = certRmText, onValueChange = { certRmText = it; onMillCertChanged(it.toDoubleOrNull(), certHrbText.toDoubleOrNull()) }, singleLine = true,
+                                label = { Text("Mill cert wire Rm (MPa)", fontSize = 10.sp) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), textStyle = certStyle,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = certHrbText, onValueChange = { certHrbText = it; onMillCertChanged(certRmText.toDoubleOrNull(), it.toDoubleOrNull()) }, singleLine = true,
+                                label = { Text("or hardness (HRB)", fontSize = 10.sp) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), textStyle = certStyle,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        val wc = result.wireCheck
+                        if (wc != null) {
+                            val (icon, tint) = when (wc.verdict) {
+                                com.aistudio.aerofast.trmst.data.WireVerdict.HEADABLE -> "✅" to SuccessGreen
+                                com.aistudio.aerofast.trmst.data.WireVerdict.SOFTER_THAN_RANGE -> "ℹ️" to customColors.accentPrimary
+                                com.aistudio.aerofast.trmst.data.WireVerdict.TOO_HARD -> "⛔" to AlertRed
+                                com.aistudio.aerofast.trmst.data.WireVerdict.NO_REFERENCE -> "⚠️" to customColors.accentSecondary
+                            }
+                            Text(text = "$icon ${wc.message}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = tint)
+                        } else {
+                            Text(
+                                text = "Headable range for ${result.material.key} (catalogue): ${result.material.rawMaterialSourcingUtsMpa}",
+                                fontSize = 10.sp, color = customColors.textMuted
+                            )
+                        }
                     }
 
                     // Drawing tensile band and locking patch: customer requirements that no property class carries
