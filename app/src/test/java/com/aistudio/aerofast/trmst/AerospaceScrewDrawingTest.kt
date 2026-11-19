@@ -115,4 +115,13 @@ class AerospaceScrewDrawingTest {
     }
 
     private fun m(k: String) = FastenerCatalog.MATERIALS.getValue(k)
+
+    @Test fun fullCoatingOnA3AThreadAsksForThicknessControlNotRejection() {
+        // Zn-Ni 8–15 µm on #8-32 3A-UNJ: at 15 µm no band is left, but 8–10 µm on the thread is holdable
+        val idx = FastenerCatalog.INCH_SIZES.indexOfFirst { it.dInch == 0.1640 }
+        val r = CalculationEngine.calculate(FastenerType.PAN_HEXALOBULAR, UnitSystem.INCH, ProductStandard.ASME_B18_6_3, idx, 32.0, 6.35, "3A-UNJ",
+            m("4340"), CoatingType.ZN_NI, 100, propertyClass = PropertyClass.CLASS_10_9)
+        assertTrue(r.pokaYokeIssues.none { it.title == "Coating consumes the whole thread tolerance" })
+        assertTrue(r.pokaYokeIssues.any { it.title == "Control coating thickness on the thread" && it.fix.contains("8–10 µm") })
+    }
 }

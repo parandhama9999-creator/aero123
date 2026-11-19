@@ -171,16 +171,18 @@ object JarvisParser {
         var dia: Double? = null
         var pitch: Double? = null
         var length: Double? = null
+        var sizeEnd = -1
         Regex("""(?<!\p{L})(?:m|ఎం|ఎమ్|एम|м)\s?(\d{1,2}(?:\.\d+)?)(?![\d.])(?:\s*(?:x|by|బై|बाय|into)\s*(\d(?:\.\d+)?)(?=\s*(?:x|by|బై|बाय|into)\s*\d))?""").find(t)?.let { m ->
             unit = UnitSystem.METRIC; dia = m.groupValues[1].toDoubleOrNull()
             m.groupValues[2].toDoubleOrNull()?.let { pitch = it }
+            sizeEnd = m.range.last + 1
             cut(m)
         }
         if (dia == null) {
             Regex("""(?:#|number|no\.|నంబర్|नंबर)\s?(\d{1,2})(?:\s*-\s*(\d{2}))?(?![\d/])""").find(t)?.let { m ->
                 val n = m.groupValues[1].toInt()
                 FastenerCatalog.INCH_SIZES.firstOrNull { it.label.startsWith("#$n ") }?.let { s ->
-                    unit = UnitSystem.INCH; dia = s.dInch * 25.4; m.groupValues[2].toDoubleOrNull()?.let { pitch = it }; cut(m)
+                    unit = UnitSystem.INCH; dia = s.dInch * 25.4; m.groupValues[2].toDoubleOrNull()?.let { pitch = it }; sizeEnd = m.range.last + 1; cut(m)
                 }
             }
         }
@@ -188,7 +190,7 @@ object JarvisParser {
             Regex("""(?<![\d/.])(\d{1,2})\s*/\s*(2|4|8|16)(?![\d/])(?:\s*(?:inch|in\b|"|ఇంచ్|इंच))?(?:\s*-\s*(\d{2}))?""").find(t)?.let { m ->
                 val v = m.groupValues[1].toDouble() / m.groupValues[2].toDouble()
                 if (v <= 1.5) {
-                    unit = UnitSystem.INCH; dia = v * 25.4; m.groupValues[3].toDoubleOrNull()?.let { pitch = it }; cut(m)
+                    unit = UnitSystem.INCH; dia = v * 25.4; m.groupValues[3].toDoubleOrNull()?.let { pitch = it }; sizeEnd = m.range.last + 1; cut(m)
                 }
             }
         }
@@ -198,6 +200,18 @@ object JarvisParser {
             ?: Regex("""(?:length|long|లెంగ్త్|పొడవు|लंबाई|लेंथ|longitud|largo|länge|longueur|длина|长度|長さ)\s*(?:is|=|:|l)?\s*(\d+(?:\.\d+)?)(\s*(?:mm|ఎంఎం|मिमी))?""").find(t)
             ?: Regex("""(\d+(?:\.\d+)?)(\s*(?:mm|millimet|మిల్లీమీటర్|ఎంఎం|मिलीमीटर|मिमी|milímetro|millimeter|millimètre|миллиметр|毫米|ミリ))(?:\s*(?:long|length|పొడవు|लंबा))?""").find(t))?.let { m ->
             length = m.groupValues[1].toDoubleOrNull()?.let { toLen(it, m.groupValues[2].isNotBlank()) }; cut(m)
+        }
+
+        // "M8 25": a plain number right after the size is the length (material keys and batches are 4+ digits or carry a word)
+        if (dia != null && length == null && sizeEnd >= 0) {
+            Regex("""^\s*(\d{1,3}(?:\.\d+)?)(?![\d.])""").find(t.substring(sizeEnd))?.let { m ->
+                val v = m.groupValues[1].toDouble()
+                if (v >= 2.0 && v <= 500.0) {
+                    length = toLen(v, false)
+                    val r = m.groups[1]!!.range
+                    t = t.replaceRange(sizeEnd + r.first, sizeEnd + r.last + 1, " ".repeat(r.last - r.first + 1))
+                }
+            }
         }
 
         // Material: a catalogue key said as one token or two (10 b21, ss 304, inconel 718)

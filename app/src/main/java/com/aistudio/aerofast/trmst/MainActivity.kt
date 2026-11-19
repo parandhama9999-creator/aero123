@@ -820,6 +820,7 @@ fun AeroFastApp() {
             onMic = { startJarvisListening() },
             onStop = { jarvisVoice.stop() },
             onClose = { jarvisVoice.stop(); jarvisOpen = false },
+            onTyped = { onJarvisHeard(it) },
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 10.dp, end = 10.dp, bottom = 78.dp)
         )
     } else {

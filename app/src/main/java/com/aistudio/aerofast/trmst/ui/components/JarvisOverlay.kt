@@ -28,6 +28,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -76,7 +78,9 @@ fun JarvisPanel(
     onMic: () -> Unit,
     onStop: () -> Unit,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Typed command, for when speech recognition mishears (e.g. "M8" heard as "MI"). */
+    onTyped: (String) -> Unit = {}
 ) {
     val c = LocalCustomColors.current
     Surface(
@@ -112,6 +116,17 @@ fun JarvisPanel(
                 if (heard.isNotBlank()) Text("🗣 $heard", fontSize = 12.sp, color = c.textMuted)
                 if (reply.isNotBlank()) Text(reply, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.textMain)
                 if (heard.isBlank() && reply.isBlank()) Text(JarvisReply.notUnderstood(language).substringAfter(". ").substringAfter("。"), fontSize = 11.sp, color = c.textMuted)
+            }
+            var typed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = typed, onValueChange = { typed = it }, singleLine = true,
+                    placeholder = { Text("M8 x 25 hex bolt…", fontSize = 12.sp) },
+                    modifier = Modifier.weight(1f)
+                )
+                androidx.compose.material3.TextButton(onClick = { if (typed.isNotBlank()) { onTyped(typed.trim()); typed = "" } }, enabled = !busy) {
+                    Text("Send", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
                 if (busy) CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp, color = c.accentPrimary)

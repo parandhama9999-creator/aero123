@@ -110,4 +110,15 @@ class JarvisTest {
         assertFalse(te, te.contains("సెట్ చేశాను"))
         assertEquals("Cut off 79 mm", JarvisReply.forSpeech("**Cut off** • 79 mm"))
     }
+
+    @Test fun bareNumberAfterSizeIsTheLength() {
+        val i = p("M8 25")
+        assertEquals(8.0, i.diaMm!!, 1e-9)
+        assertEquals(25.0, i.lengthMm!!, 1e-9)
+        val t = p("ఎం 8 25 బోల్ట్")
+        assertEquals(8.0, t.diaMm!!, 1e-9); assertEquals(25.0, t.lengthMm!!, 1e-9)
+        // material key and batch are not taken as length
+        val k = p("M10 4135 13000 pieces")
+        assertNull(k.lengthMm); assertEquals("4135", k.materialKey); assertEquals(13000, k.batchQty)
+    }
 }

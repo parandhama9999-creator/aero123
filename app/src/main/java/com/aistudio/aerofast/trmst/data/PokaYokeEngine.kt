@@ -674,7 +674,14 @@ object PokaYokeEngine {
                 } else {
                     // Pre-plate d2 must sit low enough that the plated thread still enters the GO ring gauge
                     val prePlateMax = pitchDiaMaxMm - excessUm / 1000.0
-                    if (prePlateMax <= pitchDiaMinMm) {
+                    val td2All = (pitchDiaMaxMm - pitchDiaMinMm) * 1000.0
+                    val tCap = (allowanceUm + 0.75 * td2All) / 4.0
+                    if (prePlateMax <= pitchDiaMinMm && tCap >= coating.thicknessMinUm) {
+                        // The coating's own minimum still fits: hold the thread coating near that minimum instead of rejecting the part
+                        val capMax = pitchDiaMaxMm - (4.0 * tCap - allowanceUm) / 1000.0
+                        mandatory("Control coating thickness on the thread", "$msg At the full ${coating.thicknessMaxUm.toInt()} µm nothing of the pitch-diameter tolerance is left.",
+                            "Hold the coating on the thread to ${coating.thicknessMinUm.toInt()}–${tCap.toInt()} µm (agree with the plater) and roll pre-plate pitch diameter ${"%.3f".format(java.util.Locale.US, pitchDiaMinMm)} – ${"%.3f".format(java.util.Locale.US, capMax)} mm; gauge GO / NO-GO after plating.")
+                    } else if (prePlateMax <= pitchDiaMinMm) {
                         critical("Coating consumes the whole thread tolerance", "$msg Pre-plate pitch diameter would have to be below the lower limit ${"%.3f".format(java.util.Locale.US, pitchDiaMinMm)} mm.", "Use class 6f/6e (2A for inch) or a thinner coating.")
                     } else {
                         val td2Um = (pitchDiaMaxMm - pitchDiaMinMm) * 1000.0
