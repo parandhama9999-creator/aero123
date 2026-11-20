@@ -400,8 +400,11 @@ object HeadingProgression {
         stations += HeadingStation(
             index = 1,
             title = "Square & forward extrude",
-            operation = "Square sheared ends; extrude thread section Ø${f(wire)} → Ø${f(fg.blankDiaMm, 3)} × ${f(lt, 1)} mm through 15°/side cone " +
-                "(${f(fg.coneLengthMm)} mm, ${f(reductionPct, 0)} % area reduction); stock before extrusion ${f(fg.stockToExtrudeMm)} mm; head stock ${f(stock, 1)} mm, L/D ${f(ld)}",
+            operation = "Square sheared ends; extrude thread section Ø${f(wire)} → Ø${f(fg.blankDiaMm, 3)} × ${f(lt, 1)} mm " +
+                // Full-thread: no plain shank below the head, so the extrusion runs to the die face and no cone is left on the part
+                (if (fg.coneLengthMm > 0.01) "through 15°/side cone (${f(fg.coneLengthMm)} mm, ${f(reductionPct, 0)} % area reduction)"
+                 else "up to the die face, full length (${f(reductionPct, 0)} % area reduction)") +
+                "; stock before extrusion ${f(fg.stockToExtrudeMm)} mm; head stock ${f(stock, 1)} mm, L/D ${f(ld)}",
             segments = shank + ProfileSegment(stock, wire),
             inDieMm = length
         )
