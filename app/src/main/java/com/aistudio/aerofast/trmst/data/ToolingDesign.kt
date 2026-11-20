@@ -16,7 +16,10 @@ data class MachineSetup(
     /** Carbide insert OD the shop plans to use; the app does not choose it. */
     val insertOdMm: Double? = null,
     /** Shop's open-extrusion limit, % area in one blow; null = the app default (30 %). */
-    val openExtrusionLimitPct: Double? = null
+    val openExtrusionLimitPct: Double? = null,
+    /** Shop's extrusion die opening angle 2α and land length; null = show the published range. */
+    val dieAngleDeg: Double? = null,
+    val landLengthMm: Double? = null
 ) {
     val isEmpty: Boolean get() = listOf(dieCaseOdMm, dieCaseLengthMm, punchCaseOdMm, punchCaseLengthMm, koStrokeMm, insertOdMm).all { it == null }
     val openLimit: Double get() = openExtrusionLimitPct ?: HeadingProgression.MAX_DIE_EXTRUSION_PCT
@@ -25,19 +28,19 @@ data class MachineSetup(
 /** Machine pockets are a shop setting: kept across parts, on this phone only. */
 object MachineSetupStore {
     private const val PREFS = "aerofast_machine_setup"
-    private val KEYS = listOf("dieCaseOd", "dieCaseLen", "punchCaseOd", "punchCaseLen", "koStroke", "insertOd", "openExtrusionLimit")
+    private val KEYS = listOf("dieCaseOd", "dieCaseLen", "punchCaseOd", "punchCaseLen", "koStroke", "insertOd", "openExtrusionLimit", "dieAngle", "landLength")
 
     var setup by mutableStateOf(MachineSetup())
 
     fun load(context: Context) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         fun g(k: String) = p.getFloat(k, 0f).toDouble().takeIf { it > 0.0 }
-        setup = MachineSetup(g(KEYS[0]), g(KEYS[1]), g(KEYS[2]), g(KEYS[3]), g(KEYS[4]), g(KEYS[5]), g(KEYS[6]))
+        setup = MachineSetup(g(KEYS[0]), g(KEYS[1]), g(KEYS[2]), g(KEYS[3]), g(KEYS[4]), g(KEYS[5]), g(KEYS[6]), g(KEYS[7]), g(KEYS[8]))
     }
 
     fun save(context: Context, s: MachineSetup) {
         setup = s
-        val values = listOf(s.dieCaseOdMm, s.dieCaseLengthMm, s.punchCaseOdMm, s.punchCaseLengthMm, s.koStrokeMm, s.insertOdMm, s.openExtrusionLimitPct)
+        val values = listOf(s.dieCaseOdMm, s.dieCaseLengthMm, s.punchCaseOdMm, s.punchCaseLengthMm, s.koStrokeMm, s.insertOdMm, s.openExtrusionLimitPct, s.dieAngleDeg, s.landLengthMm)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
             KEYS.zip(values).forEach { (k, v) -> putFloat(k, (v ?: 0.0).toFloat()) }
         }.apply()
@@ -64,6 +67,10 @@ enum class ToolBasis(val tag: String) {
     CATALOGUE("catalogue"),
     /** Common heading practice, not a standard: a recommendation to confirm with the toolmaker. */
     SHOP_PRACTICE("shop practice"),
+    /** A published handbook / industry guideline (sources listed on the sheet). */
+    PUBLISHED("published guideline"),
+    /** Worked out with a published formula from catalogue data: an estimate, not a measurement. */
+    ESTIMATE("estimate"),
     /** No published rule: the toolmaker or carbide supplier decides. */
     TOOLMAKER("toolmaker decides")
 }
@@ -174,14 +181,14 @@ object ToolingDesign {
         val stations = dieStations.mapIndexed { i, st ->
             // The stock this blow starts from: the previous station, or the cut-off slug for the first die
             val before = if (i == 0) plan.stations.firstOrNull { it.isCutOff } else dieStations[i - 1]
-            stationTooling(st, machine, before, ext[st.index])
+            stationTooling(st, machine, before, ext[st.index], r.material)
         }
 
         val materials = listOf(
             ToolItem("Die insert / punch (for ${r.material.key})", r.material.dieTooling, ToolBasis.CATALOGUE)
         )
 
-        val notDecided = listOf(
+        val notDecided = (if (extrusions(plan).isNotEmpty()) listOf("Extrusion die values marked [published guideline] come from: " + ExtrusionData.SOURCES.joinToString(" | ")) else emptyList()) + listOf(
             "Carbide insert OD and shrink-fit interference: no published rule was found (studies report anything from 0.1 % to 0.8 % by station); size them with your carbide supplier or toolmaker." +
                 (machine.insertOdMm?.let { " Your planned insert OD Ø${f(it)} is used for the wall checks." } ?: ""),
             "Pressure pad, springs, guide bush and running fits of pins: set from your tool standard.",
@@ -194,7 +201,7 @@ object ToolingDesign {
         )
     }
 
-    private fun stationTooling(st: HeadingStation, m: MachineSetup, before: HeadingStation? = null, ex: StationExtrusion? = null): StationTooling {
+    private fun stationTooling(st: HeadingStation, m: MachineSetup, before: HeadingStation? = null, ex: StationExtrusion? = null, material: MaterialInfo? = null): StationTooling {
         val (inDie, above) = split(st.segments, st.inDieMm)
         val items = mutableListOf<ToolItem>()
         val problems = mutableListOf<String>()
@@ -221,6 +228,11 @@ object ToolingDesign {
                     "$pct is over your ${f(m.openLimit, 0)} % open-extrusion limit: hold the billet in the Ø${f(ex.fromMm + HeadingProgression.stageClearance(ex.fromMm))} bore before the reduction" +
                         (if (ex.heldLengthMm > 0.0) " (billet held over ${f(ex.heldLengthMm, 1)} mm)" else ""), ToolBasis.SHOP_PRACTICE)
                 else -> items += ToolItem("Extrusion: open", "$pct, within your ${f(m.openLimit, 0)} % open-extrusion limit", ToolBasis.SHOP_PRACTICE)
+            }
+            if (material != null && ex.reductionPct <= HeadingProgression.TRAPPED_EXTRUSION_MAX_PCT) {
+                val (dieItems, dieProblems) = ExtrusionDie.items(ex, material, m)
+                items += dieItems
+                problems += dieProblems
             }
         }
         val aboveH = above.sumOf { it.heightMm }

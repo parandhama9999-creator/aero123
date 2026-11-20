@@ -40,7 +40,7 @@ class ToolingDesignTest {
 
     @Test fun shrinkFitAndInsertOdAreLeftToTheToolmaker() {
         val sheet = ToolingDesign.build(shcs)!!
-        assertTrue(sheet.notDecided.first().contains("no published rule"))
+        assertTrue(sheet.notDecided.any { it.contains("no published rule") })
         assertTrue(sheet.stations.flatMap { it.items }.none { it.name.contains("interference", ignoreCase = true) })
         assertEquals(ToolBasis.TOOLMAKER, sheet.cutOff.single { it.name.startsWith("Cut-off quill") }.basis)
     }

@@ -130,6 +130,8 @@ private fun ItemRow(i: ToolItem) {
         ToolBasis.MACHINE -> c.accentPrimary
         ToolBasis.CATALOGUE -> c.accentSecondary
         ToolBasis.SHOP_PRACTICE -> c.accentSecondary
+        ToolBasis.PUBLISHED -> c.accentSecondary
+        ToolBasis.ESTIMATE -> c.accentPrimary
         ToolBasis.TOOLMAKER -> c.textMuted
     }
     Column {
@@ -266,8 +268,12 @@ private fun MachineSetupCard(m: MachineSetup, onChange: (MachineSetup) -> Unit) 
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             field("Open extrusion limit %", m.openExtrusionLimitPct, Modifier.weight(1f)) { m.copy(openExtrusionLimitPct = it?.takeIf { v -> v in 5.0..70.0 }) }
+            field("Die angle 2α °", m.dieAngleDeg, Modifier.weight(1f)) { m.copy(dieAngleDeg = it?.takeIf { v -> v in 5.0..180.0 }) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            field("Die land length", m.landLengthMm, Modifier.weight(1f)) { m.copy(landLengthMm = it?.takeIf { v -> v in 0.1..30.0 }) }
             Text(
-                "Blank = ${HeadingProgression.MAX_DIE_EXTRUSION_PCT.toInt()} % (guidelines: open 30 – 35 %, trapped 70 – 75 %). Over your limit the station needs a trapped die.",
+                "Blank = published values: open limit ${HeadingProgression.MAX_DIE_EXTRUSION_PCT.toInt()} % (guideline 30 – 35 %, trapped 70 – 75 %), 2α 24° – 70°, land 1.5 – 4.5 mm.",
                 fontSize = 9.sp, color = c.textMuted, modifier = Modifier.weight(1f).padding(top = 6.dp)
             )
         }
