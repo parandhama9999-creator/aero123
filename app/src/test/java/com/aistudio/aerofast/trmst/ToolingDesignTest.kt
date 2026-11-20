@@ -61,3 +61,27 @@ class ToolingDesignTest {
         listOf("[calculated]", "[your machine]", "[catalogue]", "[toolmaker decides]", "NOT SET BY THE APP").forEach { assertTrue(it, t.contains(it)) }
     }
 }
+
+class ConePunchToolingTest {
+    private val m10 = FastenerCatalog.sizeIndexFor(UnitSystem.METRIC, 10.0)
+    private fun shcs() = CalculationEngine.calculate(FastenerType.SHCS, UnitSystem.METRIC, ProductStandard.ISO_4762, m10, 1.5, 50.0, "6g",
+        FastenerCatalog.MATERIALS.getValue("4140"), CoatingType.ZN_NI, 10000, propertyClass = PropertyClass.CLASS_12_9)
+
+    @Test fun gatheringStationNamesTheSlidingPunchAndItsTravel() {
+        val r = shcs()
+        val cone = ToolingDesign.build(r)!!.stations.single { st -> st.items.any { it.name == "Cone punch type" } }
+        val free = cone.items.single { it.name == "Free stock before this blow" }
+        // M10 SHCS: 22.75 mm of Ø9.85 wire above the die → L/D 2.31, over the 2.3 single-blow limit
+        assertTrue(free.value, free.value.contains("L/D 2.31"))
+        assertEquals(ToolBasis.SHOP_PRACTICE, cone.items.single { it.name == "Cone punch type" }.basis)
+        val coneH = cone.aboveDie.single().heightMm
+        val travel = cone.items.single { it.name == "Sleeve travel" }
+        assertTrue(travel.value, travel.value.contains(String.format(java.util.Locale.US, "%.2f mm", 22.75 - coneH).let { it.substring(0, it.length - 5) }))
+        assertEquals(ToolBasis.TOOLMAKER, cone.items.single { it.name.startsWith("Sleeve bore") }.basis)
+    }
+
+    @Test fun stationsWithoutAConeHaveNoSlidingPunch() {
+        val sheet = ToolingDesign.build(shcs())!!
+        assertEquals(1, sheet.stations.count { st -> st.items.any { it.name == "Cone punch type" } })
+    }
+}

@@ -49,6 +49,8 @@ enum class ToolBasis(val tag: String) {
     MACHINE("your machine"),
     /** From the material catalogue. */
     CATALOGUE("catalogue"),
+    /** Common heading practice, not a standard: a recommendation to confirm with the toolmaker. */
+    SHOP_PRACTICE("shop practice"),
     /** No published rule: the toolmaker or carbide supplier decides. */
     TOOLMAKER("toolmaker decides")
 }
@@ -133,7 +135,12 @@ object ToolingDesign {
             ToolItem("Cut-off quill / knife bore", "Wire Ø${f(plan.slugDiaMm)} + shearing clearance", ToolBasis.TOOLMAKER)
         )
 
-        val stations = plan.stations.filter { !it.isCutOff }.map { st -> stationTooling(st, machine) }
+        val dieStations = plan.stations.filter { !it.isCutOff }
+        val stations = dieStations.mapIndexed { i, st ->
+            // The stock this blow starts from: the previous station, or the cut-off slug for the first die
+            val before = if (i == 0) plan.stations.firstOrNull { it.isCutOff } else dieStations[i - 1]
+            stationTooling(st, machine, before)
+        }
 
         val materials = listOf(
             ToolItem("Die insert / punch (for ${r.material.key})", r.material.dieTooling, ToolBasis.CATALOGUE)
@@ -152,7 +159,7 @@ object ToolingDesign {
         )
     }
 
-    private fun stationTooling(st: HeadingStation, m: MachineSetup): StationTooling {
+    private fun stationTooling(st: HeadingStation, m: MachineSetup, before: HeadingStation? = null): StationTooling {
         val (inDie, above) = split(st.segments, st.inDieMm)
         val items = mutableListOf<ToolItem>()
         val problems = mutableListOf<String>()
@@ -173,6 +180,7 @@ object ToolingDesign {
             items += ToolItem("Punch cavity (die face → punch)", above.joinToString(" → ") { segText(it, clearance = false) } + " mm", ToolBasis.CALCULATED)
             items += ToolItem("Punch cavity depth", "${f(aboveH, 1)} mm above the die face", ToolBasis.CALCULATED)
         }
+        coneGather(st, above, before)?.let { items.addAll(it) }
         st.recesses.filter { it.fromTop }.forEach { rc ->
             items += ToolItem("Punch pin (recess)", "${shapeName(rc.shape)} ${f(rc.sizeMm)} × ${f(rc.depthMm, 1)} mm deep", ToolBasis.CALCULATED)
         }
@@ -216,6 +224,33 @@ object ToolingDesign {
             if (aboveH >= pl) problems += "punch cavity depth ${f(aboveH, 1)} mm does not fit the ${f(pl, 1)} mm punch case"
         }
         return StationTooling(st, inDie, above, items, problems)
+    }
+
+    /**
+     * A gathering blow: the head stock is formed into a cone in the punch. The free stock is what stood above the
+     * die face before this blow, so its L/D is measured on the previous station at this station's die depth.
+     */
+    private fun coneGather(st: HeadingStation, above: List<ProfileSegment>, before: HeadingStation?): List<ToolItem>? {
+        val cone = above.firstOrNull { it.shape == SectionShape.ROUND && kotlin.math.abs(it.dBottomMm - it.dTopMm) > 0.05 } ?: return null
+        if (above.size != 1 || before == null) return null
+        val stock = split(before.segments, st.inDieMm).second
+        if (stock.isEmpty()) return null
+        val freeLen = stock.sumOf { it.heightMm }
+        val stockDia = stock.first().maxWidthMm
+        val ld = freeLen / stockDia
+        val coneH = cone.heightMm
+        val list = mutableListOf(
+            ToolItem("Free stock before this blow", "${f(freeLen)} mm on Ø${f(stockDia)} = L/D ${f(ld)} " +
+                "(app limits: 1 blow ≤ ${HeadingProgression.SINGLE_BLOW_LD}, 2 blows ≤ ${HeadingProgression.TWO_BLOW_LD})", ToolBasis.CALCULATED)
+        )
+        if (ld > HeadingProgression.SINGLE_BLOW_LD) {
+            list += ToolItem("Cone punch type",
+                "Sliding (spring-loaded) cone punch is commonly used here: the sleeve encloses the free stock at first contact and slides back as the cone forms, so the stock cannot buckle. Whether a fixed cone is enough depends on the stock length, cone angle, material and stroke",
+                ToolBasis.SHOP_PRACTICE)
+            list += ToolItem("Sleeve travel", "≥ ${f(freeLen)} − ${f(coneH)} = ${f(freeLen - coneH)} mm, if the sleeve encloses the whole free stock at first contact", ToolBasis.CALCULATED)
+        }
+        list += ToolItem("Sleeve bore, cone angle, spring force and preload", "From your tool standard / toolmaker", ToolBasis.TOOLMAKER)
+        return list
     }
 
     private fun shapeName(s: SectionShape) = when (s) {

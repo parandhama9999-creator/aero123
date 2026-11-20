@@ -127,6 +127,7 @@ private fun ItemRow(i: ToolItem) {
         ToolBasis.CALCULATED -> SuccessGreen
         ToolBasis.MACHINE -> c.accentPrimary
         ToolBasis.CATALOGUE -> c.accentSecondary
+        ToolBasis.SHOP_PRACTICE -> c.accentSecondary
         ToolBasis.TOOLMAKER -> c.textMuted
     }
     Column {
