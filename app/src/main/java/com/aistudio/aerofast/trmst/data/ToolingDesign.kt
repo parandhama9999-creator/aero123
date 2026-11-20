@@ -1,0 +1,263 @@
+package com.aistudio.aerofast.trmst.data
+
+import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import java.util.Locale
+
+/** The header's own tool pockets, typed by the user from the machine manual. A null field was not entered. */
+data class MachineSetup(
+    val dieCaseOdMm: Double? = null,
+    val dieCaseLengthMm: Double? = null,
+    val punchCaseOdMm: Double? = null,
+    val punchCaseLengthMm: Double? = null,
+    val koStrokeMm: Double? = null,
+    /** Carbide insert OD the shop plans to use; the app does not choose it. */
+    val insertOdMm: Double? = null
+) {
+    val isEmpty: Boolean get() = listOf(dieCaseOdMm, dieCaseLengthMm, punchCaseOdMm, punchCaseLengthMm, koStrokeMm, insertOdMm).all { it == null }
+}
+
+/** Machine pockets are a shop setting: kept across parts, on this phone only. */
+object MachineSetupStore {
+    private const val PREFS = "aerofast_machine_setup"
+    private val KEYS = listOf("dieCaseOd", "dieCaseLen", "punchCaseOd", "punchCaseLen", "koStroke", "insertOd")
+
+    var setup by mutableStateOf(MachineSetup())
+
+    fun load(context: Context) {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        fun g(k: String) = p.getFloat(k, 0f).toDouble().takeIf { it > 0.0 }
+        setup = MachineSetup(g(KEYS[0]), g(KEYS[1]), g(KEYS[2]), g(KEYS[3]), g(KEYS[4]), g(KEYS[5]))
+    }
+
+    fun save(context: Context, s: MachineSetup) {
+        setup = s
+        val values = listOf(s.dieCaseOdMm, s.dieCaseLengthMm, s.punchCaseOdMm, s.punchCaseLengthMm, s.koStrokeMm, s.insertOdMm)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
+            KEYS.zip(values).forEach { (k, v) -> putFloat(k, (v ?: 0.0).toFloat()) }
+        }.apply()
+    }
+}
+
+/** Where a tooling figure comes from, shown next to it so nothing assumed reads as calculated. */
+enum class ToolBasis(val tag: String) {
+    /** Worked out from the part geometry the app calculates. */
+    CALCULATED("calculated"),
+    /** From the machine sizes the user typed. */
+    MACHINE("your machine"),
+    /** From the material catalogue. */
+    CATALOGUE("catalogue"),
+    /** No published rule: the toolmaker or carbide supplier decides. */
+    TOOLMAKER("toolmaker decides")
+}
+
+data class ToolItem(val name: String, val value: String, val basis: ToolBasis)
+
+data class StationTooling(
+    val station: HeadingStation,
+    /** Part segments inside the die bore and above the die face (split at the die face). */
+    val inDie: List<ProfileSegment>,
+    val aboveDie: List<ProfileSegment>,
+    val items: List<ToolItem>,
+    /** Things the machine cannot do as entered. */
+    val problems: List<String>
+)
+
+data class ToolingSheet(
+    val machine: String,
+    val cutOff: List<ToolItem>,
+    val stations: List<StationTooling>,
+    val materials: List<ToolItem>,
+    /** Figures the app does not set, and why. */
+    val notDecided: List<String>
+) {
+    val problems: List<String> get() = stations.flatMap { st -> st.problems.map { "Station ${st.station.index}: $it" } }
+}
+
+/**
+ * Header tooling worked out from the heading stations: die bore profile, punch cavity, recess and pierce pins,
+ * knock-out stroke, checked against the machine's own pockets. Shrink fit, insert OD and spring / pad sizes
+ * have no published rule the app could find, so they are listed as the toolmaker's decision, not guessed.
+ */
+object ToolingDesign {
+    private fun f(v: Double, dp: Int = 2) = String.format(Locale.US, "%.${dp}f", v)
+
+    /** Splits a station's segments at [cutMm] from the bottom: (below, above). */
+    fun split(segments: List<ProfileSegment>, cutMm: Double): Pair<List<ProfileSegment>, List<ProfileSegment>> {
+        val below = mutableListOf<ProfileSegment>()
+        val above = mutableListOf<ProfileSegment>()
+        var acc = 0.0
+        for (s in segments) {
+            val start = acc
+            val end = acc + s.heightMm
+            acc = end
+            when {
+                end <= cutMm + 1e-9 -> below += s
+                start >= cutMm - 1e-9 -> above += s
+                else -> {
+                    val hBelow = cutMm - start
+                    if (s.shape == SectionShape.ROUND && s.dBottomMm != s.dTopMm) {
+                        val dCut = s.dBottomMm + (s.dTopMm - s.dBottomMm) * hBelow / s.heightMm
+                        below += s.copy(heightMm = hBelow, dTopMm = dCut)
+                        above += s.copy(heightMm = end - cutMm, dBottomMm = dCut)
+                    } else {
+                        below += s.copy(heightMm = hBelow)
+                        above += s.copy(heightMm = end - cutMm)
+                    }
+                }
+            }
+        }
+        return below to above
+    }
+
+    private fun segText(s: ProfileSegment, clearance: Boolean): String {
+        fun c(d: Double) = if (clearance) d + HeadingProgression.stageClearance(d) else d
+        return when (s.shape) {
+            SectionShape.ROUND -> if (s.dBottomMm != s.dTopMm) "cone Ø${f(c(s.dBottomMm))} → Ø${f(c(s.dTopMm))} × ${f(s.heightMm, 1)}"
+                else "Ø${f(c(s.dBottomMm))} × ${f(s.heightMm, 1)}"
+            SectionShape.HEX -> "hex s=${f(s.dBottomMm)} × ${f(s.heightMm, 1)}"
+            SectionShape.TWELVE_POINT -> "12-point s=${f(s.dBottomMm)} × ${f(s.heightMm, 1)}"
+            SectionShape.SQUARE -> "square ${f(s.dBottomMm)} × ${f(s.heightMm, 1)}"
+            SectionShape.DOME -> "dome Ø${f(s.dBottomMm)} × ${f(s.heightMm, 1)} high"
+            else -> "${s.shape.name.lowercase()} ${f(s.dBottomMm)} × ${f(s.heightMm, 1)}"
+        }
+    }
+
+    fun build(r: FastenerCalculationResult, machine: MachineSetup = MachineSetup()): ToolingSheet? {
+        val plan = r.headingPlan ?: return null
+        val cutOff = listOf(
+            ToolItem("Wire", "Ø${f(plan.slugDiaMm)} mm ${r.material.key}", ToolBasis.CALCULATED),
+            ToolItem("Cut-off length", "${f(plan.slugLengthMm)} mm (slug ${f(plan.slugVolumeMm3, 0)} mm³)", ToolBasis.CALCULATED),
+            ToolItem("Cut-off quill / knife bore", "Wire Ø${f(plan.slugDiaMm)} + shearing clearance", ToolBasis.TOOLMAKER)
+        )
+
+        val stations = plan.stations.filter { !it.isCutOff }.map { st -> stationTooling(st, machine) }
+
+        val materials = listOf(
+            ToolItem("Die insert / punch (for ${r.material.key})", r.material.dieTooling, ToolBasis.CATALOGUE)
+        )
+
+        val notDecided = listOf(
+            "Carbide insert OD and shrink-fit interference: no published rule was found (studies report anything from 0.1 % to 0.8 % by station); size them with your carbide supplier or toolmaker." +
+                (machine.insertOdMm?.let { " Your planned insert OD Ø${f(it)} is used for the wall checks." } ?: ""),
+            "Pressure pad, springs, guide bush and running fits of pins: set from your tool standard.",
+            "Tolerances, surface finish and polish of bores and cavities: from your tool standard and the part drawing."
+        )
+
+        return ToolingSheet(
+            machine = "${plan.machineDescription} — ${plan.dieStations} die station(s)",
+            cutOff = cutOff, stations = stations, materials = materials, notDecided = notDecided
+        )
+    }
+
+    private fun stationTooling(st: HeadingStation, m: MachineSetup): StationTooling {
+        val (inDie, above) = split(st.segments, st.inDieMm)
+        val items = mutableListOf<ToolItem>()
+        val problems = mutableListOf<String>()
+
+        if (inDie.isNotEmpty()) {
+            items += ToolItem("Die bore (bottom → die face)", inDie.joinToString(" → ") { segText(it, clearance = true) } +
+                " mm, incl. transfer clearance ${f(HeadingProgression.MIN_STAGE_CLEARANCE_MM)}–${f(HeadingProgression.MAX_STAGE_CLEARANCE_MM)} mm by Ø", ToolBasis.CALCULATED)
+            items += ToolItem("Die bore depth", "${f(st.inDieMm, 1)} mm (part held in the die)", ToolBasis.CALCULATED)
+            // A step down the bore is an extrusion (or a shoulder): its entry angle and land have no rule in the app
+            inDie.zipWithNext().filter { (lower, upper) -> upper.maxWidthMm - lower.maxWidthMm > 0.05 }.forEach { (lower, upper) ->
+                items += ToolItem("Extrusion entry Ø${f(upper.maxWidthMm)} → Ø${f(lower.maxWidthMm)}", "Die entry angle, land length and radius", ToolBasis.TOOLMAKER)
+            }
+        } else {
+            items += ToolItem("Die", "Part is not held in a die bore at this station", ToolBasis.CALCULATED)
+        }
+        val aboveH = above.sumOf { it.heightMm }
+        if (above.isNotEmpty()) {
+            items += ToolItem("Punch cavity (die face → punch)", above.joinToString(" → ") { segText(it, clearance = false) } + " mm", ToolBasis.CALCULATED)
+            items += ToolItem("Punch cavity depth", "${f(aboveH, 1)} mm above the die face", ToolBasis.CALCULATED)
+        }
+        st.recesses.filter { it.fromTop }.forEach { rc ->
+            items += ToolItem("Punch pin (recess)", "${shapeName(rc.shape)} ${f(rc.sizeMm)} × ${f(rc.depthMm, 1)} mm deep", ToolBasis.CALCULATED)
+        }
+        st.recesses.filter { !it.fromTop }.forEach { rc ->
+            items += ToolItem("Knock-out pin nose (bottom recess)", "${shapeName(rc.shape)} ${f(rc.sizeMm)} × ${f(rc.depthMm, 1)} mm", ToolBasis.CALCULATED)
+        }
+        st.throughHoleMm?.let { items += ToolItem("Pierce pin", "Ø${f(it)} mm", ToolBasis.CALCULATED) }
+        if (st.scrapMm3 > 0.0) items += ToolItem("Scrap removed", "${f(st.scrapMm3, 0)} mm³", ToolBasis.CALCULATED)
+
+        val bottomBore = inDie.firstOrNull()?.let { s -> s.maxWidthMm + HeadingProgression.stageClearance(s.maxWidthMm) }
+        if (bottomBore != null) {
+            items += ToolItem("Knock-out pin", "Runs in the Ø${f(bottomBore)} bottom bore; ejection stroke ≥ ${f(st.inDieMm, 1)} mm", ToolBasis.CALCULATED)
+        }
+        if (st.isPeakBlow) items += ToolItem("Load", "Peak blow: full forming load on this station", ToolBasis.CALCULATED)
+
+        // Checks against the machine pockets the user entered
+        val maxBore = inDie.maxOfOrNull { it.maxWidthMm + HeadingProgression.stageClearance(it.maxWidthMm) }
+        m.dieCaseLengthMm?.let { L ->
+            items += ToolItem("Die case length", "${f(L, 1)} mm", ToolBasis.MACHINE)
+            if (st.inDieMm >= L) problems += "die bore depth ${f(st.inDieMm, 1)} mm does not fit the ${f(L, 1)} mm die case"
+        }
+        m.koStrokeMm?.let { k ->
+            if (st.inDieMm > k) problems += "knock-out stroke ${f(k, 1)} mm cannot push out a part held ${f(st.inDieMm, 1)} mm in the die"
+        }
+        if (maxBore != null) {
+            m.insertOdMm?.let { ins ->
+                items += ToolItem("Insert wall", "(Ø${f(ins)} − Ø${f(maxBore)}) / 2 = ${f((ins - maxBore) / 2.0)} mm; OD/bore = ${f(ins / maxBore)}", ToolBasis.MACHINE)
+                if (ins <= maxBore) problems += "insert OD Ø${f(ins)} is not larger than the die bore Ø${f(maxBore)}"
+            }
+            m.dieCaseOdMm?.let { case ->
+                val inner = m.insertOdMm ?: maxBore
+                items += ToolItem("Case ring wall", "(Ø${f(case)} − Ø${f(inner)}) / 2 = ${f((case - inner) / 2.0)} mm", ToolBasis.MACHINE)
+                if (case <= inner) problems += "die case Ø${f(case)} has no room for Ø${f(inner)}"
+            }
+        }
+        val cavityWidth = above.maxOfOrNull { it.maxWidthMm }
+        m.punchCaseOdMm?.let { p ->
+            if (cavityWidth != null && cavityWidth >= p) problems += "punch cavity ${f(cavityWidth)} mm across is wider than the Ø${f(p)} punch case"
+        }
+        m.punchCaseLengthMm?.let { pl ->
+            if (aboveH >= pl) problems += "punch cavity depth ${f(aboveH, 1)} mm does not fit the ${f(pl, 1)} mm punch case"
+        }
+        return StationTooling(st, inDie, above, items, problems)
+    }
+
+    private fun shapeName(s: SectionShape) = when (s) {
+        SectionShape.HEX -> "hex"
+        SectionShape.HEXALOBULAR -> "hexalobular"
+        SectionShape.SQUARE -> "square"
+        SectionShape.TWELVE_POINT -> "12-point"
+        else -> "round Ø"
+    }
+
+    /** Plain-text tooling sheet for sharing. */
+    fun text(r: FastenerCalculationResult, s: ToolingSheet, m: MachineSetup): String = buildString {
+        val line = "=".repeat(60)
+        appendLine(line)
+        appendLine("AEROFAST PRO — HEADER TOOLING SHEET")
+        appendLine("${r.threadLabel} × ${f(r.lengthMm, 1)} mm ${r.fastenerType.label}, ${r.material.key}")
+        appendLine("Machine: ${s.machine}")
+        appendLine(line)
+        fun item(i: ToolItem) = appendLine("  ${i.name}: ${i.value}  [${i.basis.tag}]")
+        appendLine("CUT-OFF"); s.cutOff.forEach(::item)
+        s.stations.forEach { st ->
+            appendLine()
+            appendLine("STATION ${st.station.index}: ${st.station.title}")
+            appendLine("  ${st.station.operation}")
+            st.items.forEach(::item)
+            st.problems.forEach { appendLine("  !! $it") }
+        }
+        appendLine()
+        appendLine("TOOL MATERIALS"); s.materials.forEach(::item)
+        if (!m.isEmpty) {
+            appendLine()
+            appendLine("MACHINE POCKETS (entered)")
+            m.dieCaseOdMm?.let { appendLine("  Die case OD: ${f(it, 1)} mm") }
+            m.dieCaseLengthMm?.let { appendLine("  Die case length: ${f(it, 1)} mm") }
+            m.punchCaseOdMm?.let { appendLine("  Punch case OD: ${f(it, 1)} mm") }
+            m.punchCaseLengthMm?.let { appendLine("  Punch case length: ${f(it, 1)} mm") }
+            m.koStrokeMm?.let { appendLine("  Knock-out stroke: ${f(it, 1)} mm") }
+            m.insertOdMm?.let { appendLine("  Planned insert OD: ${f(it, 1)} mm") }
+        }
+        appendLine()
+        appendLine("NOT SET BY THE APP")
+        s.notDecided.forEach { appendLine("  - $it") }
+        appendLine(line)
+    }
+}

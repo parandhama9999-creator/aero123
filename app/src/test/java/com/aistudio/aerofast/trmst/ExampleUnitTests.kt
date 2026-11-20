@@ -55,24 +55,24 @@ class ExampleUnitTests {
     val teTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(1, com.aistudio.aerofast.trmst.util.AppLanguage.TE)
     assertEquals("1. పరిమాణం", teTitle)
 
-    val esTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(4, com.aistudio.aerofast.trmst.util.AppLanguage.ES)
-    assertEquals("4. Co-Piloto IA", esTitle)
+    val esTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(5, com.aistudio.aerofast.trmst.util.AppLanguage.ES)
+    assertEquals("5. Co-Piloto IA", esTitle)
 
-    val deTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(3, com.aistudio.aerofast.trmst.util.AppLanguage.DE)
-    assertEquals("3. KI-Scanner", deTitle)
+    val deTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(4, com.aistudio.aerofast.trmst.util.AppLanguage.DE)
+    assertEquals("4. KI-Scanner", deTitle)
 
-    val jaTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(5, com.aistudio.aerofast.trmst.util.AppLanguage.JA)
-    assertEquals("5. 8D NPD エンジン", jaTitle)
+    val jaTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(6, com.aistudio.aerofast.trmst.util.AppLanguage.JA)
+    assertEquals("6. 8D NPD エンジン", jaTitle)
 
-    val zhTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(4, com.aistudio.aerofast.trmst.util.AppLanguage.ZH)
-    assertEquals("4. AI副驾驶", zhTitle)
+    val zhTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(5, com.aistudio.aerofast.trmst.util.AppLanguage.ZH)
+    assertEquals("5. AI副驾驶", zhTitle)
 
-    val ruTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(2, com.aistudio.aerofast.trmst.util.AppLanguage.RU)
-    assertEquals("2. ТО и Ковка", ruTitle)
+    val ruTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(3, com.aistudio.aerofast.trmst.util.AppLanguage.RU)
+    assertEquals("3. ТО и Ковка", ruTitle)
 
-    val frTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(5, com.aistudio.aerofast.trmst.util.AppLanguage.FR)
-    assertEquals("5. Moteur 8D NPD", frTitle)
+    val frTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(6, com.aistudio.aerofast.trmst.util.AppLanguage.FR)
+    assertEquals("6. Moteur 8D NPD", frTitle)
 
-    assertEquals("Tab 6", com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(6, com.aistudio.aerofast.trmst.util.AppLanguage.EN))
+    assertEquals("Tab 7", com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(7, com.aistudio.aerofast.trmst.util.AppLanguage.EN))
   }
 }

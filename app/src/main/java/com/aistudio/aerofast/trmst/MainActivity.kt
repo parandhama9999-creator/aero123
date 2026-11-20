@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Fireplace
 import androidx.compose.material.icons.filled.Key
@@ -102,6 +103,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.aistudio.aerofast.trmst.data.ShopDefaults.load(this)
+        com.aistudio.aerofast.trmst.data.MachineSetupStore.load(this)
         enableEdgeToEdge()
         setContent {
             // The app composes behind the intro, so it is ready the moment the intro ends
@@ -119,10 +121,11 @@ class MainActivity : ComponentActivity() {
 
 enum class NavigationTab(val tabIndex: Int, val defaultTitle: String, val icon: ImageVector) {
     SIZING(1, "1. Sizing", Icons.Default.Tune),
-    FORGING(2, "2. HT & Forging", Icons.Default.Fireplace),
-    SCANNER(3, "3. AI Scanner", Icons.Default.CameraAlt),
-    COPILOT(4, "4. AI Co-Pilot", Icons.Default.SmartToy),
-    EIGHT_D(5, "5. 8D NPD Engine", Icons.Default.Engineering);
+    TOOLING(2, "2. Tooling", Icons.Default.Build),
+    FORGING(3, "3. HT & Forging", Icons.Default.Fireplace),
+    SCANNER(4, "4. AI Scanner", Icons.Default.CameraAlt),
+    COPILOT(5, "5. AI Co-Pilot", Icons.Default.SmartToy),
+    EIGHT_D(6, "6. 8D NPD Engine", Icons.Default.Engineering);
 
     fun getTitle(lang: com.aistudio.aerofast.trmst.util.AppLanguage): String {
         return com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(tabIndex, lang)
@@ -621,6 +624,10 @@ fun AeroFastApp() {
                                     saveAppState()
                                 }
                             )
+                        }
+
+                        NavigationTab.TOOLING -> {
+                            com.aistudio.aerofast.trmst.ui.screens.ToolingScreen(result = currentCalculation)
                         }
 
                         NavigationTab.FORGING -> {
