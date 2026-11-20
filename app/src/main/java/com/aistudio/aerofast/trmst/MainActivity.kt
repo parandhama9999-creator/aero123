@@ -185,6 +185,8 @@ fun AeroFastApp() {
     var millCertRmMpa by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
     var millCertHrb by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
     val millCert = com.aistudio.aerofast.trmst.data.MillCert.of(millCertRmMpa.takeIf { it > 0 }, millCertHrb.takeIf { it > 0 })
+    // Wire diameter chosen on the Tooling tab (0 = automatic): stations, blows and tools follow it
+    var wireDiaChoiceMm by androidx.compose.runtime.saveable.rememberSaveable { mutableDoubleStateOf(0.0) }
     // Heading machine: the die design, wire and cut-off follow it everywhere (Sizing, HT & Forging, scanner, report)
     var headerChoice by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO) }
 
@@ -236,6 +238,7 @@ fun AeroFastApp() {
             threadLockPatch = threadLockPatch,
             millCertRmMpa = millCertRmMpa,
             millCertHrb = millCertHrb,
+            wireDiaMm = wireDiaChoiceMm,
             headerChoice = headerChoice.name,
             propClass = selectedPropClass.name,
             materialKey = selectedMaterialKey,
@@ -277,6 +280,7 @@ fun AeroFastApp() {
             threadLockPatch = loadedState.threadLockPatch
             millCertRmMpa = loadedState.millCertRmMpa
             millCertHrb = loadedState.millCertHrb
+            wireDiaChoiceMm = loadedState.wireDiaMm
             headerChoice = runCatching { com.aistudio.aerofast.trmst.data.HeaderChoice.valueOf(loadedState.headerChoice) }.getOrDefault(com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO)
             try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
             selectedMaterialKey = loadedState.materialKey
@@ -313,6 +317,7 @@ fun AeroFastApp() {
         tensileRange,
         threadLockPatch,
         millCert,
+        wireDiaChoiceMm,
         headerChoice,
         selectedThreadClass,
         activeMaterial,
@@ -351,6 +356,7 @@ fun AeroFastApp() {
             tensileRange = tensileRange,
             threadLockPatch = threadLockPatch,
             millCert = millCert,
+            wireDiaOverrideMm = wireDiaChoiceMm.takeIf { it > 0.0 },
             headerChoice = headerChoice,
             // Dimensions from the applied drawing; a flange bolt can also take its head sizes typed on the Sizing card
             drawing = (appliedExtractedSpec?.geometry() ?: com.aistudio.aerofast.trmst.data.DrawingGeometry()).let { g ->
@@ -384,6 +390,7 @@ fun AeroFastApp() {
                 threadLockPatch = loadedState.threadLockPatch
                 millCertRmMpa = loadedState.millCertRmMpa
                 millCertHrb = loadedState.millCertHrb
+                wireDiaChoiceMm = loadedState.wireDiaMm
                 headerChoice = runCatching { com.aistudio.aerofast.trmst.data.HeaderChoice.valueOf(loadedState.headerChoice) }.getOrDefault(com.aistudio.aerofast.trmst.data.HeaderChoice.AUTO)
                 try { selectedPropClass = PropertyClass.valueOf(loadedState.propClass) } catch (_: Exception) {}
                 selectedMaterialKey = loadedState.materialKey
@@ -513,6 +520,7 @@ fun AeroFastApp() {
                                 selectedFastenerType = selectedFastenerType,
                                 onFastenerTypeSelected = { newType ->
                                     selectedFastenerType = newType
+                                    wireDiaChoiceMm = 0.0 // a chosen wire belongs to the old size
                                     appliedExtractedSpec = null
                                     customThreadLengthMm = 0.0
                                     selectedStandard = com.aistudio.aerofast.trmst.data.PokaYokeEngine.defaultStandard(newType, selectedUnitSystem)
@@ -523,6 +531,7 @@ fun AeroFastApp() {
                                 onUnitSystemSelected = { newUnit ->
                                     selectedUnitSystem = newUnit
                                     selectedSizeIndex = FastenerCatalog.defaultSizeIndex(newUnit)
+                                    wireDiaChoiceMm = 0.0 // a chosen wire belongs to the old size
                                     selectedPitchValue = if (newUnit == UnitSystem.METRIC) 1.50 else 16.0
                                     selectedLength = if (newUnit == UnitSystem.METRIC) 60.0 else 50.8
                                     customThreadLengthMm = 0.0
@@ -541,6 +550,7 @@ fun AeroFastApp() {
                                 selectedSizeIndex = selectedSizeIndex,
                                 onSizeIndexSelected = { idx ->
                                     selectedSizeIndex = idx
+                                    wireDiaChoiceMm = 0.0 // a chosen wire belongs to the old size
                                     customThreadLengthMm = 0.0
                                     if (selectedUnitSystem == UnitSystem.METRIC) {
                                         val m = FastenerCatalog.METRIC_SIZES.getOrElse(idx) { FastenerCatalog.METRIC_SIZES[FastenerCatalog.defaultSizeIndex(UnitSystem.METRIC)] }
@@ -627,7 +637,13 @@ fun AeroFastApp() {
                         }
 
                         NavigationTab.TOOLING -> {
-                            com.aistudio.aerofast.trmst.ui.screens.ToolingScreen(result = currentCalculation)
+                            com.aistudio.aerofast.trmst.ui.screens.ToolingScreen(
+                                result = currentCalculation,
+                                onWireChosen = {
+                                    wireDiaChoiceMm = it ?: 0.0
+                                    saveAppState()
+                                }
+                            )
                         }
 
                         NavigationTab.FORGING -> {
@@ -653,6 +669,7 @@ fun AeroFastApp() {
                                     selectedFastenerType = spec.fastenerType
                                     selectedUnitSystem = spec.unitSystem
                                     selectedSizeIndex = spec.nominalSizeIndex
+                                    wireDiaChoiceMm = 0.0 // a chosen wire belongs to the old size
                                     // The scanner reports pitch in mm; inch sizes are selected by TPI, so snap to the size's nearest standard TPI
                                     selectedPitchValue = if (spec.unitSystem == UnitSystem.INCH) {
                                         val tpis = FastenerCatalog.INCH_SIZES.getOrNull(spec.nominalSizeIndex)?.tpis.orEmpty()

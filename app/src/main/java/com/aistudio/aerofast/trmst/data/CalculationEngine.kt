@@ -109,6 +109,9 @@ data class FastenerCalculationResult(
     val tensileRange: TensileRange? = null,
     /** Nylon thread-locking patch / pellet called for on the drawing. */
     val threadLockPatch: Boolean = false,
+    /** Wire chosen by the user (null = automatic), and the wire the app would pick itself. */
+    val wireDiaOverrideMm: Double? = null,
+    val autoWireDiaMm: Double = 0.0,
     /** Raw wire from the mill certificate, and its check against the catalogue's headable range. */
     val millCert: MillCert? = null,
     val wireCheck: WireCheck? = null,
@@ -173,6 +176,8 @@ object CalculationEngine {
         threadLockPatch: Boolean = false,
         /** Raw wire Rm / HRB from the supplier's mill certificate; null = not entered. */
         millCert: MillCert? = null,
+        /** Wire diameter chosen by the user; null = the app picks it. Stations, blows and tooling follow it. */
+        wireDiaOverrideMm: Double? = null,
         /** Machine asked for: Auto, 1-die 2-blow header or multi-station former. The die design follows it. */
         headerChoice: HeaderChoice = HeaderChoice.AUTO
     ): FastenerCalculationResult {
@@ -399,6 +404,8 @@ object CalculationEngine {
         // Geometry & Volume
         val lt = drawing.threadLengthMm ?: PokaYokeEngine.threadLengthB(fastenerType, unitSystem, d, lengthMm)
         var dw = ((d * 0.985) * 100).roundToInt() / 100.0 // Wire feedstock diameter
+        val wireChoice = wireDiaOverrideMm?.takeIf { it > 0.5 }
+        if (wireChoice != null) dw = wireChoice
         // Head / nut / washer geometry from the ISO, DIN and ASME tables
         val dims = DimensionTables.forPart(fastenerType, unitSystem, d)
         val s = dims.acrossFlatsS
@@ -436,7 +443,9 @@ object CalculationEngine {
         val fullThreadHeaded = part.headSegmentCount > 0 && part.style != HeadStyle.HEX_TRIMMED &&
             part.style != HeadStyle.NUT && part.style != HeadStyle.WASHER && !fastenerType.isUnthreaded &&
             part.dieSegments.isNotEmpty() && part.dieSegments.all { abs(it.dBottomMm - blankDia) < 1e-9 && abs(it.dTopMm - blankDia) < 1e-9 }
-        if (fullThreadHeaded) dw = kotlin.math.ceil(blankDia * 100.0 - 1e-6) / 100.0
+        if (fullThreadHeaded && wireChoice == null) dw = kotlin.math.ceil(blankDia * 100.0 - 1e-6) / 100.0
+        // The wire the app would pick on its own, shown next to the user's choice
+        val autoWire = if (fullThreadHeaded) kotlin.math.ceil(blankDia * 100.0 - 1e-6) / 100.0 else ((d * 0.985) * 100).roundToInt() / 100.0
         val totalVolMm3 = part.volumeMm3
         val hexHeadArea = (sqrt(3.0) / 2.0) * s.pow(2.0)
         // Head material that has to be gathered above the die (drives the upset ratio and the flow stress)
@@ -457,7 +466,8 @@ object CalculationEngine {
             type = fastenerType, wireDiaMm = dw, part = part, lengthMm = lengthMm, threadLabel = threadLabel,
             forging = boltForging, forgedHeadDiaMm = forgedHeadDia, trimmedHexS = trimS, trimmedHexK = trimK,
             flangeDiaMm = flange?.dc?.takeIf { boltForging != null }, flangeThicknessMm = flange?.c?.takeIf { boltForging != null },
-            choice = headerChoice
+            choice = headerChoice,
+            wireFixed = wireChoice != null
         )
         // The 1-die 2-blow design picks its own wire (blank, shank, or enlarged for two blows) and forms the head untrimmed
         val twoBlow = headingPlan?.route == HeaderRoute.TWO_BLOW
@@ -623,6 +633,8 @@ object CalculationEngine {
             threadLockPatch = threadLockPatch,
             millCert = millCert,
             wireCheck = wireCheck,
+            wireDiaOverrideMm = wireChoice,
+            autoWireDiaMm = autoWire,
             headerChoice = headerChoice,
             drawing = drawing,
             softAnnealSpec = SoftAnnealEngine.build(material),
@@ -672,7 +684,7 @@ object CalculationEngine {
             ) + listOfNotNull(headingPlan?.feasibilityIssue?.let {
                 PokaYokeIssue(PokaYokeSeverity.CRITICAL, "1-die 2-blow cannot make this part", "On a 1-die 2-blow header: $it.",
                     "Choose Multi-station, or change the head size / wire so the head gathers in two blows.")
-            }) + MillCertCheck.issues(wireCheck)
+            }) + MillCertCheck.issues(wireCheck) + wireChoiceIssues(wireChoice, dw, part, blankDia, ldRatio)
         )
     }
 
@@ -727,6 +739,28 @@ object CalculationEngine {
         "10B21", "4135", "4140", "4340", "42CRMO4", "AISI_51B37", "EN24", "EN24_ESR", "8740",
         "AISI_4130", "30KHGSA", "16KHGSN", "35NCD16", "SS410"
     )
+
+    /** Checks for a wire diameter the user chose: the same limits the heading plan and raw-material planner use. */
+    private fun wireChoiceIssues(choice: Double?, dw: Double, part: FinishedPart, blankDia: Double, ld: Double): List<PokaYokeIssue> {
+        if (choice == null) return emptyList()
+        fun f(v: Double, dp: Int = 2) = String.format(java.util.Locale.US, "%.${dp}f", v)
+        val out = mutableListOf<PokaYokeIssue>()
+        if (ld > HeadingProgression.THREE_BLOW_LD) out += PokaYokeIssue(PokaYokeSeverity.CRITICAL, "Wire too thin to gather the head",
+            "Head stock L/D ${f(ld)} on your Ø${f(dw)} wire is past the 3-blow limit of ${HeadingProgression.THREE_BLOW_LD} used by the app: severe buckling / folding risk.",
+            "Choose a larger wire (Auto picks one), or plan warm forming.")
+        val shank = part.dieSegments.maxOfOrNull { kotlin.math.max(it.dBottomMm, it.dTopMm) }
+        if (shank != null && dw < shank - 0.005) out += PokaYokeIssue(PokaYokeSeverity.WARNING, "Wire under the shank",
+            "Your Ø${f(dw)} wire is under the Ø${f(shank)} shank: the shank is upset back up by ${f((shank * shank / (dw * dw) - 1.0) * 100.0, 0)} % in area in the die.",
+            "Check the die can fill the shank, or choose a wire at the shank size.")
+        if (dw < blankDia - 0.05) out += PokaYokeIssue(PokaYokeSeverity.WARNING, "Wire under the rolling blank",
+            "Ø${f(dw)} is under the Ø${f(blankDia, 3)} thread rolling blank: the thread section has to be upset back up, or the thread rolls undersize.",
+            "Choose a wire at or above the rolling blank.")
+        val reduction = (1.0 - (blankDia / dw) * (blankDia / dw)) * 100.0
+        if (part.threadLengthMm > 0.0 && reduction > HeadingProgression.MAX_DIE_EXTRUSION_PCT) out += PokaYokeIssue(PokaYokeSeverity.WARNING, "Large extrusion from this wire",
+            "Extruding Ø${f(dw)} down to the Ø${f(blankDia, 3)} blank removes ${f(reduction, 0)} % of area, past the ~${HeadingProgression.MAX_DIE_EXTRUSION_PCT.toInt()} % one die takes.",
+            "Split the extrusion over two stations, use a trapped die, or choose a thinner wire.")
+        return out
+    }
 
     /** Hardness window and temper guidance for a tensile band taken from the drawing. */
     fun heatTreatForRange(ht: HeatTreatmentSpec, material: MaterialInfo, r: TensileRange): HeatTreatmentSpec {

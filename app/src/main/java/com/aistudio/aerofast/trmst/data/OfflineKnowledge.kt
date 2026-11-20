@@ -173,6 +173,8 @@ object OfflineKnowledge {
             threadLockPatch = i.threadLockPatch ?: base.threadLockPatch,
             // The certificate belongs to the wire on the job: another grade has no certificate yet
             millCert = if (i.materialKey == null || i.materialKey == base.material.key) base.millCert else null,
+            // A chosen wire belongs to this size and type only
+            wireDiaOverrideMm = if (sizeChanged || type != base.fastenerType) null else base.wireDiaOverrideMm,
             headerChoice = i.headerChoice ?: base.headerChoice
         )
     }

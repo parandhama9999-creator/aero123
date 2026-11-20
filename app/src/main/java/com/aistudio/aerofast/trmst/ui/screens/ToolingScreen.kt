@@ -3,6 +3,7 @@ package com.aistudio.aerofast.trmst.ui.screens
 import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,7 +54,7 @@ import com.aistudio.aerofast.trmst.ui.theme.SuccessGreen
 
 /** Header tooling for the current part: die bore, punch cavity, pins and knock-out, checked against the machine. */
 @Composable
-fun ToolingScreen(result: FastenerCalculationResult) {
+fun ToolingScreen(result: FastenerCalculationResult, onWireChosen: (Double?) -> Unit = {}) {
     val context = LocalContext.current
     val c = LocalCustomColors.current
     val machine = MachineSetupStore.setup
@@ -75,6 +76,7 @@ fun ToolingScreen(result: FastenerCalculationResult) {
             fontSize = 10.sp, color = c.textMuted
         )
 
+        WireChoiceCard(result, onWireChosen)
         MachineSetupCard(machine) { MachineSetupStore.save(context, it) }
 
         if (sheet.problems.isNotEmpty()) {
@@ -146,6 +148,90 @@ private fun StationCard(st: StationTooling) {
         Text("Schematic section, to scale with the part; tool outer sizes are not to scale.", fontSize = 9.sp, color = c.textMuted)
         st.items.forEach { ItemRow(it) }
         st.problems.forEach { Text("⛔ $it", fontSize = 11.sp, color = AlertRed, fontWeight = FontWeight.Bold) }
+    }
+}
+
+/** Head stock L/D on a wire, from the part's head volume: L/D = V / (π/4 · D²) / D. */
+internal fun ldOn(headVolumeMm3: Double, wireMm: Double): Double = headVolumeMm3 / (Math.PI / 4.0 * wireMm * wireMm) / wireMm
+
+internal fun blowsFor(ld: Double): String = when {
+    ld <= HeadingProgression.SINGLE_BLOW_LD -> "1 blow"
+    ld <= HeadingProgression.TWO_BLOW_LD -> "2 blows"
+    ld <= HeadingProgression.THREE_BLOW_LD -> "3 blows"
+    else -> "too thin"
+}
+
+@Composable
+private fun WireChoiceCard(r: FastenerCalculationResult, onWireChosen: (Double?) -> Unit) {
+    val c = LocalCustomColors.current
+    fun f(v: Double, dp: Int = 2) = "%.${dp}f".format(java.util.Locale.US, v)
+    val auto = r.autoWireDiaMm.takeIf { it > 0.0 } ?: r.wireDiaMm
+    val chosen = r.wireDiaOverrideMm
+    ToolCard("WIRE Ø FOR HEADING — stations and tools follow it", c.accentPrimary) {
+        Text(
+            if (chosen == null) "Ø${f(r.wireDiaMm)} mm — Auto (picked by the app)"
+            else "Ø${f(chosen)} mm — your choice (Auto would be Ø${f(auto)})",
+            fontSize = 12.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, color = c.textMain
+        )
+        val plan = r.headingPlan
+        Text(
+            "Head stock L/D ${f(r.upsetLdRatio)} → ${blowsFor(r.upsetLdRatio)}" +
+                (plan?.let { " • ${it.machineDescription} • cut-off ${f(it.slugLengthMm)} mm" } ?: ""),
+            fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.accentSecondary
+        )
+        if (r.headVolumeMm3 > 0.0) {
+            Text("Tap a wire to rebuild the sequence (L/D preview from the part's head volume):", fontSize = 10.sp, color = c.textMuted)
+            val candidates = remember(auto, r.blankTargetDia) {
+                val steps = listOf(-1.0, -0.5, 0.0, 0.5, 1.0).map { kotlin.math.round((auto + it) / 0.05) * 0.05 }
+                (steps + com.aistudio.aerofast.trmst.data.RawMaterialPlanner.suggestedDiameters(r.blankTargetDia, auto))
+                    .filter { it > 1.0 }.map { kotlin.math.round(it * 100.0) / 100.0 }.distinct().sorted()
+            }
+            val current = chosen ?: r.wireDiaMm
+            candidates.chunked(2).forEach { pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    pair.forEach { w ->
+                        val ld = ldOn(r.headVolumeMm3, w)
+                        val sel = kotlin.math.abs(w - current) < 0.005
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (sel) c.accentPrimary else c.bgElevated,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, if (sel) c.accentPrimary else c.border),
+                            modifier = Modifier.weight(1f).clickable { onWireChosen(if (kotlin.math.abs(w - auto) < 0.005) null else w) }
+                        ) {
+                            Text(
+                                "Ø${f(w)} · L/D ${f(ld, 1)} · ${blowsFor(ld)}" + if (kotlin.math.abs(w - auto) < 0.005) " (Auto)" else "",
+                                fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                                color = if (sel) Color.White else if (ld > HeadingProgression.THREE_BLOW_LD) AlertRed else c.textMain,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                    if (pair.size == 1) androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+        var custom by remember(chosen) { mutableStateOf(chosen?.let { f(it) } ?: "") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = custom, onValueChange = { custom = it }, singleLine = true,
+                label = { Text("Other wire Ø (mm)", fontSize = 10.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = c.textMain),
+                modifier = Modifier.weight(1f)
+            )
+            Button(
+                onClick = { custom.toDoubleOrNull()?.takeIf { it > 1.0 }?.let { onWireChosen(it) } },
+                colors = ButtonDefaults.buttonColors(containerColor = c.accentPrimary),
+                modifier = Modifier.padding(top = 8.dp)
+            ) { Text("Use", color = Color.White) }
+            if (chosen != null) Button(
+                onClick = { onWireChosen(null) },
+                colors = ButtonDefaults.buttonColors(containerColor = c.bgElevated),
+                modifier = Modifier.padding(top = 8.dp)
+            ) { Text("Auto", color = c.textMain) }
+        }
+        val wireIssues = r.pokaYokeIssues.filter { it.title.startsWith("Wire ") || it.title == "Large extrusion from this wire" || it.title == "1-die 2-blow cannot make this part" }
+        wireIssues.forEach { Text("⚠ ${it.title}: ${it.detail}", fontSize = 10.sp, color = if (it.severity == com.aistudio.aerofast.trmst.data.PokaYokeSeverity.CRITICAL) AlertRed else c.accentSecondary, fontWeight = FontWeight.Bold) }
     }
 }
 

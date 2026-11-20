@@ -190,14 +190,17 @@ object HeadingProgression {
         trimmedHexK: Double = 0.0,
         flangeDiaMm: Double? = null,
         flangeThicknessMm: Double? = null,
-        choice: HeaderChoice = HeaderChoice.AUTO
+        choice: HeaderChoice = HeaderChoice.AUTO,
+        /** The user chose the wire: the 1-die 2-blow design keeps it instead of picking or enlarging its own. */
+        wireFixed: Boolean = false
     ): HeadingPlan? {
         if (part.style == HeadStyle.WASHER) return null
         if (part.style == HeadStyle.NUT) return nut(type, wireDiaMm, part, threadLabel)
         val headed = part.style != HeadStyle.HEADLESS && part.headVolumeMm3 > 0.0
-        if (headed && choice == HeaderChoice.TWO_BLOW) return twoBlow(type, part, threadLabel, chosen = true)
+        val fixed = if (wireFixed) wireDiaMm else null
+        if (headed && choice == HeaderChoice.TWO_BLOW) return twoBlow(type, part, threadLabel, chosen = true, fixedWire = fixed)
         if (headed && choice == HeaderChoice.AUTO && forging == null && twoBlowIsEnough(type, part, wireDiaMm))
-            return twoBlow(type, part, threadLabel, chosen = false)
+            return twoBlow(type, part, threadLabel, chosen = false, fixedWire = fixed)
         val reason = when {
             part.style == HeadStyle.HEADLESS -> "Progressive former: the thread sections are extruded and there is no head to upset."
             choice == HeaderChoice.MULTI_STATION -> "Multi-station progressive former (your choice): extrusion, pre-upsets, socket back-extrusion and trimming each run in their own station."
@@ -230,7 +233,7 @@ object HeadingProgression {
      * first blow extrudes the shank in the closed die (when it is reduced) and gathers the head in the cone punch; the
      * second forms the head and any recess. A hex or 12-point head is closed in the punch insert: no trim, no cheese.
      */
-    private fun twoBlow(type: FastenerType, part: FinishedPart, threadLabel: String, chosen: Boolean): HeadingPlan {
+    private fun twoBlow(type: FastenerType, part: FinishedPart, threadLabel: String, chosen: Boolean, fixedWire: Double? = null): HeadingPlan {
         val body = part.dieSegments
         val inDie = body.sumOf { it.heightMm }
         val headVol = part.headVolumeMm3
@@ -238,10 +241,12 @@ object HeadingProgression {
         val maxD = body.maxOfOrNull { max(it.dBottomMm, it.dTopMm) } ?: part.blankDiaMm
         fun ldAt(w: Double) = headVol / area(w) / w
         fun reductionAt(w: Double) = (1.0 - area(minD) / area(w)) * 100.0
-        var wire = kotlin.math.ceil(maxD * 100.0 - 1e-6) / 100.0
+        var wire = fixedWire ?: (kotlin.math.ceil(maxD * 100.0 - 1e-6) / 100.0)
         var issue: String? = null
         var enlarged = false
-        if (ldAt(wire) > TWO_BLOW_LD) {
+        if (fixedWire != null && ldAt(wire) > TWO_BLOW_LD) {
+            issue = "the head stock L/D is ${f(ldAt(wire))} on your Ø${f(wire)} wire, more than two blows can gather ($TWO_BLOW_LD)"
+        } else if (ldAt(wire) > TWO_BLOW_LD) {
             // Two blows need L/D ≤ 4.5: L/D = 4V / (π D³), so D ≥ (4V / (4.5 π))^⅓, drawn in 0.05 mm steps
             val need = kotlin.math.ceil(Math.cbrt(4.0 * headVol / (PI * TWO_BLOW_LD)) / 0.05 - 1e-9) * 0.05
             if (reductionAt(need) <= MAX_DIE_EXTRUSION_PCT) { wire = need; enlarged = true }
