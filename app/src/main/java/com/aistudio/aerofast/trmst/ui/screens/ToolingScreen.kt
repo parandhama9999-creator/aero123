@@ -264,6 +264,13 @@ private fun MachineSetupCard(m: MachineSetup, onChange: (MachineSetup) -> Unit) 
             field("Knock-out stroke", m.koStrokeMm, Modifier.weight(1f)) { m.copy(koStrokeMm = it) }
             field("Planned insert OD", m.insertOdMm, Modifier.weight(1f)) { m.copy(insertOdMm = it) }
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            field("Open extrusion limit %", m.openExtrusionLimitPct, Modifier.weight(1f)) { m.copy(openExtrusionLimitPct = it?.takeIf { v -> v in 5.0..70.0 }) }
+            Text(
+                "Blank = ${HeadingProgression.MAX_DIE_EXTRUSION_PCT.toInt()} % (guidelines: open 30 – 35 %, trapped 70 – 75 %). Over your limit the station needs a trapped die.",
+                fontSize = 9.sp, color = c.textMuted, modifier = Modifier.weight(1f).padding(top = 6.dp)
+            )
+        }
     }
 }
 

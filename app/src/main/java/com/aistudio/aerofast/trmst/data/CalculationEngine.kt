@@ -109,6 +109,8 @@ data class FastenerCalculationResult(
     val tensileRange: TensileRange? = null,
     /** Nylon thread-locking patch / pellet called for on the drawing. */
     val threadLockPatch: Boolean = false,
+    /** Open-extrusion limit the plan was built with (% area in one blow). */
+    val openExtrusionLimitPct: Double = HeadingProgression.MAX_DIE_EXTRUSION_PCT,
     /** Wire chosen by the user (null = automatic), and the wire the app would pick itself. */
     val wireDiaOverrideMm: Double? = null,
     val autoWireDiaMm: Double = 0.0,
@@ -178,6 +180,8 @@ object CalculationEngine {
         millCert: MillCert? = null,
         /** Wire diameter chosen by the user; null = the app picks it. Stations, blows and tooling follow it. */
         wireDiaOverrideMm: Double? = null,
+        /** Shop's open-extrusion limit (% area in one blow); over it a trapped die is needed. */
+        openExtrusionLimitPct: Double = HeadingProgression.MAX_DIE_EXTRUSION_PCT,
         /** Machine asked for: Auto, 1-die 2-blow header or multi-station former. The die design follows it. */
         headerChoice: HeaderChoice = HeaderChoice.AUTO
     ): FastenerCalculationResult {
@@ -467,7 +471,8 @@ object CalculationEngine {
             forging = boltForging, forgedHeadDiaMm = forgedHeadDia, trimmedHexS = trimS, trimmedHexK = trimK,
             flangeDiaMm = flange?.dc?.takeIf { boltForging != null }, flangeThicknessMm = flange?.c?.takeIf { boltForging != null },
             choice = headerChoice,
-            wireFixed = wireChoice != null
+            wireFixed = wireChoice != null,
+            openLimit = openExtrusionLimitPct
         )
         // The 1-die 2-blow design picks its own wire (blank, shank, or enlarged for two blows) and forms the head untrimmed
         val twoBlow = headingPlan?.route == HeaderRoute.TWO_BLOW
@@ -635,6 +640,7 @@ object CalculationEngine {
             wireCheck = wireCheck,
             wireDiaOverrideMm = wireChoice,
             autoWireDiaMm = autoWire,
+            openExtrusionLimitPct = openExtrusionLimitPct,
             headerChoice = headerChoice,
             drawing = drawing,
             softAnnealSpec = SoftAnnealEngine.build(material),
@@ -684,7 +690,12 @@ object CalculationEngine {
             ) + listOfNotNull(headingPlan?.feasibilityIssue?.let {
                 PokaYokeIssue(PokaYokeSeverity.CRITICAL, "1-die 2-blow cannot make this part", "On a 1-die 2-blow header: $it.",
                     "Choose Multi-station, or change the head size / wire so the head gathers in two blows.")
-            }) + MillCertCheck.issues(wireCheck) + wireChoiceIssues(wireChoice, dw, part, blankDia, ldRatio)
+            }) + MillCertCheck.issues(wireCheck) + wireChoiceIssues(wireChoice, dw, part, blankDia, ldRatio, openExtrusionLimitPct) +
+                (headingPlan?.let { pl -> ToolingDesign.extrusions(pl) }.orEmpty().filter { it.reductionPct > HeadingProgression.TRAPPED_EXTRUSION_MAX_PCT }.map {
+                    PokaYokeIssue(PokaYokeSeverity.CRITICAL, "Extrusion over the trapped limit",
+                        "Station ${it.stationIndex} extrudes Ø${it.fromMm.round(2)} → Ø${it.toMm.round(2)}: ${it.reductionPct.round(0).toInt()} % area, over the ~${HeadingProgression.TRAPPED_EXTRUSION_MAX_PCT.toInt()} % that trapped extrusion takes in one blow.",
+                        "Extrude in two stations, or choose a thinner wire.")
+                })
         )
     }
 
@@ -741,7 +752,7 @@ object CalculationEngine {
     )
 
     /** Checks for a wire diameter the user chose: the same limits the heading plan and raw-material planner use. */
-    private fun wireChoiceIssues(choice: Double?, dw: Double, part: FinishedPart, blankDia: Double, ld: Double): List<PokaYokeIssue> {
+    private fun wireChoiceIssues(choice: Double?, dw: Double, part: FinishedPart, blankDia: Double, ld: Double, openLimit: Double): List<PokaYokeIssue> {
         if (choice == null) return emptyList()
         fun f(v: Double, dp: Int = 2) = String.format(java.util.Locale.US, "%.${dp}f", v)
         val out = mutableListOf<PokaYokeIssue>()
@@ -756,9 +767,9 @@ object CalculationEngine {
             "Ø${f(dw)} is under the Ø${f(blankDia, 3)} thread rolling blank: the thread section has to be upset back up, or the thread rolls undersize.",
             "Choose a wire at or above the rolling blank.")
         val reduction = (1.0 - (blankDia / dw) * (blankDia / dw)) * 100.0
-        if (part.threadLengthMm > 0.0 && reduction > HeadingProgression.MAX_DIE_EXTRUSION_PCT) out += PokaYokeIssue(PokaYokeSeverity.WARNING, "Large extrusion from this wire",
-            "Extruding Ø${f(dw)} down to the Ø${f(blankDia, 3)} blank removes ${f(reduction, 0)} % of area, past the ~${HeadingProgression.MAX_DIE_EXTRUSION_PCT.toInt()} % one die takes.",
-            "Split the extrusion over two stations, use a trapped die, or choose a thinner wire.")
+        if (part.threadLengthMm > 0.0 && reduction > openLimit && reduction <= HeadingProgression.TRAPPED_EXTRUSION_MAX_PCT) out += PokaYokeIssue(PokaYokeSeverity.WARNING, "Large extrusion from this wire",
+            "Extruding Ø${f(dw)} down to the Ø${f(blankDia, 3)} blank removes ${f(reduction, 0)} % of area, over your ${f(openLimit, 0)} % open-extrusion limit.",
+            "Extrude in a trapped die, or choose a thinner wire.")
         return out
     }
 

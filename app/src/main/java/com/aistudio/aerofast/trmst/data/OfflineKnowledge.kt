@@ -175,6 +175,7 @@ object OfflineKnowledge {
             millCert = if (i.materialKey == null || i.materialKey == base.material.key) base.millCert else null,
             // A chosen wire belongs to this size and type only
             wireDiaOverrideMm = if (sizeChanged || type != base.fastenerType) null else base.wireDiaOverrideMm,
+            openExtrusionLimitPct = base.openExtrusionLimitPct,
             headerChoice = i.headerChoice ?: base.headerChoice
         )
     }

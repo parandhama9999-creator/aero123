@@ -192,15 +192,17 @@ object HeadingProgression {
         flangeThicknessMm: Double? = null,
         choice: HeaderChoice = HeaderChoice.AUTO,
         /** The user chose the wire: the 1-die 2-blow design keeps it instead of picking or enlarging its own. */
-        wireFixed: Boolean = false
+        wireFixed: Boolean = false,
+        /** Largest open (free) extrusion reduction the shop allows in one blow; over it a trapped die is needed. */
+        openLimit: Double = MAX_DIE_EXTRUSION_PCT
     ): HeadingPlan? {
         if (part.style == HeadStyle.WASHER) return null
         if (part.style == HeadStyle.NUT) return nut(type, wireDiaMm, part, threadLabel)
         val headed = part.style != HeadStyle.HEADLESS && part.headVolumeMm3 > 0.0
         val fixed = if (wireFixed) wireDiaMm else null
-        if (headed && choice == HeaderChoice.TWO_BLOW) return twoBlow(type, part, threadLabel, chosen = true, fixedWire = fixed)
+        if (headed && choice == HeaderChoice.TWO_BLOW) return twoBlow(type, part, threadLabel, chosen = true, fixedWire = fixed, openLimit = openLimit)
         if (headed && choice == HeaderChoice.AUTO && forging == null && twoBlowIsEnough(type, part, wireDiaMm))
-            return twoBlow(type, part, threadLabel, chosen = false, fixedWire = fixed)
+            return twoBlow(type, part, threadLabel, chosen = false, fixedWire = fixed, openLimit = openLimit)
         val reason = when {
             part.style == HeadStyle.HEADLESS -> "Progressive former: the thread sections are extruded and there is no head to upset."
             choice == HeaderChoice.MULTI_STATION -> "Multi-station progressive former (your choice): extrusion, pre-upsets, socket back-extrusion and trimming each run in their own station."
@@ -208,15 +210,23 @@ object HeadingProgression {
         }
         val plan = when {
             forging != null && forgedHeadDiaMm != null ->
-                trimmedHex(type, lengthMm, forging, forgedHeadDiaMm, trimmedHexS, trimmedHexK, threadLabel, flangeDiaMm, flangeThicknessMm, part.cautions)
+                trimmedHex(type, lengthMm, forging, forgedHeadDiaMm, trimmedHexS, trimmedHexK, threadLabel, flangeDiaMm, flangeThicknessMm, part.cautions, openLimit)
             part.style == HeadStyle.HEADLESS || part.headVolumeMm3 <= 0.0 -> headless(type, wireDiaMm, part, threadLabel)
-            else -> headed(type, wireDiaMm, part, threadLabel)
+            else -> headed(type, wireDiaMm, part, threadLabel, openLimit)
         }
         return plan.copy(route = HeaderRoute.MULTI_STATION, routeReason = reason)
     }
 
-    /** Largest area reduction a single closed die takes in the first blow before the shank upsets instead of extruding. */
+    /** Largest open (free) forward extrusion in one blow before the unsupported shank upsets instead of extruding:
+     *  cold-forming guidelines give about 30 – 35 %. Default for the shop setting. */
     const val MAX_DIE_EXTRUSION_PCT = 30.0
+    /** Trapped (contained) forward extrusion: guidelines give 70 – 75 %; the lower figure is used. */
+    const val TRAPPED_EXTRUSION_MAX_PCT = 70.0
+
+    private fun extrusionNotes(reductionPct: Double, openLimit: Double): List<String> = buildList {
+        if (reductionPct > TRAPPED_EXTRUSION_MAX_PCT) add("Extrusion ${f(reductionPct, 0)} % is over the ~${TRAPPED_EXTRUSION_MAX_PCT.toInt()} % trapped-extrusion limit: extrude in two stations or choose a thinner wire.")
+        else if (reductionPct > openLimit) add("Extrusion ${f(reductionPct, 0)} % is over your ${f(openLimit, 0)} % open-extrusion limit: extrude in a trapped die (billet held in the bore) to avoid upsetting the shank.")
+    }
 
     /** Auto: one die is enough when nothing is extruded, the head needs ≤ 2 blows and is formed, not trimmed. */
     private fun twoBlowIsEnough(type: FastenerType, part: FinishedPart, wire: Double): Boolean {
@@ -233,7 +243,7 @@ object HeadingProgression {
      * first blow extrudes the shank in the closed die (when it is reduced) and gathers the head in the cone punch; the
      * second forms the head and any recess. A hex or 12-point head is closed in the punch insert: no trim, no cheese.
      */
-    private fun twoBlow(type: FastenerType, part: FinishedPart, threadLabel: String, chosen: Boolean, fixedWire: Double? = null): HeadingPlan {
+    private fun twoBlow(type: FastenerType, part: FinishedPart, threadLabel: String, chosen: Boolean, fixedWire: Double? = null, openLimit: Double = MAX_DIE_EXTRUSION_PCT): HeadingPlan {
         val body = part.dieSegments
         val inDie = body.sumOf { it.heightMm }
         val headVol = part.headVolumeMm3
@@ -249,13 +259,13 @@ object HeadingProgression {
         } else if (ldAt(wire) > TWO_BLOW_LD) {
             // Two blows need L/D ≤ 4.5: L/D = 4V / (π D³), so D ≥ (4V / (4.5 π))^⅓, drawn in 0.05 mm steps
             val need = kotlin.math.ceil(Math.cbrt(4.0 * headVol / (PI * TWO_BLOW_LD)) / 0.05 - 1e-9) * 0.05
-            if (reductionAt(need) <= MAX_DIE_EXTRUSION_PCT) { wire = need; enlarged = true }
+            if (reductionAt(need) <= openLimit) { wire = need; enlarged = true }
             else issue = "the head stock L/D is ${f(ldAt(wire))} on Ø${f(wire)} wire, more than two blows can gather ($TWO_BLOW_LD); " +
-                "wire large enough for two blows (Ø${f(need)}) would have to be extruded ${f(reductionAt(need), 0)} % in the die, over the ~${MAX_DIE_EXTRUSION_PCT.toInt()} % one die takes"
+                "wire large enough for two blows (Ø${f(need)}) would have to be extruded ${f(reductionAt(need), 0)} % in the die, over the ~${openLimit.toInt()} % one die takes"
         }
         val reductionPct = reductionAt(wire).coerceAtLeast(0.0)
-        if (issue == null && reductionPct > MAX_DIE_EXTRUSION_PCT)
-            issue = "extruding Ø${f(wire)} → Ø${f(minD)} is ${f(reductionPct, 0)} % area reduction, over the ~${MAX_DIE_EXTRUSION_PCT.toInt()} % one die takes in the first blow"
+        if (issue == null && reductionPct > openLimit)
+            issue = "extruding Ø${f(wire)} → Ø${f(minD)} is ${f(reductionPct, 0)} % area reduction, over the ~${openLimit.toInt()} % one die takes in the first blow"
         val aw = area(wire)
         val slugVol = part.volumeMm3          // formed, not trimmed: the slug is the finished part
         val slugLen = slugVol / aw
@@ -362,7 +372,7 @@ object HeadingProgression {
     /** Hex head forged round (1.2 × e), then trimmed: the slug carries the cheese, the trim station removes it. */
     private fun trimmedHex(
         type: FastenerType, length: Double, fg: BoltForgingResult, dRound: Double, s: Double, k: Double, threadLabel: String,
-        flangeDc: Double? = null, flangeC: Double? = null, cautions: List<String> = emptyList()
+        flangeDc: Double? = null, flangeC: Double? = null, cautions: List<String> = emptyList(), openLimit: Double = MAX_DIE_EXTRUSION_PCT
     ): HeadingPlan {
         val isFlange = flangeDc != null && flangeC != null
         val wire = fg.shankDiaMm
@@ -457,7 +467,7 @@ object HeadingProgression {
         }
         val notes = buildList {
             if (ld > THREE_BLOW_LD) add("Head stock L/D ${f(ld)} exceeds the 3-blow limit ($THREE_BLOW_LD): use larger wire or warm forming.")
-            if (reductionPct > 30.0) add("Open-die extrusion ${f(reductionPct, 0)} % exceeds ~30 %: extrude in a closed (trapped) die to avoid upsetting the shank.")
+            addAll(extrusionNotes(reductionPct, openLimit))
         }
         return HeadingPlan(wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), blows, notes + cautions)
     }
@@ -530,7 +540,7 @@ object HeadingProgression {
         }
     }
 
-    private fun headed(type: FastenerType, wire: Double, part: FinishedPart, threadLabel: String): HeadingPlan {
+    private fun headed(type: FastenerType, wire: Double, part: FinishedPart, threadLabel: String, openLimit: Double = MAX_DIE_EXTRUSION_PCT): HeadingPlan {
         val aw = area(wire)
         val slugVol = part.volumeMm3
         val slugLen = slugVol / aw
@@ -616,7 +626,7 @@ object HeadingProgression {
 
         val notes = buildList {
             if (ld > THREE_BLOW_LD) add("Head stock L/D ${f(ld)} exceeds the 3-blow limit ($THREE_BLOW_LD): use larger wire or warm forming.")
-            if (reductionPct > 30.0) add("Open-die extrusion ${f(reductionPct, 0)} % exceeds ~30 %: extrude in a closed (trapped) die to avoid upsetting the shank.")
+            addAll(extrusionNotes(reductionPct, openLimit))
             addAll(part.cautions)
         }
         return HeadingPlan(wire, slugLen, slugVol, stations, offHeaderOps(type, threadLabel), blows, notes)

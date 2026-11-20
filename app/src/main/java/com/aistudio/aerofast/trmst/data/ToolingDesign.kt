@@ -14,32 +14,45 @@ data class MachineSetup(
     val punchCaseLengthMm: Double? = null,
     val koStrokeMm: Double? = null,
     /** Carbide insert OD the shop plans to use; the app does not choose it. */
-    val insertOdMm: Double? = null
+    val insertOdMm: Double? = null,
+    /** Shop's open-extrusion limit, % area in one blow; null = the app default (30 %). */
+    val openExtrusionLimitPct: Double? = null
 ) {
     val isEmpty: Boolean get() = listOf(dieCaseOdMm, dieCaseLengthMm, punchCaseOdMm, punchCaseLengthMm, koStrokeMm, insertOdMm).all { it == null }
+    val openLimit: Double get() = openExtrusionLimitPct ?: HeadingProgression.MAX_DIE_EXTRUSION_PCT
 }
 
 /** Machine pockets are a shop setting: kept across parts, on this phone only. */
 object MachineSetupStore {
     private const val PREFS = "aerofast_machine_setup"
-    private val KEYS = listOf("dieCaseOd", "dieCaseLen", "punchCaseOd", "punchCaseLen", "koStroke", "insertOd")
+    private val KEYS = listOf("dieCaseOd", "dieCaseLen", "punchCaseOd", "punchCaseLen", "koStroke", "insertOd", "openExtrusionLimit")
 
     var setup by mutableStateOf(MachineSetup())
 
     fun load(context: Context) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         fun g(k: String) = p.getFloat(k, 0f).toDouble().takeIf { it > 0.0 }
-        setup = MachineSetup(g(KEYS[0]), g(KEYS[1]), g(KEYS[2]), g(KEYS[3]), g(KEYS[4]), g(KEYS[5]))
+        setup = MachineSetup(g(KEYS[0]), g(KEYS[1]), g(KEYS[2]), g(KEYS[3]), g(KEYS[4]), g(KEYS[5]), g(KEYS[6]))
     }
 
     fun save(context: Context, s: MachineSetup) {
         setup = s
-        val values = listOf(s.dieCaseOdMm, s.dieCaseLengthMm, s.punchCaseOdMm, s.punchCaseLengthMm, s.koStrokeMm, s.insertOdMm)
+        val values = listOf(s.dieCaseOdMm, s.dieCaseLengthMm, s.punchCaseOdMm, s.punchCaseLengthMm, s.koStrokeMm, s.insertOdMm, s.openExtrusionLimitPct)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
             KEYS.zip(values).forEach { (k, v) -> putFloat(k, (v ?: 0.0).toFloat()) }
         }.apply()
     }
 }
+
+/** A station where the shank is reduced: from the previous station's (or the slug's) diameter to this one. */
+data class StationExtrusion(
+    val stationIndex: Int,
+    val fromMm: Double,
+    val toMm: Double,
+    val reductionPct: Double,
+    /** Length of billet at the starting diameter held in the die bore above the reduction (what traps it). */
+    val heldLengthMm: Double
+)
 
 /** Where a tooling figure comes from, shown next to it so nothing assumed reads as calculated. */
 enum class ToolBasis(val tag: String) {
@@ -114,6 +127,27 @@ object ToolingDesign {
         return below to above
     }
 
+    /** Round in-die sections only: a hex or square section is not an extrusion of the round shank. */
+    private fun roundMin(segs: List<ProfileSegment>) =
+        segs.filter { it.shape == SectionShape.ROUND }.minOfOrNull { kotlin.math.min(it.dBottomMm, it.dTopMm) }
+
+    /** Every station that reduces the shank, with its area reduction. Nut formers are not shank extrusions. */
+    fun extrusions(plan: HeadingPlan): List<StationExtrusion> {
+        if (plan.route == HeaderRoute.NUT_FORMER) return emptyList()
+        var before = plan.slugDiaMm
+        val out = mutableListOf<StationExtrusion>()
+        for (st in plan.stations.filter { !it.isCutOff }) {
+            val inDie = split(st.segments, st.inDieMm).first
+            val now = roundMin(inDie) ?: continue
+            if (now < before - 0.01) {
+                val held = inDie.filter { it.shape == SectionShape.ROUND && kotlin.math.min(it.dBottomMm, it.dTopMm) >= before - 0.01 }.sumOf { it.heightMm }
+                out += StationExtrusion(st.index, before, now, (1.0 - (now / before) * (now / before)) * 100.0, held)
+            }
+            before = kotlin.math.min(before, now)
+        }
+        return out
+    }
+
     private fun segText(s: ProfileSegment, clearance: Boolean): String {
         fun c(d: Double) = if (clearance) d + HeadingProgression.stageClearance(d) else d
         return when (s.shape) {
@@ -136,10 +170,11 @@ object ToolingDesign {
         )
 
         val dieStations = plan.stations.filter { !it.isCutOff }
+        val ext = extrusions(plan).associateBy { it.stationIndex }
         val stations = dieStations.mapIndexed { i, st ->
             // The stock this blow starts from: the previous station, or the cut-off slug for the first die
             val before = if (i == 0) plan.stations.firstOrNull { it.isCutOff } else dieStations[i - 1]
-            stationTooling(st, machine, before)
+            stationTooling(st, machine, before, ext[st.index])
         }
 
         val materials = listOf(
@@ -159,7 +194,7 @@ object ToolingDesign {
         )
     }
 
-    private fun stationTooling(st: HeadingStation, m: MachineSetup, before: HeadingStation? = null): StationTooling {
+    private fun stationTooling(st: HeadingStation, m: MachineSetup, before: HeadingStation? = null, ex: StationExtrusion? = null): StationTooling {
         val (inDie, above) = split(st.segments, st.inDieMm)
         val items = mutableListOf<ToolItem>()
         val problems = mutableListOf<String>()
@@ -169,11 +204,24 @@ object ToolingDesign {
                 " mm, incl. transfer clearance ${f(HeadingProgression.MIN_STAGE_CLEARANCE_MM)}–${f(HeadingProgression.MAX_STAGE_CLEARANCE_MM)} mm by Ø", ToolBasis.CALCULATED)
             items += ToolItem("Die bore depth", "${f(st.inDieMm, 1)} mm (part held in the die)", ToolBasis.CALCULATED)
             // A step down the bore is an extrusion (or a shoulder): its entry angle and land have no rule in the app
-            inDie.zipWithNext().filter { (lower, upper) -> upper.maxWidthMm - lower.maxWidthMm > 0.05 }.forEach { (lower, upper) ->
+            if (ex != null) inDie.zipWithNext().filter { (lower, upper) -> upper.maxWidthMm - lower.maxWidthMm > 0.05 }.forEach { (lower, upper) ->
                 items += ToolItem("Extrusion entry Ø${f(upper.maxWidthMm)} → Ø${f(lower.maxWidthMm)}", "Die entry angle, land length and radius", ToolBasis.TOOLMAKER)
             }
         } else {
             items += ToolItem("Die", "Part is not held in a die bore at this station", ToolBasis.CALCULATED)
+        }
+        if (ex != null) {
+            val pct = "${f(ex.reductionPct, 1)} % area (Ø${f(ex.fromMm)} → Ø${f(ex.toMm)})"
+            when {
+                ex.reductionPct > HeadingProgression.TRAPPED_EXTRUSION_MAX_PCT -> {
+                    items += ToolItem("Extrusion", "$pct — over the ~${HeadingProgression.TRAPPED_EXTRUSION_MAX_PCT.toInt()} % trapped-extrusion limit", ToolBasis.SHOP_PRACTICE)
+                    problems += "extrusion ${f(ex.reductionPct, 0)} % is over the ~${HeadingProgression.TRAPPED_EXTRUSION_MAX_PCT.toInt()} % trapped limit: extrude in two stations or choose a thinner wire"
+                }
+                ex.reductionPct > m.openLimit -> items += ToolItem("Extrusion: TRAPPED die required",
+                    "$pct is over your ${f(m.openLimit, 0)} % open-extrusion limit: hold the billet in the Ø${f(ex.fromMm + HeadingProgression.stageClearance(ex.fromMm))} bore before the reduction" +
+                        (if (ex.heldLengthMm > 0.0) " (billet held over ${f(ex.heldLengthMm, 1)} mm)" else ""), ToolBasis.SHOP_PRACTICE)
+                else -> items += ToolItem("Extrusion: open", "$pct, within your ${f(m.openLimit, 0)} % open-extrusion limit", ToolBasis.SHOP_PRACTICE)
+            }
         }
         val aboveH = above.sumOf { it.heightMm }
         if (above.isNotEmpty()) {

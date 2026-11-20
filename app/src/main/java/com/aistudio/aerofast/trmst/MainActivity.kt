@@ -318,6 +318,7 @@ fun AeroFastApp() {
         threadLockPatch,
         millCert,
         wireDiaChoiceMm,
+        com.aistudio.aerofast.trmst.data.MachineSetupStore.setup.openLimit,
         headerChoice,
         selectedThreadClass,
         activeMaterial,
@@ -357,6 +358,7 @@ fun AeroFastApp() {
             threadLockPatch = threadLockPatch,
             millCert = millCert,
             wireDiaOverrideMm = wireDiaChoiceMm.takeIf { it > 0.0 },
+            openExtrusionLimitPct = com.aistudio.aerofast.trmst.data.MachineSetupStore.setup.openLimit,
             headerChoice = headerChoice,
             // Dimensions from the applied drawing; a flange bolt can also take its head sizes typed on the Sizing card
             drawing = (appliedExtractedSpec?.geometry() ?: com.aistudio.aerofast.trmst.data.DrawingGeometry()).let { g ->
