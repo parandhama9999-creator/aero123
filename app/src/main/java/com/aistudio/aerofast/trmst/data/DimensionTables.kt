@@ -156,7 +156,7 @@ object DimensionTables {
         FastenerType.NUTPLATE, FastenerType.SOLID_RIVET, FastenerType.BLIND_RIVET,
         // These were silently given plain hex bolt / hex nut dimensions; their own standards differ
         FastenerType.TWELVE_POINT, FastenerType.T_BOLT, FastenerType.EYE_BOLT, FastenerType.HEAVY_HEX_BOLT,
-        FastenerType.HEAVY_HEX_NUT, FastenerType.FLANGE_NUT, FastenerType.NYLOC_NUT, FastenerType.METAL_LOCK_NUT,
+        FastenerType.HEAVY_HEX_NUT, FastenerType.NYLOC_NUT, FastenerType.METAL_LOCK_NUT,
         FastenerType.CASTLE_NUT, FastenerType.ACORN_NUT, FastenerType.WELD_NUT,
         // Added catalogue types: proportional head geometry only, no product table in the app yet
         FastenerType.SQUARE_BOLT, FastenerType.SHOULDER_BOLT, FastenerType.SET_SCREW_CONE, FastenerType.SET_SCREW_DOG,
@@ -175,6 +175,21 @@ object DimensionTables {
         FastenerType.FENDER_WASHER, FastenerType.STRUCT_WASHER, FastenerType.TOOTH_LOCK_WASHER,
         FastenerType.BELLEVILLE_WASHER, FastenerType.WAVE_WASHER, FastenerType.TAPER_WASHER
     )
+
+    /**
+     * DIN 6923 hex flange nut (supplier tables: Boltport, Brighton-Best, fasteners.eu agree):
+     * d → s, m max, dc max, c min, dw min.
+     */
+    private val DIN_6923 = mapOf(
+        5.0 to doubleArrayOf(8.0, 5.0, 11.8, 1.0, 9.8), 6.0 to doubleArrayOf(10.0, 6.0, 14.2, 1.1, 12.2),
+        8.0 to doubleArrayOf(13.0, 8.0, 17.9, 1.2, 15.8), 10.0 to doubleArrayOf(15.0, 10.0, 21.8, 1.5, 19.6),
+        12.0 to doubleArrayOf(18.0, 12.0, 26.0, 1.8, 23.8), 16.0 to doubleArrayOf(24.0, 16.0, 34.5, 2.4, 31.9),
+        20.0 to doubleArrayOf(30.0, 20.0, 42.8, 3.0, 39.9)
+    )
+
+    /** DIN 6923 flange Ø dc max and thickness c min for a metric size; null outside the table. */
+    fun din6923Flange(dMm: Double): Pair<Double, Double>? =
+        DIN_6923.entries.firstOrNull { kotlin.math.abs(it.key - dMm) < 0.01 }?.value?.let { it[2] to it[3] }
 
     fun forPart(type: FastenerType, unit: UnitSystem, dMm: Double): HeadDimensions {
         val dims = tableFor(type, unit, dMm)
@@ -210,6 +225,13 @@ object DimensionTables {
             FastenerType.CARRIAGE_BOLT -> {
                 if (metric) lookup(DIN_603, dMm)?.let { return HeadDimensions(it[0], it[1], 0.92 * it[0], nutM, "DIN 603 (head only)", true) }
                 return estimated(2.4 * dMm, 0.55 * dMm, dMm, if (metric) "outside the DIN 603 table" else "no inch carriage bolt table in the app")
+            }
+            FastenerType.FLANGE_NUT -> {
+                if (metric) DIN_6923.entries.firstOrNull { kotlin.math.abs(it.key - dMm) < 0.01 }?.value?.let { r ->
+                    return HeadDimensions(r[0], r[1], r[4], r[1], "DIN 6923 (supplier tables)", true)
+                }
+                val hex = tableFor(FastenerType.HEX_NUT, unit, dMm)
+                return hex.copy(source = "Approximated from ${hex.source} — no DIN 6923 row for this size", isTable = false)
             }
             FastenerType.FLANGE_BOLT -> {
                 if (metric) BoltForging.din6921(dMm)?.let { g ->

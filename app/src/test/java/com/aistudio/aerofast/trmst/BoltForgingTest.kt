@@ -61,9 +61,10 @@ class FlangeProgressionTest {
         assertEquals(0.0, plan.stations.sumOf { it.scrapMm3 }, 1e-9)
         assertTrue(plan.stations.none { it.title.contains("Trim") })
         assertEquals(f.finishedVolumeMm3!!, plan.slugVolumeMm3, 1e-9)
-        // Without c the old progression is kept and no forging figures are claimed
+        // Without c on the drawing the DIN 6921 minimum is used (M10: c 1.5), so the flange is still formed
         val r2 = CalculationEngine.calculate(FastenerType.FLANGE_BOLT, UnitSystem.METRIC, ProductStandard.ISO_1665, idx, 1.5, 60.0, "6g", m,
             CoatingType.ZN_NI, 100, propertyClass = PropertyClass.CLASS_8_8)
-        assertEquals(null, r2.boltForging)
+        assertTrue(r2.boltForging!!.headNote.contains("c 1.5"))
+        assertEquals("Hex & flange form", r2.headingPlan!!.stations.last().title)
     }
 }

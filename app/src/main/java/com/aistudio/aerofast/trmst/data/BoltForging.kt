@@ -38,20 +38,25 @@ object BoltForging {
         val complete get() = dc != null && k != null && s != null && c != null && c > 0 && k > c
     }
 
-    /** DIN 6921 (1983 edition, supplier tables): d → dc max, k max, s (null = no source found). */
-    private val DIN_6921 = mapOf<Double, Triple<Double, Double, Double?>>(
-        5.0 to Triple(11.8, 5.4, 8.0), 6.0 to Triple(14.2, 6.6, 10.0), 8.0 to Triple(18.0, 8.1, 13.0),
-        10.0 to Triple(22.3, 9.2, 15.0), 12.0 to Triple(26.6, 11.5, 16.0), 16.0 to Triple(35.0, 14.4, 21.0),
-        20.0 to Triple(43.0, 17.1, null)
+    /**
+     * DIN 6921 (supplier tables): d → dc max, k max, s, c min (null = no source found).
+     * c min: M5 1.0, M6 1.1, M8 1.2, M12 1.8 from supplier tables; M10 1.5 and M16 2.4 from the Böllhoff DIN 6921
+     * table (unlabelled column, matching the DIN 6923 flange nut c min). M20 c not confirmed.
+     */
+    private data class Din6921Row(val dc: Double, val k: Double, val s: Double?, val c: Double?)
+    private val DIN_6921 = mapOf(
+        5.0 to Din6921Row(11.8, 5.4, 8.0, 1.0), 6.0 to Din6921Row(14.2, 6.6, 10.0, 1.1), 8.0 to Din6921Row(18.0, 8.1, 13.0, 1.2),
+        10.0 to Din6921Row(22.3, 9.2, 15.0, 1.5), 12.0 to Din6921Row(26.6, 11.5, 16.0, 1.8), 16.0 to Din6921Row(35.0, 14.4, 21.0, 2.4),
+        20.0 to Din6921Row(43.0, 17.1, null, null)
     )
 
     fun din6921(dMm: Double): FlangeGeom? =
-        DIN_6921.entries.firstOrNull { kotlin.math.abs(it.key - dMm) < 0.01 }?.value?.let { FlangeGeom(it.first, it.second, it.third, null) }
+        DIN_6921.entries.firstOrNull { kotlin.math.abs(it.key - dMm) < 0.01 }?.value?.let { FlangeGeom(it.dc, it.k, it.s, it.c) }
 
-    /** Drawing / typed values first, then DIN 6921; flange thickness c only ever comes from the drawing. */
+    /** Drawing / typed values first, then DIN 6921 (flange thickness c is the table minimum). */
     fun resolveFlange(dMm: Double, dc: Double?, k: Double?, s: Double?, c: Double?): FlangeGeom {
         val din = din6921(dMm)
-        return FlangeGeom(dc ?: din?.dc, k ?: din?.k, s ?: din?.s, c)
+        return FlangeGeom(dc ?: din?.dc, k ?: din?.k, s ?: din?.s, c ?: din?.c)
     }
 
     fun compute(

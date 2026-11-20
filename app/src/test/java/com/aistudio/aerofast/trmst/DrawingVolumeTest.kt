@@ -80,8 +80,10 @@ class DrawingVolumeTest {
         // 12-point: bi-hex area (√3 − 3·tan15°)·s²
         assertEquals(0.92820 * 16 * 16 * 6.4, calc(FastenerType.TWELVE_POINT).finishedPart!!.segments.last().volumeMm3, 0.05)
         // types on stand-in dimensions say so
-        for (t in listOf(FastenerType.TWELVE_POINT, FastenerType.T_BOLT, FastenerType.FLANGE_NUT, FastenerType.HEAVY_HEX_BOLT))
+        for (t in listOf(FastenerType.TWELVE_POINT, FastenerType.T_BOLT, FastenerType.HEAVY_HEX_BOLT))
             assertFalse("$t", DimensionTables.forPart(t, UnitSystem.METRIC, 10.0).isTable)
+        // Flange nut now has its own DIN 6923 table
+        assertTrue(DimensionTables.forPart(FastenerType.FLANGE_NUT, UnitSystem.METRIC, 10.0).isTable)
         assertTrue(DimensionTables.forPart(FastenerType.SOCKET_CSK, UnitSystem.METRIC, 10.0).isTable)
     }
 

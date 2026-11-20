@@ -272,12 +272,16 @@ object PartGeometry {
             HeadStyle.NUT -> {
                 val (s, a) = pick("across flats s", g.acrossFlatsMm, table.acrossFlatsS)
                 val (m, b) = pick("nut height m", g.nutHeightMm ?: g.headHeightMm, table.nutHeightM)
-                val dc = g.flangeDiaMm
-                val c = g.flangeThicknessMm
+                // Flange nut: drawing first, then DIN 6923 (dc max, c min)
+                val tableFlange = if (type == FastenerType.FLANGE_NUT && unit == UnitSystem.METRIC) DimensionTables.din6923Flange(dMm) else null
+                val dc = g.flangeDiaMm ?: tableFlange?.first
+                val c = g.flangeThicknessMm ?: tableFlange?.second
                 if (dc != null && c != null && c > 0.0 && c < m && dc > s) {
-                    fromDrawing += "flange Ø dc ${n(dc)} mm"
-                    fromDrawing += "flange thickness c ${n(c)} mm"
-                    seg(ProfileSegment(c, dc), "Flange", "Ø${n(dc)} × ${n(c)} mm", DimSource.DRAWING, head = true)
+                    if (g.flangeDiaMm != null) fromDrawing += "flange Ø dc ${n(dc)} mm" else notOnDrawing += "flange Ø dc ${n(dc)} mm — DIN 6923 max"
+                    if (g.flangeThicknessMm != null) fromDrawing += "flange thickness c ${n(c)} mm" else notOnDrawing += "flange thickness c ${n(c)} mm — DIN 6923 min"
+                    val flangeSrc = if (g.flangeDiaMm != null && g.flangeThicknessMm != null) DimSource.DRAWING else DimSource.STANDARD
+                    seg(ProfileSegment(c, dc), "Flange", "Ø${n(dc)} × ${n(c)} mm", flangeSrc, head = true)
+                    if (flangeSrc != DimSource.DRAWING) cautions += "Flange modelled as a disc Ø dc max × c min (DIN 6923); the conical top of the flange is not in the volume, so the weight is slightly low."
                     seg(ProfileSegment(m - c, s, shape = SectionShape.HEX), "Hex body", "s ${n(s)} × ${n(m - c)} mm", worst(a, b), head = true)
                 } else {
                     seg(ProfileSegment(m, s, shape = SectionShape.HEX), "Hex body", "s ${n(s)} × m ${n(m)} mm", worst(a, b), head = true)
@@ -340,6 +344,7 @@ object PartGeometry {
                     val sS = used("across flats s", g.acrossFlatsMm, fl.s!!)
                     val sK = used("head height k", g.headHeightMm, fl.k!!)
                     seg(ProfileSegment(fl.c, fl.dc), "Flange", "Ø${n(fl.dc)} × c ${n(fl.c)} mm", worst(sDc, sC), head = true)
+                    if (g.flangeThicknessMm == null) cautions += "Flange modelled as a disc Ø dc × c min (DIN 6921); the conical top of the flange is not in the volume, so the weight is slightly low."
                     seg(ProfileSegment(fl.k - fl.c, fl.s, shape = SectionShape.HEX), "Hex head", "s ${n(fl.s)} × ${n(fl.k - fl.c)} mm", worst(sS, sK, sC), head = true)
                 } else {
                     val (s, a) = pick("across flats s", g.acrossFlatsMm, table.acrossFlatsS)
