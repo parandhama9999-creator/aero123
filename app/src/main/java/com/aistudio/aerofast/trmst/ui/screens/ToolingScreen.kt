@@ -281,7 +281,7 @@ private fun MachineSetupCard(m: MachineSetup, onChange: (MachineSetup) -> Unit) 
 }
 
 /** Half-width profile of segments stacked upward from y = 0: (axial mm, half-width mm) points. */
-private fun profile(segs: List<ProfileSegment>, clearance: Boolean): List<Pair<Double, Double>> {
+internal fun profile(segs: List<ProfileSegment>, clearance: Boolean): List<Pair<Double, Double>> {
     val pts = mutableListOf<Pair<Double, Double>>()
     var y = 0.0
     fun hw(d: Double) = (if (clearance) d + HeadingProgression.stageClearance(d) else d) / 2.0
@@ -305,77 +305,73 @@ private fun profile(segs: List<ProfileSegment>, clearance: Boolean): List<Pair<D
     return pts
 }
 
+/** Colours for the tool section, so the same drawing renders on screen (theme) and off screen (export). */
+data class ToolSectionColors(val die: Color, val punch: Color, val part: Color, val ko: Color, val line: Color, val bg: Color, val label: Color)
+
 @Composable
 private fun ToolSection(st: StationTooling, modifier: Modifier) {
     val c = LocalCustomColors.current
-    val dieColor = c.textMuted.copy(alpha = 0.25f)
-    val punchColor = c.accentPrimary.copy(alpha = 0.22f)
-    val partColor = c.accentSecondary.copy(alpha = 0.75f)
-    val koColor = SuccessGreen.copy(alpha = 0.5f)
-    val line = c.textMain
-    Canvas(modifier) {
-        val inDieH = st.inDie.sumOf { it.heightMm }
-        val aboveH = st.aboveDie.sumOf { it.heightMm }
-        val koH = (inDieH * 0.35).coerceAtLeast(3.0)
-        val totalH = inDieH + aboveH + koH + 6.0
-        val maxW = (st.station.segments.maxOfOrNull { it.maxWidthMm } ?: 10.0)
-        val toolW = maxW * 2.6
-        val scale = minOf(size.height / totalH.toFloat(), size.width / toolW.toFloat()) * 0.95f
-        val cx = size.width / 2f
-        val dieFaceY = size.height - ((koH + inDieH + 2.0) * scale).toFloat()
-        fun X(mm: Double, side: Int) = cx + side * (mm * scale).toFloat()
-        fun Yup(mm: Double) = dieFaceY - (mm * scale).toFloat()        // above the die face
-        fun Ydown(mm: Double) = dieFaceY + (mm * scale).toFloat()      // into the die
-
-        // Die block with the bore cut out
-        val half = (toolW / 2.0)
-        val dieBottom = Ydown(inDieH + koH + 1.0)
-        drawRect(dieColor, Offset(X(half, -1), dieFaceY), androidx.compose.ui.geometry.Size((toolW * scale).toFloat(), dieBottom - dieFaceY))
-        // Punch block above, with its cavity
-        val punchTop = Yup(aboveH + 4.0).coerceAtLeast(0f)
-        drawRect(punchColor, Offset(X(half, -1), punchTop), androidx.compose.ui.geometry.Size((toolW * scale).toFloat(), dieFaceY - punchTop - 2f))
-
-        fun shapePath(pts: List<Pair<Double, Double>>, yOf: (Double) -> Float, flip: Boolean): Path = Path().apply {
-            val ordered = pts
-            ordered.forEachIndexed { i, (y, w) -> if (i == 0) moveTo(X(w, 1), yOf(if (flip) inDieH - y else y)) else lineTo(X(w, 1), yOf(if (flip) inDieH - y else y)) }
-            ordered.asReversed().forEach { (y, w) -> lineTo(X(w, -1), yOf(if (flip) inDieH - y else y)) }
-            close()
-        }
-        val bg = c.bgCard
-        // Bore (with clearance) cut through the die, part sitting in it
-        if (st.inDie.isNotEmpty()) {
-            val bore = profile(st.inDie, clearance = true)
-            drawPath(shapePath(bore, ::Ydown, flip = true), bg)
-            drawPath(shapePath(bore, ::Ydown, flip = true), line, style = Stroke(1.2f))
-            drawPath(shapePath(profile(st.inDie, clearance = false), ::Ydown, flip = true), partColor)
-            // Knock-out pin in the bottom bore
-            val koHalf = (st.inDie.first().maxWidthMm / 2.0) * 0.92
-            drawRect(koColor, Offset(X(koHalf, -1), Ydown(inDieH)), androidx.compose.ui.geometry.Size((koHalf * 2 * scale).toFloat(), (koH * scale).toFloat()))
-        }
-        // Cavity in the punch, part above the die face
-        if (st.aboveDie.isNotEmpty()) {
-            val cav = profile(st.aboveDie, clearance = false)
-            drawPath(shapePath(cav, ::Yup, flip = false), bg)
-            drawPath(shapePath(cav, ::Yup, flip = false), partColor)
-            drawPath(shapePath(cav, ::Yup, flip = false), line, style = Stroke(1.2f))
-        }
-        // Recess pin from the punch
-        st.station.recesses.filter { it.fromTop }.forEach { rc ->
-            val w = rc.sizeMm / 2.0
-            drawRect(koColor, Offset(X(w, -1), Yup(aboveH)), androidx.compose.ui.geometry.Size((w * 2 * scale).toFloat(), (rc.depthMm * scale).toFloat()))
-        }
-        // Die face and axis
-        drawLine(line, Offset(X(half, -1), dieFaceY), Offset(X(half, 1), dieFaceY), 1.5f)
-        drawLine(line.copy(alpha = 0.4f), Offset(cx, punchTop), Offset(cx, dieBottom), 1f,
-            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f, 6f)))
-        labels(this, c.textMuted, X(half, 1) - 4f, punchTop + 14f, dieFaceY + 14f, Ydown(inDieH + koH * 0.5))
-    }
+    val colors = ToolSectionColors(
+        die = c.textMuted.copy(alpha = 0.25f), punch = c.accentPrimary.copy(alpha = 0.22f), part = c.accentSecondary.copy(alpha = 0.75f),
+        ko = SuccessGreen.copy(alpha = 0.5f), line = c.textMain, bg = c.bgCard, label = c.textMuted
+    )
+    Canvas(modifier) { drawToolSection(st, colors, 22f) }
 }
 
-private fun labels(d: DrawScope, color: Color, xRight: Float, punchY: Float, dieY: Float, koY: Float) {
+/** Schematic section of one station's tools: punch with cavity, part, die bore and knock-out pin, to scale with the part. */
+fun DrawScope.drawToolSection(st: StationTooling, k: ToolSectionColors, labelPx: Float) {
+    val inDieH = st.inDie.sumOf { it.heightMm }
+    val aboveH = st.aboveDie.sumOf { it.heightMm }
+    val koH = (inDieH * 0.35).coerceAtLeast(3.0)
+    val totalH = inDieH + aboveH + koH + 6.0
+    val maxW = (st.station.segments.maxOfOrNull { it.maxWidthMm } ?: 10.0)
+    val toolW = maxW * 2.6
+    val scale = minOf(size.height / totalH.toFloat(), size.width / toolW.toFloat()) * 0.95f
+    val cx = size.width / 2f
+    val dieFaceY = size.height - ((koH + inDieH + 2.0) * scale).toFloat()
+    fun X(mm: Double, side: Int) = cx + side * (mm * scale).toFloat()
+    fun Yup(mm: Double) = dieFaceY - (mm * scale).toFloat()
+    fun Ydown(mm: Double) = dieFaceY + (mm * scale).toFloat()
+
+    val half = (toolW / 2.0)
+    val dieBottom = Ydown(inDieH + koH + 1.0)
+    drawRect(k.die, Offset(X(half, -1), dieFaceY), androidx.compose.ui.geometry.Size((toolW * scale).toFloat(), dieBottom - dieFaceY))
+    val punchTop = Yup(aboveH + 4.0).coerceAtLeast(0f)
+    drawRect(k.punch, Offset(X(half, -1), punchTop), androidx.compose.ui.geometry.Size((toolW * scale).toFloat(), dieFaceY - punchTop - 2f))
+
+    fun shapePath(pts: List<Pair<Double, Double>>, yOf: (Double) -> Float, flip: Boolean): Path = Path().apply {
+        pts.forEachIndexed { i, (y, w) -> if (i == 0) moveTo(X(w, 1), yOf(if (flip) inDieH - y else y)) else lineTo(X(w, 1), yOf(if (flip) inDieH - y else y)) }
+        pts.asReversed().forEach { (y, w) -> lineTo(X(w, -1), yOf(if (flip) inDieH - y else y)) }
+        close()
+    }
+    if (st.inDie.isNotEmpty()) {
+        val bore = profile(st.inDie, clearance = true)
+        drawPath(shapePath(bore, ::Ydown, flip = true), k.bg)
+        drawPath(shapePath(bore, ::Ydown, flip = true), k.line, style = Stroke(1.2f))
+        drawPath(shapePath(profile(st.inDie, clearance = false), ::Ydown, flip = true), k.part)
+        val koHalf = (st.inDie.first().maxWidthMm / 2.0) * 0.92
+        drawRect(k.ko, Offset(X(koHalf, -1), Ydown(inDieH)), androidx.compose.ui.geometry.Size((koHalf * 2 * scale).toFloat(), (koH * scale).toFloat()))
+    }
+    if (st.aboveDie.isNotEmpty()) {
+        val cav = profile(st.aboveDie, clearance = false)
+        drawPath(shapePath(cav, ::Yup, flip = false), k.bg)
+        drawPath(shapePath(cav, ::Yup, flip = false), k.part)
+        drawPath(shapePath(cav, ::Yup, flip = false), k.line, style = Stroke(1.2f))
+    }
+    st.station.recesses.filter { it.fromTop }.forEach { rc ->
+        val w = rc.sizeMm / 2.0
+        drawRect(k.ko, Offset(X(w, -1), Yup(aboveH)), androidx.compose.ui.geometry.Size((w * 2 * scale).toFloat(), (rc.depthMm * scale).toFloat()))
+    }
+    drawLine(k.line, Offset(X(half, -1), dieFaceY), Offset(X(half, 1), dieFaceY), 1.5f)
+    drawLine(k.line.copy(alpha = 0.4f), Offset(cx, punchTop), Offset(cx, dieBottom), 1f,
+        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f, 6f)))
+    labels(this, k.label, X(half, 1) - 4f, punchTop + labelPx * 0.65f, dieFaceY + labelPx * 0.65f, Ydown(inDieH + koH * 0.5), labelPx)
+}
+
+private fun labels(d: DrawScope, color: Color, xRight: Float, punchY: Float, dieY: Float, koY: Float, px: Float = 22f) {
     val p = android.graphics.Paint().apply {
         this.color = android.graphics.Color.argb((color.alpha * 255).toInt(), (color.red * 255).toInt(), (color.green * 255).toInt(), (color.blue * 255).toInt())
-        textSize = 22f; textAlign = android.graphics.Paint.Align.RIGHT; isAntiAlias = true
+        textSize = px; textAlign = android.graphics.Paint.Align.RIGHT; isAntiAlias = true
     }
     d.drawContext.canvas.nativeCanvas.apply {
         drawText("PUNCH", xRight, punchY, p)

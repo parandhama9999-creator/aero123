@@ -35,6 +35,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Fireplace
 import androidx.compose.material.icons.filled.Key
@@ -125,7 +126,8 @@ enum class NavigationTab(val tabIndex: Int, val defaultTitle: String, val icon: 
     FORGING(3, "3. HT & Forging", Icons.Default.Fireplace),
     SCANNER(4, "4. AI Scanner", Icons.Default.CameraAlt),
     COPILOT(5, "5. AI Co-Pilot", Icons.Default.SmartToy),
-    EIGHT_D(6, "6. 8D NPD Engine", Icons.Default.Engineering);
+    EIGHT_D(6, "6. 8D NPD Engine", Icons.Default.Engineering),
+    MEDIA(7, "7. Images & Video", Icons.Default.PhotoLibrary);
 
     fun getTitle(lang: com.aistudio.aerofast.trmst.util.AppLanguage): String {
         return com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(tabIndex, lang)
@@ -636,6 +638,10 @@ fun AeroFastApp() {
                                     saveAppState()
                                 }
                             )
+                        }
+
+                        NavigationTab.MEDIA -> {
+                            com.aistudio.aerofast.trmst.ui.screens.MediaStudioScreen(result = currentCalculation)
                         }
 
                         NavigationTab.TOOLING -> {

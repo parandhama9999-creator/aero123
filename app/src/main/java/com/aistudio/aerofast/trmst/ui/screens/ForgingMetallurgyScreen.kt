@@ -1255,7 +1255,7 @@ fun ColdHeadingProgressionCanvas(
     }
 }
 
-private object DieColors {
+internal object DieColors {
     val background = Color(0xFF0F172A)
     val metal = Color(0xFF8FA3BF)
     val wire = Color(0xFFA8B3C2)

@@ -100,6 +100,17 @@ object AppLocalization {
                 AppLanguage.JA -> "6. 8D NPD エンジン"
                 AppLanguage.EN -> "6. 8D NPD Engine"
             }
+            7 -> when (lang) {
+                AppLanguage.HI -> "7. चित्र और वीडियो"
+                AppLanguage.TE -> "7. చిత్రాలు & వీడియో"
+                AppLanguage.ES -> "7. Imágenes y vídeo"
+                AppLanguage.DE -> "7. Bilder & Video"
+                AppLanguage.FR -> "7. Images & vidéo"
+                AppLanguage.RU -> "7. Изображения и видео"
+                AppLanguage.ZH -> "7. 图片与视频"
+                AppLanguage.JA -> "7. 画像と動画"
+                AppLanguage.EN -> "7. Images & Video"
+            }
             else -> "Tab $tabIndex"
         }
     }
