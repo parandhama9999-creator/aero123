@@ -121,3 +121,21 @@ class OfflineKnowledgeTest {
     }
 }
 
+
+class ToolSteelQuestionTest {
+    private val idx = FastenerCatalog.sizeIndexFor(UnitSystem.METRIC, 10.0)
+    private val base = CalculationEngine.calculate(FastenerType.HEX_BOLT, UnitSystem.METRIC, ProductStandard.ISO_4014, idx, 1.5, 60.0, "6g",
+        FastenerCatalog.MATERIALS.getValue("4135"), CoatingType.ZN_NI, 13000, propertyClass = PropertyClass.CLASS_10_9)
+
+    @Test fun toolSteelIsNotAnsweredWithThePartCycle() {
+        val a = OfflineKnowledge.answer("I need ASP 30 heat treatment cycle for salt bath", base, AppLanguage.EN)
+        assertFalse(a.found)
+        assertTrue(a.text, a.text.contains("ASP 30") && a.text.contains("tool material"))
+        assertFalse(a.text.contains("500°C"))
+    }
+
+    @Test fun threadSizesAreNotMistakenForToolSteel() {
+        assertTrue(OfflineKnowledge.toolSteels("M10 x 60 hex bolt heat treatment").isEmpty())
+        assertTrue(OfflineKnowledge.answer("heat treatment", base, AppLanguage.EN).found)
+    }
+}

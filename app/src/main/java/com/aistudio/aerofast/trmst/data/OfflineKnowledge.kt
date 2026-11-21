@@ -230,6 +230,29 @@ object OfflineKnowledge {
         return (standards + materials + alloys).distinct().take(6)
     }
 
+    /** Punch / die materials. They appear in the app only as a tooling recommendation, never with a heat-treatment cycle. */
+    private val TOOL_STEEL = Regex(
+        """(?<![\p{L}\d])(asp\s?-?\d{2}|cpm\s?-?(?:rex\s?)?[a-z]?\d{1,3}[a-z]?|sk[hd]\s?-?\d{1,2}|h13|d2|gt\s?-?\d{2}|hss|tool steel|die steel|punch steel|tungsten carbide|carbide)(?![\p{L}\d])""",
+        RegexOption.IGNORE_CASE)
+
+    fun toolSteels(question: String): List<String> =
+        TOOL_STEEL.findAll(question).map { it.value.trim().uppercase(Locale.ROOT) }.distinct().toList()
+
+    private fun toolSteelAnswer(names: List<String>, l: AppLanguage): KnowledgeAnswer {
+        val n = names.joinToString(", ")
+        val text = L(l,
+            "“$n” is a tool material for punches and dies. The app's heat-treatment cycles are for fastener materials only; it holds no hardening, salt-bath or tempering data for $n, so it will not give one. Take the cycle from the steel maker's datasheet (for ASP grades: Erasteel) and save it as an approved fact (📚) with that source.",
+            "“$n” punch, die కోసం వాడే tool material. యాప్ heat-treatment cycles fastener materials కోసం మాత్రమే; $n కి hardening, salt-bath లేదా tempering data యాప్ లో లేదు, కాబట్టి ఇవ్వదు. Steel తయారీదారు datasheet నుండి తీసుకోండి (ASP grades కి Erasteel), ఆ source తో ఆమోదించిన ఫ్యాక్ట్ (📚) గా సేవ్ చేయండి.",
+            "“$n” पंच और डाई का टूल मटेरियल है। ऐप के हीट-ट्रीटमेंट चक्र केवल फास्टनर मटेरियल के लिए हैं; $n का कोई डेटा ऐप में नहीं है, इसलिए नहीं देगा। स्टील निर्माता की डेटाशीट (ASP के लिए Erasteel) से लें और स्वीकृत तथ्य (📚) के रूप में सेव करें।",
+            "“$n” es un material de herramienta para punzones y matrices. Los ciclos de la app son solo para materiales de tornillería; no tiene datos de temple para $n. Tome el ciclo de la ficha del fabricante (ASP: Erasteel) y guárdelo como dato aprobado (📚).",
+            "„$n“ ist ein Werkzeugwerkstoff für Stempel und Matrizen. Die Wärmebehandlungen der App gelten nur für Schraubenwerkstoffe; für $n hat sie keine Daten. Zyklus aus dem Datenblatt des Herstellers (ASP: Erasteel) übernehmen und als geprüfte Angabe (📚) speichern.",
+            "« $n » est un matériau d'outillage (poinçons, matrices). Les cycles de l'appli ne concernent que les matériaux de visserie ; aucune donnée pour $n. Prenez le cycle de la fiche du fabricant (ASP : Erasteel) et enregistrez-le comme fait approuvé (📚).",
+            "«$n» — инструментальный материал для пуансонов и матриц. Режимы приложения только для крепёжных материалов; данных по $n нет. Возьмите режим из паспорта производителя (ASP: Erasteel) и сохраните как подтверждённый факт (📚).",
+            "“$n”是冲头和模具用的工具材料。应用的热处理工艺只适用于紧固件材料，没有 $n 的数据。请采用钢厂数据表（ASP：Erasteel）并保存为已确认事实（📚）。",
+            "「$n」はパンチ・ダイ用の工具材料です。アプリの熱処理はねじ材料のみで、$n のデータはありません。メーカーのデータシート（ASP：Erasteel）から取り、承認済み情報（📚）として保存してください。")
+        return KnowledgeAnswer(text, emptyList(), false)
+    }
+
     private fun unknownAnswer(codes: List<String>, l: AppLanguage): KnowledgeAnswer {
         val list = codes.joinToString(", ")
         val closest = codes.flatMap { closestInApp(it) }.distinct().take(6)
@@ -255,6 +278,8 @@ object OfflineKnowledge {
             return KnowledgeAnswer(f.answer, listOf(L(l, "your approved fact", "మీరు ఆమోదించిన ఫ్యాక్ట్", "आपका स्वीकृत तथ्य", "su dato aprobado", "Ihre geprüfte Angabe",
                 "votre fait approuvé", "ваш подтверждённый факт", "您确认的事实", "承認済みの情報") + " ($date) — ${f.source}"), true)
         }
+        // A tool / die steel (punch, die insert): the app has no hardening data for it, only part materials
+        toolSteels(question).takeIf { it.isNotEmpty() }?.let { return toolSteelAnswer(it, l) }
         // A standard, material or product the app does not hold: say so, never answer it from the current part
         unknownCodes(question).takeIf { it.isNotEmpty() }?.let { return unknownAnswer(it, l) }
         val topics = topics(question)
