@@ -96,10 +96,13 @@ object SoftAnnealEngine {
                 "the usual reason a 718 anneal does not soften. Annealed 718 is about 28 HRC max (voestalpine). " +
                 "Above about 990 – 1010 °C δ dissolves and the grain grows fast."),
         "A286" to MillAnnealCycle("982 °C (1800 °F); 899 °C (1650 °F) for more ductility", "1 h", "Water or oil quench",
-            "Aircraft Materials; UPMET (AMS 5731 / 5732 / 5737)", MEDIUM),
-        "WASPALOY" to MillAnnealCycle("1049 °C (1920 °F)", "4 h", "Air cool",
-            "Alloy Wire; Haynes", MEDIUM,
-            "Heat through 650 – 870 °C as fast as possible to avoid strain-age cracking."),
+            "Aircraft Materials; High Temp Metals; Rolled Alloys (AMS 5731 / 5732 / 5737)", HIGH),
+        "WASPALOY" to MillAnnealCycle("996 – 1038 °C (1825 – 1900 °F); 1049 °C (1920 °F) quoted for wire",
+            "1 – 4 h (Upmet 1 h, Haynes 2 h, Special Metals 4 h)",
+            "Rapid: oil or water quench; air cool only for thin wire",
+            "Special Metals Waspaloy (heat treatment B); Haynes; Upmet AMS 5706; Alloy Wire", HIGH,
+            "Heat through 650 – 870 °C as fast as possible to avoid strain-age cracking. A slow cool precipitates γ′ and leaves " +
+                "the wire hard. The γ′ solvus is about 1032 – 1043 °C (1890 – 1910 °F), where grain growth also begins (CarTech)."),
         "RENE41" to MillAnnealCycle("1066 – 1080 °C (1950 – 1975 °F)", "4 h", "Air cool",
             "Alfa Chemistry; High Temp Metals", DISPUTED,
             "Heat fast through 650 – 870 °C (strain-age cracking). Catalogue hardening cycle tops out at 1120 °C, above these sources."),
@@ -352,6 +355,8 @@ object SoftAnnealEngine {
             AnnealRoute.MILL_ANNEALED -> {
                 notes += "Bought already annealed — verify the condition on the mill certificate. " +
                     "The cycle shown is the mill anneal, for re-annealing between blows."
+                if (family == MaterialFamily.NICKEL_SUPERALLOY) notes += "No spheroidize anneal exists for this alloy: it is austenitic " +
+                    "(no ferrite / cementite to ball up) and hardens by precipitation. The solution anneal with a fast cool IS its softest condition."
                 val mill = MILL_ANNEAL[material.key]
                 if (mill == null) {
                     unsourced += "Mill-anneal cycle — not researched for this grade"

@@ -884,15 +884,16 @@ object FastenerCatalog {
             flowStressCoeffK = 1280.0,
             strainHardeningN = 0.20,
             heatTreatmentSpec = HeatTreatmentSpec(
-                austenitizingOrSolutionTempC = "Solution Anneal: 980°C ± 10°C",
-                soakingTimeMinutes = "60 min",
-                quenchMedium = "Rapid Oil Quench or Water Quench",
-                temperingOrAgingTempC = "Precipitation Hardening: 720°C ± 5°C",
-                temperingOrAgingTimeHours = "16.0 hrs continuous soak",
-                targetHardnessHrc = "32 – 38 HRC (320–375 HV)",
+                austenitizingOrSolutionTempC = "982 °C (1800 °F), AMS 5731 / 5732 — or 899 °C (1650 °F), AMS 5737",
+                soakingTimeMinutes = "About 1 h at temperature",
+                quenchMedium = "Oil or water quench",
+                temperingOrAgingTempC = "Age 718 °C (1325 °F) 16 h, air cool",
+                temperingOrAgingTimeHours = "16 h",
+                targetHardnessHrc = "About 24 – 37 HRC aged (248 – 341 HB; confirm the AMS value)",
                 hydrogenBakingRequired = false,
                 hydrogenBakingCycle = "Not required (Aero IVD Al coating used)",
-                standardReference = "AMS 5731 / AMS 5732 / NAS624 / MS21250"
+                standardReference = "AMS 5731 / AMS 5732 / AMS 5737",
+                isAging = true
             )
         ),
         "TI_GR1" to MaterialInfo(
@@ -968,15 +969,16 @@ object FastenerCatalog {
             flowStressCoeffK = 1550.0,
             strainHardeningN = 0.14,
             heatTreatmentSpec = HeatTreatmentSpec(
-                austenitizingOrSolutionTempC = "Stage 1 Solution: 1010°C–1040°C (4 hrs)",
-                soakingTimeMinutes = "240 min",
-                quenchMedium = "Agitated Oil Quench",
-                temperingOrAgingTempC = "Stage 2 Stabilize: 845°C (4h) -> Stage 3 Age: 760°C (16h)",
-                temperingOrAgingTimeHours = "20.0 hrs total aging",
-                targetHardnessHrc = "37 – 44 HRC",
+                austenitizingOrSolutionTempC = "996 – 1038 °C (1825 – 1900 °F), 1010 °C typical",
+                soakingTimeMinutes = "4 h (Special Metals heat treatment B)",
+                quenchMedium = "Oil quench",
+                temperingOrAgingTempC = "Stabilize 845 °C (1550 °F) 4 h AC -> Age 760 °C (1400 °F) 16 h AC",
+                temperingOrAgingTimeHours = "4 h + 16 h",
+                targetHardnessHrc = "34 – 44 HRC",
                 hydrogenBakingRequired = false,
                 hydrogenBakingCycle = "Not required for nickel superalloys",
-                standardReference = "AMS 5708 / UNS N07001"
+                standardReference = "Special Metals heat treatment B / AMS 5706 – 5709 / UNS N07001",
+                isAging = true
             )
         ),
         "INCONEL718" to MaterialInfo(

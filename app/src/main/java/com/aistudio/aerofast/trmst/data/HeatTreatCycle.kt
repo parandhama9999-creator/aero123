@@ -206,8 +206,58 @@ object HeatTreatCycleEngine {
      * Inconel 718 solution treatment and precipitation hardening (AMS 5662 solution + AMS 5663 age): 718 °C for 8 h,
      * furnace cool at 55 °C/h to 621 °C, hold until the total ageing time reaches 18 h, air cool. Null for other grades.
      */
-    fun precipitationHarden(material: MaterialInfo, sectionMm: Double): FurnaceCycle? {
-        if (material.key != "INCONEL718") return null
+    fun precipitationHarden(material: MaterialInfo, sectionMm: Double): FurnaceCycle? = when (material.key) {
+        "INCONEL718" -> inconel718(sectionMm)
+        "A286" -> a286(sectionMm)
+        "WASPALOY" -> waspaloy(sectionMm)
+        else -> null
+    }
+
+    /** A286: solution 982 °C (AMS 5731/5732) or 899 °C (AMS 5737) about 1 h, oil / water quench, age 718 °C 16 h, air cool. */
+    private fun a286(sectionMm: Double) = FurnaceCycle(
+        title = "Solution treat & age — complete cycle",
+        stages = listOf(
+            AnnealStage("1. Charge & heat", "982 °C (1800 °F) for AMS 5731 / 5732, or 899 °C (1650 °F) for AMS 5737 • vacuum, argon or protective gas", 0.5, 1.5),
+            AnnealStage("2. Solution soak", "About 1 h at temperature (${f(sectionMm)} mm section)", 1.0, 1.0),
+            AnnealStage("3. Quench", "Oil or water", 0.1, 0.3),
+            AnnealStage("4. Age 718 °C (1325 °F)", "Heat to 718 °C and hold 16 h (AMS window 704 – 760 °C, at least 16 h)", 16.5, 17.0),
+            AnnealStage("5. Air cool", "To room temperature", 0.5, 1.0)
+        ),
+        basis = "A286 solution treatment and ageing for a ${f(sectionMm)} mm section",
+        sources = listOf(
+            "Aircraft Materials A286 (AMS 5731 / 5732 / 5737): 1800 °F or 1650 °F, about 1 h, water or oil quench",
+            "High Temp Metals A286: solution 1800 °F 1 h oil quench, age 1325 °F 16 h air cool",
+            "Rolled Alloys A-286: 1800 °F gives the best creep-rupture strength, 1650 °F better ductility and room-temperature strength"
+        ),
+        cautions = listOf(
+            "Pick the solution temperature from the drawing: 982 °C and 899 °C give different properties (AMS 5732 vs AMS 5737).",
+            "Hardness acceptance values differ between sources (248 – 341 HB and 277 – 363 HB quoted): use the AMS sheet on the drawing."
+        )
+    )
+
+    /** Waspaloy, Special Metals heat treatment B: solution 996 – 1038 °C, oil quench, stabilize 845 °C 4 h AC, age 760 °C 16 h AC. */
+    private fun waspaloy(sectionMm: Double) = FurnaceCycle(
+        title = "Solution treat, stabilize & age — complete cycle",
+        stages = listOf(
+            AnnealStage("1. Charge & heat", "996 – 1038 °C (1825 – 1900 °F), 1010 °C typical • vacuum or argon. Heat through 650 – 870 °C fast", 0.5, 1.5),
+            AnnealStage("2. Solution soak", "4 h (Special Metals heat treatment B; Haynes uses 2 h, Upmet 1 h)", 4.0, 4.0),
+            AnnealStage("3. Oil quench", "Or fast gas / water", 0.1, 0.3),
+            AnnealStage("4. Stabilize 845 °C (1550 °F)", "4 h, then air cool", 4.5, 5.0),
+            AnnealStage("5. Age 760 °C (1400 °F)", "16 h, then air cool", 16.5, 17.0)
+        ),
+        basis = "Waspaloy heat treatment for room- and high-temperature tensile properties, ${f(sectionMm)} mm section",
+        sources = listOf(
+            "Special Metals Waspaloy, heat treatment B: 995 – 1035 °C 4 h oil quench; 845 °C 4 h AC; 760 °C 16 h AC; 34 – 44 HRC",
+            "Haynes Waspaloy: 1825 °F 2 h, then 1550 °F 4 h and 1400 °F 16 h",
+            "Upmet AMS 5706: supplied solution treated 1825 – 1900 °F for 1 h"
+        ),
+        cautions = listOf(
+            "For creep / stress-rupture parts Special Metals uses a different route (1975 °F 4 h AC, 1550 °F 24 h, 1400 °F 16 h): follow the drawing.",
+            "Waspaloy is prone to strain-age cracking: heat cold-worked parts through 650 – 870 °C as fast as possible."
+        )
+    )
+
+    private fun inconel718(sectionMm: Double): FurnaceCycle {
         val soak = soakHours(sectionMm)
         val fcHours = (718.0 - 621.0) / 55.0
         val hold621 = 18.0 - 8.0 - fcHours
