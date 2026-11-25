@@ -22,8 +22,9 @@ object CadDxfGenerator {
         val l = result.lengthMm
         val lt = result.threadLengthMm
         val blank = result.blankTargetDia
-        val headWidth = d * 1.5
-        val headHeight = d * 0.7
+        // Head from the standard's dimension table where the app has one; the generic proportions only as a fallback
+        val headWidth = result.headDimensions?.acrossFlatsS ?: (d * 1.5)
+        val headHeight = result.headDimensions?.headHeightK ?: (d * 0.7)
 
         val sb = StringBuilder()
         sb.append("0\nSECTION\n2\nHEADER\n9\n\$ACADVER\n1\nAC1015\n0\nENDSEC\n")

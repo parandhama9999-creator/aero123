@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Fireplace
 import androidx.compose.material.icons.filled.Key
@@ -127,7 +128,8 @@ enum class NavigationTab(val tabIndex: Int, val defaultTitle: String, val icon: 
     SCANNER(4, "4. AI Scanner", Icons.Default.CameraAlt),
     COPILOT(5, "5. AI Co-Pilot", Icons.Default.SmartToy),
     EIGHT_D(6, "6. 8D NPD Engine", Icons.Default.Engineering),
-    MEDIA(7, "7. Images & Video", Icons.Default.PhotoLibrary);
+    MEDIA(7, "7. Images & Video", Icons.Default.PhotoLibrary),
+    QUALITY(8, "8. Quality", Icons.Default.Verified);
 
     fun getTitle(lang: com.aistudio.aerofast.trmst.util.AppLanguage): String {
         return com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(tabIndex, lang)
@@ -723,6 +725,10 @@ fun AeroFastApp() {
 
                         NavigationTab.EIGHT_D -> {
                             EightDKnowledgeScreen(currentResult = currentCalculation)
+                        }
+
+                        NavigationTab.QUALITY -> {
+                            com.aistudio.aerofast.trmst.ui.screens.QualityScreen(result = currentCalculation)
                         }
                     }
                 }

@@ -73,6 +73,6 @@ class ExampleUnitTests {
     val frTitle = com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(6, com.aistudio.aerofast.trmst.util.AppLanguage.FR)
     assertEquals("6. Moteur 8D NPD", frTitle)
 
-    assertEquals("Tab 8", com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(8, com.aistudio.aerofast.trmst.util.AppLanguage.EN))
+    assertEquals("Tab 9", com.aistudio.aerofast.trmst.util.AppLocalization.getTabTitle(9, com.aistudio.aerofast.trmst.util.AppLanguage.EN))
   }
 }

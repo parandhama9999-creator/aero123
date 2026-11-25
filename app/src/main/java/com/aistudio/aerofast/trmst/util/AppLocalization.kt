@@ -111,6 +111,17 @@ object AppLocalization {
                 AppLanguage.JA -> "7. 画像と動画"
                 AppLanguage.EN -> "7. Images & Video"
             }
+            8 -> when (lang) {
+                AppLanguage.HI -> "8. गुणवत्ता"
+                AppLanguage.TE -> "8. నాణ్యత"
+                AppLanguage.ES -> "8. Calidad"
+                AppLanguage.DE -> "8. Qualität"
+                AppLanguage.FR -> "8. Qualité"
+                AppLanguage.RU -> "8. Качество"
+                AppLanguage.ZH -> "8. 质量"
+                AppLanguage.JA -> "8. 品質"
+                AppLanguage.EN -> "8. Quality"
+            }
             else -> "Tab $tabIndex"
         }
     }
