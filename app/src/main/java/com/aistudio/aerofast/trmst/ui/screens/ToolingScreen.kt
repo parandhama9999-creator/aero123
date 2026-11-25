@@ -42,6 +42,7 @@ import com.aistudio.aerofast.trmst.data.FastenerCalculationResult
 import com.aistudio.aerofast.trmst.data.HeadingProgression
 import com.aistudio.aerofast.trmst.data.MachineSetup
 import com.aistudio.aerofast.trmst.data.MachineSetupStore
+import com.aistudio.aerofast.trmst.data.save
 import com.aistudio.aerofast.trmst.data.ProfileSegment
 import com.aistudio.aerofast.trmst.data.SectionShape
 import com.aistudio.aerofast.trmst.data.StationTooling

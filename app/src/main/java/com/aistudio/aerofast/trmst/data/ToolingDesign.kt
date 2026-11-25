@@ -1,6 +1,5 @@
 package com.aistudio.aerofast.trmst.data
 
-import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -25,26 +24,12 @@ data class MachineSetup(
     val openLimit: Double get() = openExtrusionLimitPct ?: HeadingProgression.MAX_DIE_EXTRUSION_PCT
 }
 
-/** Machine pockets are a shop setting: kept across parts, on this phone only. */
+/** Machine pockets are a shop setting: kept across parts, on this device only (load / save are platform code). */
 object MachineSetupStore {
-    private const val PREFS = "aerofast_machine_setup"
-    private val KEYS = listOf("dieCaseOd", "dieCaseLen", "punchCaseOd", "punchCaseLen", "koStroke", "insertOd", "openExtrusionLimit", "dieAngle", "landLength")
+    internal const val PREFS = "aerofast_machine_setup"
+    internal val KEYS = listOf("dieCaseOd", "dieCaseLen", "punchCaseOd", "punchCaseLen", "koStroke", "insertOd", "openExtrusionLimit", "dieAngle", "landLength")
 
     var setup by mutableStateOf(MachineSetup())
-
-    fun load(context: Context) {
-        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        fun g(k: String) = p.getFloat(k, 0f).toDouble().takeIf { it > 0.0 }
-        setup = MachineSetup(g(KEYS[0]), g(KEYS[1]), g(KEYS[2]), g(KEYS[3]), g(KEYS[4]), g(KEYS[5]), g(KEYS[6]), g(KEYS[7]), g(KEYS[8]))
-    }
-
-    fun save(context: Context, s: MachineSetup) {
-        setup = s
-        val values = listOf(s.dieCaseOdMm, s.dieCaseLengthMm, s.punchCaseOdMm, s.punchCaseLengthMm, s.koStrokeMm, s.insertOdMm, s.openExtrusionLimitPct, s.dieAngleDeg, s.landLengthMm)
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
-            KEYS.zip(values).forEach { (k, v) -> putFloat(k, (v ?: 0.0).toFloat()) }
-        }.apply()
-    }
 }
 
 /** A station where the shank is reduced: from the previous station's (or the slug's) diameter to this one. */

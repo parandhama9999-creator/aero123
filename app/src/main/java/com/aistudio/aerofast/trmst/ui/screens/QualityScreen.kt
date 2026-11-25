@@ -1,7 +1,5 @@
 package com.aistudio.aerofast.trmst.ui.screens
 
-import android.content.Context
-import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -51,6 +50,7 @@ import com.aistudio.aerofast.trmst.data.UnitSystem
 import com.aistudio.aerofast.trmst.ui.theme.AlertRed
 import com.aistudio.aerofast.trmst.ui.theme.LocalCustomColors
 import com.aistudio.aerofast.trmst.ui.theme.SuccessGreen
+import com.aistudio.aerofast.trmst.ui.platform.LocalPlatformActions
 import java.util.Locale
 
 private enum class QSection(val title: String) {
@@ -60,30 +60,27 @@ private enum class QSection(val title: String) {
 
 private fun f(v: Double, dp: Int = 2) = String.format(Locale.US, "%.${dp}f", v)
 
-private fun share(context: Context, subject: String, text: String) {
-    val send = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, subject)
-        putExtra(Intent.EXTRA_TEXT, text)
-    }
-    context.startActivity(Intent.createChooser(send, subject))
-}
+private const val PREFS = "quality_prefs"
 
+@OptIn(ExperimentalLayoutApi::class)
 /** Quality systems for the current part: control plan, APQP, PPAP, capability, torque, tests, GD&T, lean and change management. */
 @Composable
-fun QualityScreen(result: FastenerCalculationResult) {
+fun QualityScreen(result: FastenerCalculationResult, wrapSections: Boolean = false) {
     val c = LocalCustomColors.current
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("quality_prefs", Context.MODE_PRIVATE) }
+    val platform = LocalPlatformActions.current
     var section by rememberSaveable { mutableStateOf(QSection.CONTROL) }
-    var csr by remember { mutableStateOf(prefs.getString("csr", "") ?: "") }
-    fun saveCsr(v: String) { csr = v; prefs.edit().putString("csr", v).apply() }
+    var csr by remember { mutableStateOf(platform.loadString(PREFS, "csr") ?: "") }
+    fun saveCsr(v: String) { csr = v; platform.saveString(PREFS, "csr", v) }
 
     Column(Modifier.fillMaxSize().background(c.bgMain)) {
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
+        // Phones scroll the section row sideways; a desktop window wraps it so every section stays visible
+        val sectionRow: @Composable (@Composable () -> Unit) -> Unit = { content ->
+            if (wrapSections) FlowRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+            else Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+        }
+        sectionRow {
             QSection.entries.forEach { s ->
                 val on = s == section
                 Text(
@@ -143,8 +140,8 @@ private fun KV(label: String, value: String, valueColor: Color = LocalCustomColo
 @Composable
 private fun ShareButton(label: String, subject: String, text: () -> String) {
     val c = LocalCustomColors.current
-    val context = LocalContext.current
-    Button(onClick = { share(context, subject, text()) }, colors = ButtonDefaults.buttonColors(containerColor = c.accentPrimary), modifier = Modifier.fillMaxWidth()) {
+    val platform = LocalPlatformActions.current
+    Button(onClick = { platform.shareText(subject, text()) }, colors = ButtonDefaults.buttonColors(containerColor = c.accentPrimary), modifier = Modifier.fillMaxWidth()) {
         Text(label, color = Color.White, fontWeight = FontWeight.Bold)
     }
 }
@@ -230,13 +227,12 @@ private fun ApqpSection(r: FastenerCalculationResult) {
 @Composable
 private fun PpapSection(r: FastenerCalculationResult, csr: String, onCsr: (String) -> Unit) {
     val c = LocalCustomColors.current
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("quality_prefs", Context.MODE_PRIVATE) }
+    val platform = LocalPlatformActions.current
     var level by rememberSaveable { mutableStateOf(3) }
     var reason by rememberSaveable { mutableStateOf(QualityDocs.PSW_REASONS[0]) }
-    var partNo by remember { mutableStateOf(prefs.getString("partNo", "") ?: "") }
-    var rev by remember { mutableStateOf(prefs.getString("rev", "") ?: "") }
-    var customer by remember { mutableStateOf(prefs.getString("customer", "") ?: "") }
+    var partNo by remember { mutableStateOf(platform.loadString(PREFS, "partNo") ?: "") }
+    var rev by remember { mutableStateOf(platform.loadString(PREFS, "rev") ?: "") }
+    var customer by remember { mutableStateOf(platform.loadString(PREFS, "customer") ?: "") }
     val elements = remember(r) { QualityDocs.ppapElements(r) }
 
     QCard("Submission level") {
@@ -270,9 +266,9 @@ private fun PpapSection(r: FastenerCalculationResult, csr: String, onCsr: (Strin
         }
     }
     QCard("Part submission warrant") {
-        TextIn("Customer part number", partNo) { partNo = it; prefs.edit().putString("partNo", it).apply() }
-        TextIn("Drawing revision", rev) { rev = it; prefs.edit().putString("rev", it).apply() }
-        TextIn("Customer", customer) { customer = it; prefs.edit().putString("customer", it).apply() }
+        TextIn("Customer part number", partNo) { partNo = it; platform.saveString(PREFS, "partNo", it) }
+        TextIn("Drawing revision", rev) { rev = it; platform.saveString(PREFS, "rev", it) }
+        TextIn("Customer", customer) { customer = it; platform.saveString(PREFS, "customer", it) }
         Text("Reason for submission", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textMain)
         QualityDocs.PSW_REASONS.forEach { rs ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { reason = rs }) {

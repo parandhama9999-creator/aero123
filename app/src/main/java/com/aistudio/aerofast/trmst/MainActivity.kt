@@ -1,5 +1,6 @@
 package com.aistudio.aerofast.trmst
 
+import com.aistudio.aerofast.trmst.data.load
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -728,7 +729,10 @@ fun AeroFastApp() {
                         }
 
                         NavigationTab.QUALITY -> {
-                            com.aistudio.aerofast.trmst.ui.screens.QualityScreen(result = currentCalculation)
+                            val platform = remember { com.aistudio.aerofast.trmst.ui.platform.AndroidPlatformActions(context) }
+                            androidx.compose.runtime.CompositionLocalProvider(com.aistudio.aerofast.trmst.ui.platform.LocalPlatformActions provides platform) {
+                                com.aistudio.aerofast.trmst.ui.screens.QualityScreen(result = currentCalculation)
+                            }
                         }
                     }
                 }
