@@ -88,8 +88,13 @@ object SoftAnnealEngine {
             "Corrosion Materials / Rolled Alloys CP Ti datasheets", HIGH),
         "VT16" to MillAnnealCycle("770 – 790 °C", "2 h", "Furnace cool 1 – 5 °C/min to 500 °C, then air",
             "TsKBA standard process", HIGH),
-        "INCONEL718" to MillAnnealCycle("927 – 1010 °C (1700 – 1850 °F), 980 °C typical", "", "Air cool or faster",
-            "HPAlloys; Total Materia", MEDIUM),
+        "INCONEL718" to MillAnnealCycle("927 – 1010 °C (1700 – 1850 °F), 955 – 980 °C typical",
+            "Time commensurate with section size (AMS 5662)",
+            "Rapid cool, usually water quench; air cool or faster for thin wire. Never furnace cool",
+            "Special Metals INCONEL 718 bulletin; AMS 5662 supplier data sheet; voestalpine 718", HIGH,
+            "A slow cool or a hold between about 600 and 1000 °C precipitates γ″ / δ and leaves the wire hard: " +
+                "the usual reason a 718 anneal does not soften. Annealed 718 is about 28 HRC max (voestalpine). " +
+                "Above about 990 – 1010 °C δ dissolves and the grain grows fast."),
         "A286" to MillAnnealCycle("982 °C (1800 °F); 899 °C (1650 °F) for more ductility", "1 h", "Water or oil quench",
             "Aircraft Materials; UPMET (AMS 5731 / 5732 / 5737)", MEDIUM),
         "WASPALOY" to MillAnnealCycle("1049 °C (1920 °F)", "4 h", "Air cool",

@@ -104,7 +104,9 @@ object QualityDocs {
                 "Furnace chart review", "Hold load, re-test hardness, re-treat or scrap"))
             add(ControlPlanRow("40 Heat treat", "Core hardness", true, true, ht.targetHardnessHrc,
                 "Rockwell (ISO 6508-1) / Vickers HV10 referee (ISO 6507-1)", "Each load", "Lab record", "Hold load, re-treat or scrap"))
-            add(ControlPlanRow("40 Heat treat", "Surface hardness / decarburisation", true, true,
+            val decarbs = PokaYokeEngine.materialFamily(r.material) == MaterialFamily.CARBON_ALLOY_STEEL ||
+                PokaYokeEngine.stainlessType(r.material) == PokaYokeEngine.StainlessType.MARTENSITIC
+            if (decarbs) add(ControlPlanRow("40 Heat treat", "Surface hardness / decarburisation", true, true,
                 "Per ${r.propertyClass?.let { "ISO 898-1 (${it.label.substringBefore(" (")})" } ?: "material spec"}",
                 "Vickers HV0.3 surface vs core; metallographic section", "Each load", "Lab record", "Hold load, re-treat or scrap"))
         }
@@ -190,7 +192,10 @@ object QualityDocs {
 
     fun specialCharacteristics(r: FastenerCalculationResult): List<String> = buildList {
         if (!r.fastenerType.isUnthreaded && !r.fastenerType.isWasher) add("thread pitch diameter")
-        if (!r.heatTreatmentSpec.austenitizingOrSolutionTempC.startsWith("N/A")) addAll(listOf("core hardness", "decarburisation"))
+        if (!r.heatTreatmentSpec.austenitizingOrSolutionTempC.startsWith("N/A")) {
+            add("core hardness")
+            if (PokaYokeEngine.materialFamily(r.material) == MaterialFamily.CARBON_ALLOY_STEEL) add("decarburisation")
+        }
         if (r.propertyClass != null && !r.fastenerType.isWasher && !r.fastenerType.isUnthreaded) add("proof load")
         if (r.hasHydrogenEmbrittlementRisk) add("hydrogen embrittlement")
     }

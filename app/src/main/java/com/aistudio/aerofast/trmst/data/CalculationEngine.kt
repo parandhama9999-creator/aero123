@@ -721,6 +721,11 @@ object CalculationEngine {
         if (material.isAero && PokaYokeEngine.materialFamily(material) == MaterialFamily.CARBON_ALLOY_STEEL && !isWarmHeaded(material, d)) {
             risks.add("✈️ Aerospace alloy steel (${material.name}): cold headable only from fully spheroidize-annealed wire; it work-hardens faster than commercial grades.")
             recommendations.add("Buy or anneal the wire fully spheroidized (typically ≤ 92 HRB), use phosphate + soap or polymer coating, and magnetic-particle check the first-off heads for cracks.")
+        } else if (material.isAero && PokaYokeEngine.materialFamily(material) == MaterialFamily.NICKEL_SUPERALLOY) {
+            risks.add("✈️ Nickel superalloy (${material.name}): work-hardens fast. Head from solution-annealed wire (cold, small sizes, re-anneal between blows if needed) or hot head locally by induction from cold-drawn bar.")
+            recommendations.add("Re-anneal with the solution (mill) anneal and a RAPID cool (water for 718); a furnace cool leaves the wire hard. " +
+                "Do not soak the wire between about 600 and 1000 °C (ageing and δ range) except for the final age on the finished part. " +
+                "Take the hot-heading temperature window from your process qualification.")
         } else if (material.hasHighHardness && material.isAero) {
             risks.add("✈️ High-Strength Aerospace Alloy Warning (${material.name}): Rapid work-hardening behavior. Room-temperature cold working will cause catastrophic micro-cracking.")
             recommendations.add("Strictly enforce Controlled Warm Forging / Induction Heating (650°C–720°C) with Glass-MoS2 dual lubrication.")
@@ -931,23 +936,23 @@ object CalculationEngine {
                     isAging = true
                 )
             }
-            // Inconel 718 (AMS 5662)
+            // Inconel 718: AMS 5662 solution treatment + AMS 5663 precipitation treatment (Special Metals, ASTM A1014)
             key == "INCONEL718" || key.contains("718") -> {
                 HeatTreatmentSpec(
-                    austenitizingOrSolutionTempC = "955°C – 980°C (Solution Anneal)",
-                    soakingTimeMinutes = "60 mins soak (AMS 5662)",
-                    quenchMedium = "Argon Gas Quench or Forced Air Cool to <38°C",
-                    temperingOrAgingTempC = "Double Age: 720°C (8 hrs) -> Cool 55°C/hr -> 620°C (8 hrs)",
-                    temperingOrAgingTimeHours = "8 hrs (480 mins) @ 720°C + 8 hrs (480 mins) @ 620°C",
-                    targetHardnessHrc = "40–46 HRC",
+                    austenitizingOrSolutionTempC = "927 – 1010 °C (1700 – 1850 °F), 955 – 980 °C typical (Solution treatment, AMS 5662)",
+                    soakingTimeMinutes = "Time commensurate with section size (AMS 5662)",
+                    quenchMedium = "Rapid cool: water, or fast gas / air (air cool or faster). Never furnace cool",
+                    temperingOrAgingTempC = "Age 718 °C (1325 °F) 8 h → furnace cool 55 °C/h to 621 °C (1150 °F) → hold to 18 h total ageing → air cool (AMS 5663)",
+                    temperingOrAgingTimeHours = "18 h total: 8 h at 718 °C + ≈ 1.8 h furnace cool + ≈ 8.2 h at 621 °C",
+                    targetHardnessHrc = "36 – 43 HRC aged (≤ 28 HRC annealed)",
                     hydrogenBakingRequired = false,
                     hydrogenBakingCycle = "Not applicable to nickel superalloys",
-                    standardReference = "AMS 5662 / AMS 5664",
-                    preheatTempC = "700°C (Uniform Thermal Pre-heat)",
-                    preheatSoakTime = "60 mins",
-                    atmosphere = "Vacuum Furnace (<10⁻⁴ mbar)",
-                    quenchDetails = "Rapid Argon recirculating quench to below 38°C",
-                    coolingMethod = "Controlled furnace cool at 55°C/hr from 720°C to 620°C, then air cool",
+                    standardReference = "AMS 5662 / AMS 5663 / AMS 2774",
+                    preheatTempC = "",
+                    preheatSoakTime = "",
+                    atmosphere = "Vacuum or argon",
+                    quenchDetails = "Cool fast from the solution temperature: slow cooling precipitates δ / γ″ before the age and weakens the ageing response",
+                    coolingMethod = "Furnace cool 55 °C/h (100 °F/h) from 718 to 621 °C; air cool after the 621 °C hold",
                     targetUtsMpa = "1380–1500 MPa",
                     bakingTempC = "N/A",
                     bakingSoakTime = "N/A",

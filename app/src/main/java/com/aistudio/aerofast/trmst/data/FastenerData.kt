@@ -985,7 +985,7 @@ object FastenerCatalog {
             density = 8.19, uts = 1380.0, vc = 36.0, feed = 0.10, doc = 0.6, rateInr = 4950.0, km = 0.028,
             isAero = true, hasHighHardness = true, headingSpm = 35,
             insertSpec = "CNMG 120408-QM (PVD AlTiN ISO S05)",
-            heatTreatment = "Solution 955°C -> Double Age: 720°C (8h) + 620°C (8h).",
+            heatTreatment = "Solution 955–980°C, rapid cool -> Age 718°C 8h, FC 55°C/h to 621°C, 18h total (AMS 5663).",
             lubricationCoating = "Cu + MoS2. Final: IVD Al. Roll Post-HT.",
             dieTooling = "WC-15%Co + Mirror ASP30 Punch.",
             rawMaterialSourcingUtsMpa = "920 – 1020 MPa (AMS 5662 Annealed Wire)",
@@ -996,15 +996,18 @@ object FastenerCatalog {
             flowStressCoeffK = 1600.0,
             strainHardeningN = 0.13,
             heatTreatmentSpec = HeatTreatmentSpec(
-                austenitizingOrSolutionTempC = "Solution Anneal: 955°C – 980°C (Vacuum)",
-                soakingTimeMinutes = "60 min",
-                quenchMedium = "Rapid Inert Gas Quench (Pressure > 4 bar)",
-                temperingOrAgingTempC = "Double Age: 720°C (8h) -> furnace cool 50°C/h -> 620°C (8h)",
-                temperingOrAgingTimeHours = "18.0 hrs total cycle",
-                targetHardnessHrc = "42 – 47 HRC (415–465 HV)",
+                austenitizingOrSolutionTempC = "927 – 1010 °C (1700 – 1850 °F), 955 – 980 °C typical (Solution treatment, AMS 5662)",
+                soakingTimeMinutes = "Time commensurate with section size (AMS 5662)",
+                quenchMedium = "Rapid cool: water, or fast gas / air (air cool or faster). Never furnace cool",
+                temperingOrAgingTempC = "Age 718 °C (1325 °F) 8 h → furnace cool 55 °C/h to 621 °C (1150 °F) → hold to 18 h total ageing → air cool (AMS 5663)",
+                temperingOrAgingTimeHours = "18 h total ageing (including the furnace cool)",
+                targetHardnessHrc = "36 – 43 HRC aged (≤ 28 HRC annealed)",
                 hydrogenBakingRequired = false,
                 hydrogenBakingCycle = "Not required (Aero IVD Al / Passivated)",
-                standardReference = "AMS 5662 / AMS 5664 / AMS 2759/3 / NAS624"
+                standardReference = "AMS 5662 / AMS 5663 / AMS 2774",
+                atmosphere = "Vacuum or argon",
+                coolingMethod = "Furnace cool 55 °C/h from 718 to 621 °C; air cool after the 621 °C hold",
+                isAging = true
             )
         ),
         "300M" to MaterialInfo(

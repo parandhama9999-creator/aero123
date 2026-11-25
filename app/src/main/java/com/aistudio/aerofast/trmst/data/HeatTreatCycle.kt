@@ -176,8 +176,66 @@ object HeatTreatCycleEngine {
             // because at 0.02 % carbon there is nothing to ball up.
             MaterialFamily.CARBON_ALLOY_STEEL ->
                 if (!SteelCompositions.canSpheroidise(material)) maragingSolutionAnneal(material, sectionMm) else null
+            MaterialFamily.NICKEL_SUPERALLOY -> superalloyAnneal(material, sectionMm)
             else -> null
         }
+    }
+
+    /** Re-anneal between blows for a nickel superalloy, from its researched mill-anneal cycle; null when none is on file. */
+    private fun superalloyAnneal(material: MaterialInfo, sectionMm: Double): FurnaceCycle? {
+        val mill = SoftAnnealEngine.MILL_ANNEAL[material.key] ?: return null
+        val soak = soakHours(sectionMm)
+        return FurnaceCycle(
+            title = "Solution (mill) anneal — complete cycle",
+            stages = listOf(
+                AnnealStage("1. Charge & heat", "${mill.temperatureC} • vacuum or argon, or the surface oxidises", 0.5, 1.5),
+                AnnealStage("2. Soak", "${mill.hold.ifBlank { "Hold not stated in the source" }} — ${f(soak)} h by the shop rule of 1 h per 25 mm of ${f(sectionMm)} mm section, minimum 1 h", soak, soak),
+                AnnealStage("3. Cool", mill.cooling.ifBlank { "Cooling not stated in the source" }, 0.1, 0.5)
+            ),
+            basis = "Mill anneal of ${material.name} for a ${f(sectionMm)} mm section, to soften the wire between blows",
+            sources = listOf("${mill.source} (${mill.confidence})"),
+            cautions = listOf(
+                "This is a solution anneal: the softening comes from dissolving the hardening phases and cooling fast " +
+                    "enough to keep them dissolved. A slow or furnace cool does the opposite.",
+                "Never age before heading: the age goes on the finished part."
+            )
+        )
+    }
+
+    /**
+     * Inconel 718 solution treatment and precipitation hardening (AMS 5662 solution + AMS 5663 age): 718 °C for 8 h,
+     * furnace cool at 55 °C/h to 621 °C, hold until the total ageing time reaches 18 h, air cool. Null for other grades.
+     */
+    fun precipitationHarden(material: MaterialInfo, sectionMm: Double): FurnaceCycle? {
+        if (material.key != "INCONEL718") return null
+        val soak = soakHours(sectionMm)
+        val fcHours = (718.0 - 621.0) / 55.0
+        val hold621 = 18.0 - 8.0 - fcHours
+        return FurnaceCycle(
+            title = "Solution treat & age — complete cycle",
+            stages = listOf(
+                AnnealStage("1. Charge & heat", "927 – 1010 °C (1700 – 1850 °F), 955 – 980 °C typical • vacuum or argon", 0.5, 1.5),
+                AnnealStage("2. Solution soak", "Time commensurate with section (AMS 5662) — ${f(soak)} h by the shop rule for a ${f(sectionMm)} mm section", soak, soak),
+                AnnealStage("3. Rapid cool", "Water, or fast gas / air (air cool or faster). The faster the cool, the stronger the ageing response", 0.1, 0.3),
+                AnnealStage("4. Age 718 °C (1325 °F)", "Heat to 718 °C and hold 8 h", 8.5, 9.0),
+                AnnealStage("5. Furnace cool", "55 °C/h (100 °F/h) from 718 °C to 621 °C (1150 °F)", fcHours, fcHours),
+                AnnealStage("6. Hold 621 °C (1150 °F)", "Until the total ageing time reaches 18 h (≈ ${f(hold621)} h here)", hold621, hold621),
+                AnnealStage("7. Air cool", "To room temperature", 0.5, 1.0)
+            ),
+            basis = "AMS 5662 solution treatment + AMS 5663 precipitation treatment for a ${f(sectionMm)} mm section",
+            sources = listOf(
+                "Special Metals INCONEL 718: solution 1700 – 1850 °F, rapid cool usually in water; age 1325 °F 8 h, furnace cool to 1150 °F, hold for a total ageing time of 18 h, air cool",
+                "ASTM A1014: precipitation treatment at 1325 °F (718 °C) followed by a furnace-cooled step to 1150 °F (621 °C)",
+                "NASA PRC-2003: a controlled 100 °F/h cool may replace the furnace cool",
+                "voestalpine 718: about 28 HRC max annealed, about 36 – 43 HRC aged"
+            ),
+            cautions = listOf(
+                "The 18 h is the total precipitation time, including the furnace cool from 718 to 621 °C.",
+                "Do not furnace cool from the solution temperature: slow cooling precipitates δ / γ″ in the solution step and weakens the age.",
+                "AMS 5664 is a different cycle with a higher solution temperature: use it only when the drawing calls for it.",
+                "Aerospace 718 bolts are usually thread rolled after this treatment: check the drawing / bolt specification."
+            )
+        )
     }
 
     /**

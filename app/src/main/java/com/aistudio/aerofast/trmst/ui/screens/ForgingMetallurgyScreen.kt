@@ -434,8 +434,8 @@ fun ForgingMetallurgyScreen(
                 }
 
                 // Hours on every stage, worked out from the section size the specs actually use
-                com.aistudio.aerofast.trmst.data.HeatTreatCycleEngine
-                    .quenchTemper(result.material, result.wireDiaMm, result.heatTreatmentSpec)
+                (com.aistudio.aerofast.trmst.data.HeatTreatCycleEngine.quenchTemper(result.material, result.wireDiaMm, result.heatTreatmentSpec)
+                    ?: com.aistudio.aerofast.trmst.data.HeatTreatCycleEngine.precipitationHarden(result.material, result.wireDiaMm))
                     ?.let { cycle ->
                         CycleStagesBlock(
                             title = "COMPLETE CYCLE \u2014 DOOR TO DOOR",

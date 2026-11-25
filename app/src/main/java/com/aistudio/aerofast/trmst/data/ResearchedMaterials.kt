@@ -174,6 +174,10 @@ object ResearchedMaterials {
                     targetHardnessHrc = "Per product spec (AMS 5667 / 5698 / 5699)",
                     standardReference = "AMS 5667 / AMS 5698 / AMS 5699",
                     targetUtsMpa = "1100 – 1380 MPa (1250 typical)",
+                    preheatTempC = "",
+                    preheatSoakTime = "",
+                    quenchDetails = "Air cool or faster from the solution temperature",
+                    coolingMethod = "Air cool after each age",
                     isAging = true
                 ),
                 estimatedFrom = "INCONEL718",

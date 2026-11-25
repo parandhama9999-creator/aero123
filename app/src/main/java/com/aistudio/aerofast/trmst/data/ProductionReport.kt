@@ -57,12 +57,15 @@ object ProductionReport {
             ", coat for heading (phosphate + soap / polymer)")
         add("Cut-off ${n(r.cutOffLengthMm)} mm and head on the ${r.headingPlan?.machineDescription ?: "header"}" +
             (if (CalculationEngine.isWarmHeaded(r.material, r.nominalDiaMm)) " (warm)" else " (cold)"))
+        val superalloy = PokaYokeEngine.materialFamily(r.material) == MaterialFamily.NICKEL_SUPERALLOY
         if (threaded) add("Roll the thread: blank Ø${n(r.blankLowerLimit, 3)}–${n(r.blankUpperLimit, 3)} mm" +
-            (if (r.threadClass.contains("UNJ") || r.threadClass.endsWith("-MJ")) "; check whether the drawing / spec requires rolling AFTER heat treatment (common for UNJ / MJ fatigue-rated parts)" else ", before heat treatment"))
+            (if (r.threadClass.contains("UNJ") || r.threadClass.endsWith("-MJ") || superalloy) "; check whether the drawing / spec requires rolling AFTER heat treatment (common for UNJ / MJ fatigue-rated parts and nickel-alloy aerospace bolts)" else ", before heat treatment"))
         val ht = r.heatTreatmentSpec
         if (!ht.austenitizingOrSolutionTempC.startsWith("N/A")) {
-            add("Heat treat: ${ht.austenitizingOrSolutionTempC}, ${ht.quenchMedium}; temper ${ht.temperingOrAgingTempC}")
-            add("Check hardness ${ht.targetHardnessHrc}, decarburisation and tensile on the first load")
+            add("Heat treat: ${ht.austenitizingOrSolutionTempC}, ${ht.quenchMedium}; ${if (ht.isAging) "age" else "temper"} ${ht.temperingOrAgingTempC}")
+            val steel = PokaYokeEngine.materialFamily(r.material) == MaterialFamily.CARBON_ALLOY_STEEL ||
+                PokaYokeEngine.stainlessType(r.material) == PokaYokeEngine.StainlessType.MARTENSITIC
+            add("Check hardness ${ht.targetHardnessHrc}${if (steel) ", decarburisation" else ""} and tensile on the first load")
         }
         val bake = r.hasHydrogenEmbrittlementRisk
         if (r.coating.isElectroplating) {
