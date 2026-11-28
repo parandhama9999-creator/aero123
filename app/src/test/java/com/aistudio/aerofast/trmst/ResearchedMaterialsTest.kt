@@ -4,7 +4,6 @@ import com.aistudio.aerofast.trmst.data.AnnealRoute
 import com.aistudio.aerofast.trmst.data.FastenerCatalog
 import com.aistudio.aerofast.trmst.data.MaterialFamily
 import com.aistudio.aerofast.trmst.data.PokaYokeEngine
-import com.aistudio.aerofast.trmst.data.ResearchedMaterials
 import com.aistudio.aerofast.trmst.data.SoftAnnealEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -71,10 +70,5 @@ class ResearchedMaterialsTest {
 
     @Test fun yieldNeverExceedsTensile() {
         added.forEach { assertTrue(it, m(it).yieldStrengthMpa <= m(it).postForgingTargetUtsMpa) }
-    }
-
-    @Test fun extendIsIndependentOfTheMutableMap() {
-        assertEquals(16, ResearchedMaterials.extend(
-            FastenerCatalog.DEFAULT_MATERIALS.filterValues { it.estimatedFrom == null }).size)
     }
 }

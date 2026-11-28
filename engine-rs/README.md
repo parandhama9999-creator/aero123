@@ -2,9 +2,11 @@
 
 The AeroFast Pro calculation engine, ported from the Kotlin engine in
 `app/src/main/java/com/aistudio/aerofast/trmst/data`. This is phase 1: the engine as a
-standalone Rust library, proven to give the same answers as the Kotlin engine. The Android
-app still uses the Kotlin engine; connecting the apps to this library (Android first,
-iOS later) is phase 2.
+standalone Rust library, proven to give the same answers as the Kotlin engine. Since phase 2 the
+Android app calculates with this library: `libaerofast_engine.so` is built for arm64-v8a,
+armeabi-v7a and x86_64, and the app's engine objects (`app/.../data/Engine.kt`) forward every
+call to it through one JNI function (`src/bridge.rs`, `src/jni_entry.rs`) with JSON arguments
+and answers. iOS can use the same library later.
 
 ## What is ported
 
@@ -53,6 +55,21 @@ storage classes (AppStateStore, AndroidPrefs, CustomMaterialStore).
 
 ```
 cargo test --release
+```
+
+`app/src/test/.../RustEngineParityTest.kt` runs the same 900 golden parts through the app's own
+Kotlin functions, so the Kotlin types, the JSON and the JNI call are checked too:
+
+```
+cd engine-rs && cargo build --release --features jni && cd ..
+./gradlew :app:testDebugUnitTest --tests '*RustEngineParityTest*'
+```
+
+Build the phone libraries before building the APK:
+
+```
+cd engine-rs
+cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -P 24 -o ../app/src/main/jniLibs build --release --features jni
 ```
 
 The golden data is fixed at the Kotlin engine as of this port. If the Kotlin engine changes,

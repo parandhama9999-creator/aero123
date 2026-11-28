@@ -1,12 +1,16 @@
 package com.aistudio.aerofast.trmst.data
 
+import kotlinx.serialization.Serializable
+
 /** What the drawing scanner reads off a customer drawing (platform-free, shared with the desktop app). */
+@Serializable
 data class DetectedDimension(
     val feature: String,
     val nominal: String,
     val tolerance: String
 )
 
+@Serializable
 data class ExtractedFastenerSpec(
     val fastenerType: FastenerType,
     val unitSystem: UnitSystem,

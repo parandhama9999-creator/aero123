@@ -38,6 +38,28 @@ jobs:
         if: env.DEBUG_KEYSTORE_BASE64 != ''
         run: echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > debug.keystore
 
+      # The calculation engine is the Rust library in engine-rs/, built here for each phone CPU type
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine-rs
+
+      - name: Build the Rust engine for Android
+        working-directory: engine-rs
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          cargo install cargo-ndk --locked
+          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -P 24 -o ../app/src/main/jniLibs build --release --locked --features jni
+
+      # The app's engine functions on all 900 golden parts (answers recorded from the original Kotlin engine)
+      - name: Check the app's engine path against the golden parts
+        run: |
+          (cd engine-rs && cargo build --release --locked --features jni)
+          gradle :app:testDebugUnitTest --tests '*RustEngineParityTest*' --stacktrace
+
       # No API key is passed in: the APK is published, and any key inside it could be extracted.
       # Users enter their own Gemini key in Settings → AI Settings.
       - name: Build debug APK

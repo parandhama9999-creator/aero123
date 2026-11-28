@@ -1,6 +1,7 @@
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
+  alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
 }
@@ -73,6 +74,8 @@ android {
       // Lets a sandbox without Maven access run the Robolectric tests from a pre-fetched android-all jar:
       // set ROBOLECTRIC_DEPS_DIR to the folder holding it. Unset, Robolectric downloads as usual.
       all {
+        // JVM unit tests load the Rust engine built for this machine (cargo build --release --features jni)
+        it.systemProperty("java.library.path", rootProject.file("engine-rs/target/release").absolutePath)
         val roboDeps = System.getenv("ROBOLECTRIC_DEPS_DIR")
         if (!roboDeps.isNullOrBlank()) {
           it.systemProperty("robolectric.offline", "true")
@@ -128,6 +131,7 @@ dependencies {
   implementation(libs.converter.moshi)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
+  implementation(libs.kotlinx.serialization.json)
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)

@@ -9,8 +9,9 @@ class CatalogueFilterTest {
 
     private val materials = FastenerCatalog.MATERIALS.values.toList()
 
+    /** The catalogue now comes from the Rust engine: the estimated grades must still carry their sources. */
     @Test fun everyExtendedGradeIsInTheCatalogue() {
-        val added = ExtendedMaterials.extend(FastenerCatalog.DEFAULT_MATERIALS)
+        val added = FastenerCatalog.DEFAULT_MATERIALS.filterValues { it.estimatedFrom != null }
         assertTrue("no extended grades", added.size >= 30)
         for ((key, m) in added) {
             assertEquals(key, m.key)

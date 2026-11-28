@@ -183,6 +183,11 @@ fn call(method: &str, a: &Args) -> Result<Value, String> {
             json!({ "temperatureC": m.temperature_c, "hold": m.hold, "cooling": m.cooling, "source": m.source, "confidence": m.confidence, "note": m.note })
         })),
         "AnnealCycleEngine.spheroidize" => ok(soft_anneal::spheroidize(&a.get::<MaterialInfo>(0)?, a.get(1)?, a.get(2)?)),
+        "SteelCompositions.ac1" => ok(steel::ac1(&a.get::<steel::SteelComposition>(0)?)),
+        "SteelCompositions.andrewsApplies" => ok(steel::andrews_applies(&a.get::<steel::SteelComposition>(0)?)),
+        "SteelCompositions.soakHoursForDiameter" => ok(p2(steel::soak_hours_for_diameter(a.get(0)?))),
+        "IsoThreadClass.parse" => ok(crate::thread::IsoThreadClass::parse(&a.get::<String>(0)?)),
+        "IsoThreadClass.gradeFactor" => ok(crate::thread::IsoThreadClass::grade_factor(a.get(0)?)),
         "SteelCompositions.ac1For" => ok(steel::ac1_for(&a.get::<MaterialInfo>(0)?)),
         "SteelCompositions.canSpheroidise" => ok(steel::can_spheroidise(&a.get::<MaterialInfo>(0)?)),
         "SteelCompositions.forMaterial" => ok(steel::for_material(&a.get::<MaterialInfo>(0)?)),
