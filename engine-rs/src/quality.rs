@@ -262,6 +262,8 @@ pub struct PpapElement {
 #[serde(rename_all = "camelCase")]
 pub struct ChecklistPhase {
     pub title: String,
+    /// A Kotlin `List<Pair<String, String>>`: written as `{first, second}` objects.
+    #[serde(with = "crate::pairs::vec2")]
     pub items: Vec<(String, String)>,
 }
 
