@@ -74,16 +74,19 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk "$name"
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to "latest" release
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      # main publishes to "latest-apk"; a manual run on another branch publishes to "apk-<branch>"
+      - name: Publish APK release
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
         run: |
-          gh release delete latest-apk --cleanup-tag --yes || true
-          gh release create latest-apk "${{ steps.apk.outputs.name }}" \
+          if [ "$BRANCH" = "main" ]; then tag=latest-apk; title="Latest APK"; else tag="apk-$BRANCH"; title="APK ($BRANCH)"; fi
+          gh release delete "$tag" --cleanup-tag --yes || true
+          gh release create "$tag" "${{ steps.apk.outputs.name }}" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "Latest APK (${GITHUB_SHA::7})" \
+            --title "$title (${GITHUB_SHA::7})" \
             --notes "Debug APK built from ${GITHUB_SHA} on $(date -u '+%Y-%m-%d %H:%M UTC'). Download the .apk below and open it on the phone to install."
 
       # Release assets do not count toward the Actions artifact storage quota, so the release is the
