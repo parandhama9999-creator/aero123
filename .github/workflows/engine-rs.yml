@@ -1,0 +1,49 @@
+name: Rust engine
+
+on:
+  push:
+    paths:
+      - "engine-rs/**"
+      - ".github/workflows/engine-rs.yml"
+  pull_request:
+    paths:
+      - "engine-rs/**"
+      - ".github/workflows/engine-rs.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine-rs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine-rs
+      - name: Build
+        run: cargo build --release --locked
+      - name: Tests (parity with the Kotlin engine + ported unit tests)
+        run: cargo test --release --locked -- --nocapture
+
+  mobile-targets:
+    # Phase 1 check only: the engine compiles for Android and iOS. The bridge to the apps is phase 2.
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: engine-rs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,aarch64-apple-ios,aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine-rs
+      - name: Check every mobile target
+        run: |
+          for t in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android aarch64-apple-ios aarch64-apple-ios-sim; do
+            cargo check --release --locked --target "$t"
+          done

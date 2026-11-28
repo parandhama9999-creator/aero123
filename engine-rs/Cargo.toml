@@ -1,0 +1,26 @@
+[package]
+name = "aerofast-engine"
+version = "0.1.0"
+edition = "2021"
+description = "AeroFast Pro fastener engineering engine (Rust port of the Kotlin engine)"
+license = "LicenseRef-Proprietary"
+publish = false
+
+[lib]
+# rlib for tests and Rust users; staticlib / cdylib are added with the mobile bridge in phase 2
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }
+flate2 = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+# unwind, not abort: the phase-2 mobile bridge catches a panic and returns an error instead of crashing the app
+panic = "unwind"
+strip = true
