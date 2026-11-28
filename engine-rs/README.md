@@ -36,10 +36,11 @@ storage classes (AppStateStore, AndroidPrefs, CustomMaterialStore).
 
 ## How sameness is proven
 
-1. `desktop/src/test/.../golden/GoldenExport.kt` runs the **Kotlin** engine on 900 parts
+1. A JVM exporter (since removed together with the desktop app; it is in git history at
+   commit b54b3dd, `desktop/src/test/.../golden/GoldenExport.kt`) ran the **Kotlin** engine on 900 parts
    (every fastener type, material, property class, coating, thread class and size, plus
    drawing, tensile-range, mill-cert, wire and header-choice cases) and writes every input
-   and result to `golden/cases.json.gz`. It also exports the catalogue data
+   and result to `golden/cases.json.gz`. It also exported the catalogue data
    (`golden/enums.json`, `materials.json`, `objects.json`).
 2. `codegen/gen.py` generates the Rust enum and material tables from that export, so the
    data cannot drift by hand-copying.
@@ -54,12 +55,10 @@ storage classes (AppStateStore, AndroidPrefs, CustomMaterialStore).
 cargo test --release
 ```
 
-To refresh the golden data after a Kotlin engine change:
-
-```
-GOLDEN_DIR=$PWD/engine-rs/golden ./gradlew :desktop:test --tests '*GoldenExport*' --configure-on-demand
-cd engine-rs && python3 -I codegen/gen.py && cargo test --release
-```
+The golden data is fixed at the Kotlin engine as of this port. If the Kotlin engine changes,
+the same change has to be made in Rust; to re-check parity, restore the exporter from git
+history into a JVM test module and run it with `GOLDEN_DIR=<engine-rs/golden>`, then
+`python3 -I codegen/gen.py && cargo test --release`.
 
 ## Notes
 

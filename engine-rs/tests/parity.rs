@@ -1,6 +1,6 @@
 //! Parity with the Kotlin engine: every golden case is re-run in Rust and compared field by field.
 //! Numbers must agree to 1e-9 relative, strings and enums exactly.
-//! The golden data comes from the Kotlin engine itself (desktop/src/test/.../GoldenExport.kt).
+//! The golden data comes from the Kotlin engine itself (GoldenExport.kt, removed with the desktop app; see git history).
 
 use aerofast_engine::calculation::{self, CalcInput, FastenerCalculationResult};
 use aerofast_engine::part_geometry::DrawingGeometry;

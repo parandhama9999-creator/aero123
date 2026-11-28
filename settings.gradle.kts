@@ -25,4 +25,3 @@ dependencyResolutionManagement {
 rootProject.name = "AeroFast Pro"
 
 include(":app")
-include(":desktop")
